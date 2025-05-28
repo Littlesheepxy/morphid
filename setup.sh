@@ -1,13 +1,13 @@
 #!/bin/bash
 
-echo "🧭 FlowID 项目初始化脚本"
+echo "🧭 MorphID 项目初始化脚本"
 echo "================================"
 
-# 检查是否已经在flowid目录中
-if [ "$(basename "$PWD")" = "flowid" ]; then
-    echo "✅ 已在flowid目录中"
+# 检查是否已经在MorphID目录中
+if [ "$(basename "$PWD")" = "MorphID" ]; then
+    echo "✅ 已在MorphID目录中"
 else
-    echo "❌ 请在flowid项目根目录中运行此脚本"
+    echo "❌ 请在MorphID项目根目录中运行此脚本"
     exit 1
 fi
 
@@ -282,7 +282,7 @@ cat > .lintstagedrc.json << 'EOF'
 EOF
 
 echo ""
-echo "✅ FlowID 项目初始化完成！"
+echo "✅ MorphID 项目初始化完成！"
 echo ""
 echo "📋 下一步操作："
 echo "1. 复制 .env.example 到 .env.local 并填入你的API密钥"

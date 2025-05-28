@@ -1,4 +1,4 @@
-# 🚀 FlowID 快速开始指南
+# 🚀 MorphID 快速开始指南
 
 ## 📋 前置要求
 
@@ -13,7 +13,7 @@
 ### 1. 运行初始化脚本
 
 ```bash
-# 确保在flowid项目根目录
+# 确保在MorphID项目根目录
 ./setup.sh
 ```
 
@@ -151,7 +151,7 @@ npm run dev
 ## 📁 项目结构说明
 
 ```
-flowid/
+MorphID/
 ├── app/                    # Next.js App Router
 │   ├── (auth)/            # 认证相关页面
 │   ├── (dashboard)/       # 用户仪表板
@@ -223,4 +223,4 @@ npm install
 
 **准备好开始构建您的AI驱动身份平台了吗？** 🚀
 
-运行 `./setup.sh` 开始您的FlowID开发之旅！ 
+运行 `./setup.sh` 开始您的MorphID开发之旅！ 

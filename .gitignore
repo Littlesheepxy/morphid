@@ -83,3 +83,5 @@ temp/
 
 # Editor directories and files
 .cursor/ 
+# clerk configuration (can include secrets)
+/.clerk/

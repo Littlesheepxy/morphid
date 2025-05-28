@@ -1,4 +1,4 @@
-# 📋 FlowID 开发计划
+# 📋 MorphID 开发计划
 
 ## 🎯 开发阶段概览
 
@@ -32,8 +32,8 @@
 ### 1.1 项目初始化
 ```bash
 # 创建Next.js项目
-npx create-next-app@latest flowid --typescript --tailwind --eslint --app
-cd flowid
+npx create-next-app@latest MorphID --typescript --tailwind --eslint --app
+cd MorphID
 
 # 安装核心依赖
 npm install @clerk/nextjs @supabase/supabase-js zustand
@@ -50,7 +50,7 @@ npm install lucide-react @hookform/resolvers zod react-hook-form
 
 ### 1.2 项目结构设计
 ```
-flowid/
+MorphID/
 ├── app/
 │   ├── (auth)/
 │   │   ├── sign-in/
@@ -489,7 +489,7 @@ export default async function PublicPageView({
     }
   },
   "env": {
-    "NEXT_PUBLIC_APP_URL": "https://flowid.ai"
+    "NEXT_PUBLIC_APP_URL": "https://MorphID.ai"
   }
 }
 ```
