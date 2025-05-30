@@ -20,7 +20,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true)
     // 从 localStorage 读取主题设置
-    const savedTheme = localStorage.getItem("MorphID-theme") as Theme
+    const savedTheme = localStorage.getItem("HeysMe-theme") as Theme
     if (savedTheme) {
       setTheme(savedTheme)
     } else {
@@ -32,7 +32,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem("MorphID-theme", theme)
+      localStorage.setItem("HeysMe-theme", theme)
       // 更新 document 类名
       document.documentElement.classList.remove("light", "dark")
       document.documentElement.classList.add(theme)

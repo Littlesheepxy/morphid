@@ -95,7 +95,7 @@ export async function getCurrentUser() {
       .insert({
         id: userId, // 使用 Clerk ID 作为主键
         email: "", // 将在 syncUserWithClerk 中更新
-        projects: ["morphid"], // 默认给予 MorphID 访问权限
+        projects: ["HeysMe"], // 默认给予 HeysMe 访问权限
         plan: "free",
         default_model: "gpt-4o",
       })
@@ -150,7 +150,7 @@ export async function syncUserWithClerk(clerkUser: any) {
 /**
  * 共享数据库表结构说明：
  *
- * users 表（现有表结构 + MorphID 扩展）：
+ * users 表（现有表结构 + HeysMe 扩展）：
  * - id (text, primary key) - Clerk用户ID
  * - email (text, unique, not null)
  * - first_name (text, nullable)
@@ -162,7 +162,7 @@ export async function syncUserWithClerk(clerkUser: any) {
  * - created_at (timestamp)
  * - updated_at (timestamp)
  *
- * morphid_pages 表：
+ * HeysMe_pages 表：
  * - id (uuid, primary key)
  * - user_id (text, foreign key to users.id)
  * - slug (text, unique)
@@ -174,7 +174,7 @@ export async function syncUserWithClerk(clerkUser: any) {
  * - created_at (timestamp)
  * - updated_at (timestamp)
  *
- * morphid_page_blocks 表：
+ * HeysMe_page_blocks 表：
  * - id (uuid, primary key)
  * - page_id (uuid, foreign key)
  * - type (text)
@@ -184,46 +184,46 @@ export async function syncUserWithClerk(clerkUser: any) {
  * - created_at (timestamp)
  * - updated_at (timestamp)
  *
- * 其他 MorphID 表：
- * - morphid_page_analytics (页面访问统计)
- * - morphid_templates (页面模板)
- * - morphid_user_assets (用户上传的资源)
+ * 其他 HeysMe 表：
+ * - HeysMe_page_analytics (页面访问统计)
+ * - HeysMe_templates (页面模板)
+ * - HeysMe_user_assets (用户上传的资源)
  */
 
 // 常用查询辅助函数（更新为使用共享数据库结构）
 export const queries = {
-  // 获取用户的所有 MorphID 页面
-  getUserMorphIDPages: async (clerkUserId: string) => {
+  // 获取用户的所有 HeysMe 页面
+  getUserHeysMePages: async (clerkUserId: string) => {
     return supabase
-      .from("morphid_pages")
+      .from("HeysMe_pages")
       .select(`
         *,
-        morphid_page_blocks (*)
+        HeysMe_page_blocks (*)
       `)
       .eq("user_id", clerkUserId)
       .order("created_at", { ascending: false })
   },
 
-  // 获取公开的 MorphID 页面
-  getPublicMorphIDPages: () =>
+  // 获取公开的 HeysMe 页面
+  getPublicHeysMePages: () =>
     supabase
-      .from("morphid_pages")
+      .from("HeysMe_pages")
       .select(`
         *,
-        morphid_page_blocks (*),
+        HeysMe_page_blocks (*),
         users!inner (first_name, last_name, avatar_url)
       `)
       .eq("visibility", "public")
       .eq("is_featured", true)
       .order("created_at", { ascending: false }),
 
-  // 通过slug获取 MorphID 页面
-  getMorphIDPageBySlug: (slug: string) =>
+  // 通过slug获取 HeysMe 页面
+  getHeysMePageBySlug: (slug: string) =>
     supabase
-      .from("morphid_pages")
+      .from("HeysMe_pages")
       .select(`
         *,
-        morphid_page_blocks (*),
+        HeysMe_page_blocks (*),
         users!inner (email, first_name, last_name, avatar_url)
       `)
       .eq("slug", slug)
@@ -238,8 +238,8 @@ export const queries = {
       .single()
   },
 
-  // 检查用户是否有 MorphID 访问权限
-  checkMorphIDAccess: async (clerkUserId: string) => {
+  // 检查用户是否有 HeysMe 访问权限
+  checkHeysMeAccess: async (clerkUserId: string) => {
     const { data, error } = await supabase
       .from("users")
       .select("projects")
@@ -249,7 +249,7 @@ export const queries = {
     if (error || !data) return false
     
     const projects = data.projects || []
-    return projects.includes("morphid")
+    return projects.includes("HeysMe")
   },
 }
 

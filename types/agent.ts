@@ -1,7 +1,13 @@
 export interface Intent {
-  type: "create_MorphID" | "edit_MorphID" | "general_chat" | "help"
+  type: "create_HeysMe" | "edit_HeysMe" | "general_chat" | "help"
   confidence: number
   entities?: Record<string, any>
+  extracted_info?: {
+    role?: string
+    purpose?: string
+    style?: string
+    display_priority?: string[]
+  }
 }
 
 export interface Agent {

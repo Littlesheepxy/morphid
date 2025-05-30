@@ -24,7 +24,7 @@ export default function HomePage() {
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>MorphID</span>
+            <span className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>HeysMe</span>
           </div>
           <div className="flex gap-4 items-center">
             <ThemeToggle />
@@ -58,7 +58,7 @@ export default function HomePage() {
         >
           <a href="/chat">
             <Sparkles className="w-5 h-5 mr-2" />
-            开始创建 MorphID
+            开始创建 HeysMe
           </a>
         </Button>
       </section>
@@ -66,7 +66,7 @@ export default function HomePage() {
       {/* Features */}
       <section className="container mx-auto px-4 py-20">
         <h2 className={`text-3xl font-bold text-center mb-12 ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-          为什么选择 MorphID？
+          为什么选择 HeysMe？
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <Card
@@ -128,7 +128,7 @@ export default function HomePage() {
         >
           <CardContent className="p-12">
             <h2 className={`text-3xl font-bold mb-4 ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-              准备好创建你的 MorphID 了吗？
+              准备好创建你的 HeysMe 了吗？
             </h2>
             <p className={`mb-8 ${theme === "light" ? "text-gray-600" : "text-gray-300"}`}>
               只需几分钟，就能拥有一个专业的职业主页

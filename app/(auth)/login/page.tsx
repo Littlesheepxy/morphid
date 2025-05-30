@@ -105,7 +105,7 @@ export default function LoginPage() {
         <Button variant="ghost" asChild className="rounded-2xl">
           <Link href="/">
             <Sparkles className="w-4 h-4 mr-2" />
-            MorphID
+            HeysMe
           </Link>
         </Button>
       </div>
@@ -122,7 +122,7 @@ export default function LoginPage() {
           <CardTitle className={`text-2xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
             欢迎回来
           </CardTitle>
-          <p className={`${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>登录到你的 MorphID 账户</p>
+          <p className={`${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>登录到你的 HeysMe 账户</p>
         </CardHeader>
 
         <CardContent className="space-y-6">

@@ -1,62 +1,125 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sparkles, Plus, MessageSquare, Eye, Share, Download, Send, User, Bot, Mic } from "lucide-react"
+import { 
+  Send, 
+  User, 
+  Bot,
+  Paperclip,
+  Sparkles,
+  Plus,
+  MessageSquare,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  ArrowLeft,
+  Code,
+  Download,
+  Eye,
+  CheckCircle
+} from "lucide-react"
 import { useChatSystem } from "@/hooks/use-chat-system"
-import PageRenderer from "@/components/page-renderer"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { useTheme } from "@/contexts/theme-context"
-import type { ChatMessage } from "@/types/chat"
-import type { FlowPage } from "@/types/morphid"
-import { ModelSelector } from "@/components/model-selector"
+import { motion, AnimatePresence } from "framer-motion"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { CodeBlockStreaming } from "@/components/code/CodeBlockStreaming"
+import { ReactPreviewRenderer } from "@/components/code/ReactPreviewRenderer"
+import { generateMockResumeCode } from "@/lib/utils/mockCodeGenerator"
 
 export default function ChatPage() {
   const { theme } = useTheme()
   const {
-    sessions = [], // 添加默认值
+    sessions = [],
     currentSession,
     isGenerating,
-    generatedPage,
-    selectedModel,
-    setSelectedModel,
     createNewSession,
     selectSession,
     sendMessage,
   } = useChatSystem()
+  
   const [inputValue, setInputValue] = useState("")
-  const [viewMode, setViewMode] = useState<"chat" | "preview">("chat")
+  const [hasStartedChat, setHasStartedChat] = useState(false)
+  const [typingText, setTypingText] = useState("")
+  const [isCodeMode, setIsCodeMode] = useState(false)
+  const [generatedCode, setGeneratedCode] = useState<any[]>([])
+  const [showReactPreview, setShowReactPreview] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
+  const welcomeText = "你好！我是 HeysMe AI 助手，我可以帮助你创建专业的个人简历和作品集。"
+
+  // 打字机效果
+  useEffect(() => {
+    if (!hasStartedChat) {
+      let index = 0
+      const timer = setInterval(() => {
+        if (index < welcomeText.length) {
+          setTypingText(welcomeText.slice(0, index + 1))
+          index++
+        } else {
+          clearInterval(timer)
+        }
+      }, 50)
+      return () => clearInterval(timer)
+    }
+  }, [hasStartedChat])
+
+  // 自动滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [currentSession?.messages])
+
+  // 监听当前会话变化，如果有会话且有消息，则显示对话模式
+  useEffect(() => {
+    if (currentSession && currentSession.messages && currentSession.messages.length > 0) {
+      setHasStartedChat(true)
+    }
+  }, [currentSession])
+
+  // 监听当前会话变化，检查是否进入代码生成阶段
+  useEffect(() => {
+    if (currentSession && currentSession.messages && currentSession.messages.length > 0) {
+      setHasStartedChat(true)
+      
+      // 检查是否有代码生成相关的消息
+      const hasCodeGeneration = currentSession.messages.some(message => 
+        message.metadata?.system_state?.current_stage === '代码生成中' ||
+        message.metadata?.codeBlocks
+      )
+      
+      if (hasCodeGeneration && !isCodeMode) {
+        setIsCodeMode(true)
+        // 提取生成的代码
+        const codeMessages = currentSession.messages.filter(msg => msg.metadata?.codeBlocks)
+        if (codeMessages.length > 0) {
+          const latestCodeMessage = codeMessages[codeMessages.length - 1]
+          if (latestCodeMessage.metadata?.codeBlocks) {
+            setGeneratedCode(latestCodeMessage.metadata.codeBlocks)
+          }
+        }
+      }
+    }
+  }, [currentSession, isCodeMode])
+
+  // 发送消息
   const handleSendMessage = () => {
     if (!inputValue.trim()) return
 
-    if (!currentSession) {
-      createNewSession()
+    if (!hasStartedChat) {
+      setHasStartedChat(true)
+      if (!currentSession) {
+        createNewSession()
+      }
     }
 
     sendMessage(inputValue)
     setInputValue("")
-
-    if (generatedPage) {
-      setViewMode("preview")
-    }
   }
 
-  const handleOptionClick = (option: any) => {
-    if (!currentSession) return
-
-    sendMessage(option.label, option)
-
-    if (option.value === "done" || generatedPage) {
-      setViewMode("preview")
-    }
-  }
-
+  // 处理键盘事件
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -64,405 +127,681 @@ export default function ChatPage() {
     }
   }
 
-  const previewPage: FlowPage | null = generatedPage
-    ? {
-        id: "preview",
-        user_id: "preview",
-        slug: "preview",
-        title: generatedPage.title || "预览页面",
-        theme: generatedPage.theme || "modern",
-        layout: generatedPage.layout || "single-column",
-        visibility: "private",
-        is_featured: false,
-        blocks: (generatedPage.blocks || []).map((block: any, index: number) => ({
-          ...block,
-          id: `block-${index}`,
-          page_id: "preview",
-        })),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    : null
+  // 开始新对话
+  const handleNewChat = () => {
+    setHasStartedChat(false)
+    setTypingText("")
+    setInputValue("")
+    createNewSession()
+  }
 
-  return (
-    <div
-      className={`h-screen flex flex-col transition-colors duration-300 ${
-        theme === "light" ? "bg-gradient-light" : "bg-gradient-dark"
-      }`}
-    >
-      {/* 顶部导航 - 支持深色模式 */}
-      <header
-        className={`backdrop-blur-xl border-b px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-300 ${
-          theme === "light" ? "bg-white/80 border-white/20" : "bg-gray-900/80 border-gray-700/20 text-white"
+  // 处理React预览
+  const handleReactPreview = () => {
+    if (generatedCode.length > 0) {
+      setShowReactPreview(true)
+    }
+  }
+
+  // 处理代码下载
+  const handleCodeDownload = () => {
+    // 创建下载逻辑
+    const projectData = {
+      name: currentSession?.title || 'HeysMe项目',
+      files: generatedCode
+    }
+    
+    // 这里可以实现实际的下载功能
+    console.log('下载项目:', projectData)
+  }
+
+  // 处理部署
+  const handleDeploy = () => {
+    // 这里可以实现部署到Vercel/Netlify等平台
+    console.log('部署项目')
+  }
+
+  // 处理代码编辑
+  const handleEditCode = (filename: string) => {
+    // 这里可以打开代码编辑器
+    console.log('编辑文件:', filename)
+  }
+
+  // 转换代码为React预览格式
+  const getReactPreviewData = () => {
+    if (!generatedCode.length) return null
+
+    return {
+      files: generatedCode.map(code => ({
+        filename: code.filename,
+        content: code.content,
+        language: code.language,
+        type: code.type || 'component',
+        description: code.description
+      })),
+      projectName: currentSession?.title || 'HeysMe项目',
+      description: '基于AI生成的个人简历和作品集',
+      assets: extractAssetsFromCode(generatedCode)
+    }
+  }
+
+  // 从代码中提取资源
+  const extractAssetsFromCode = (codeFiles: any[]) => {
+    const assets: any[] = []
+    
+    codeFiles.forEach(file => {
+      // 提取图片链接
+      const imageMatches = file.content.match(/src=["']([^"']*\.(jpg|jpeg|png|gif|webp|svg))["']/gi)
+      if (imageMatches) {
+        imageMatches.forEach((match: string) => {
+          const url = match.match(/src=["']([^"']+)["']/)?.[1]
+          if (url && url.startsWith('http')) {
+            assets.push({
+              name: url.split('/').pop() || 'image',
+              url,
+              type: 'image',
+              description: '项目图片资源'
+            })
+          }
+        })
+      }
+
+      // 提取iframe链接
+      const iframeMatches = file.content.match(/src=["']([^"']+)["']/gi)
+      if (iframeMatches && file.content.includes('iframe')) {
+        iframeMatches.forEach((match: string) => {
+          const url = match.match(/src=["']([^"']+)["']/)?.[1]
+          if (url && url.startsWith('http') && !url.includes('image')) {
+            assets.push({
+              name: '作品展示',
+              url,
+              type: 'link',
+              description: '作品链接或演示'
+            })
+          }
+        })
+      }
+    })
+
+    return assets
+  }
+
+  // 生成测试代码用于演示
+  const generateTestCode = () => {
+    const mockUserData = {
+      name: "张三",
+      title: "前端开发工程师",
+      bio: "热爱技术，专注于前端开发和用户体验设计。拥有5年Web开发经验，熟悉React、Vue、Node.js等技术栈。",
+      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
+      email: "zhangsan@example.com",
+      linkedin: "https://linkedin.com/in/zhangsan",
+      github: "https://github.com/zhangsan"
+    }
+
+    const mockCode = generateMockResumeCode(mockUserData)
+    setGeneratedCode(mockCode)
+    setIsCodeMode(true)
+    setHasStartedChat(true)
+
+    // 如果还没有会话，创建一个
+    if (!currentSession) {
+      createNewSession()
+    }
+  }
+
+  const MessageBubble = ({ message, isLast }: { message: any; isLast: boolean }) => {
+    const isUser = message.type === "user"
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`flex items-start gap-4 max-w-4xl mx-auto px-6 py-4 ${
+          isUser ? "flex-row-reverse" : ""
         }`}
       >
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-            <Sparkles className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1
-              className={`text-xl font-bold bg-gradient-to-r bg-clip-text text-transparent ${
-                theme === "light" ? "from-gray-900 to-gray-600" : "from-white to-gray-300"
-              }`}
-            >
-              MorphID
-            </h1>
-            <Badge variant="secondary" className="text-xs rounded-full">
-              v0.1 MVP
-            </Badge>
-          </div>
-        </div>
+        {/* 头像 */}
+        <Avatar className="w-8 h-8 shrink-0">
+          <AvatarFallback className={isUser ? "bg-blue-500 text-white" : "bg-gray-100"}>
+            {isUser ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+          </AvatarFallback>
+        </Avatar>
 
-        <div className="flex items-center gap-3">
-          <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
-          <ThemeToggle />
-          {generatedPage && (
-            <>
-              <div
-                className={`flex items-center backdrop-blur-sm border rounded-2xl p-1 shadow-sm ${
-                  theme === "light" ? "bg-white/60 border-white/30" : "bg-gray-800/60 border-gray-700/30"
-                }`}
-              >
-                <Button
-                  variant={viewMode === "chat" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("chat")}
-                  className="rounded-xl"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  对话
-                </Button>
-                <Button
-                  variant={viewMode === "preview" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("preview")}
-                  className="rounded-xl"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  预览
-                </Button>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className={`rounded-2xl backdrop-blur-sm ${
-                  theme === "light" ? "border-white/30 bg-white/60" : "border-gray-700/30 bg-gray-800/60"
-                }`}
-              >
-                <Share className="w-4 h-4 mr-2" />
-                分享
-              </Button>
-              <Button size="sm" className="rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg">
-                <Download className="w-4 h-4 mr-2" />
-                部署
-              </Button>
-            </>
-          )}
-        </div>
-      </header>
-
-      {/* 主要内容区域 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧会话列表 - 支持深色模式 */}
-        <div
-          className={`w-80 backdrop-blur-xl border-r flex flex-col transition-colors duration-300 ${
-            theme === "light" ? "bg-white/60 border-white/20" : "bg-gray-900/60 border-gray-700/20"
-          }`}
-        >
-          {/* 新建对话按钮 */}
-          <div className="p-6">
-            <Button
-              onClick={createNewSession}
-              className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300 h-12 text-white"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              新建对话
-            </Button>
-          </div>
-
-          {/* 会话列表 */}
-          <ScrollArea className="flex-1 px-3">
-            <div className="space-y-3 pb-6">
-              {sessions.length > 0 ? (
-                sessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className={`p-4 cursor-pointer transition-all duration-300 rounded-2xl hover:scale-[1.02] ${
-                      currentSession?.id === session.id
-                        ? theme === "light"
-                          ? "bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200/50 shadow-md"
-                          : "bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-2 border-blue-500/30 shadow-md"
-                        : theme === "light"
-                          ? "bg-white/40 backdrop-blur-sm border border-white/30 hover:bg-white/60"
-                          : "bg-gray-800/40 backdrop-blur-sm border border-gray-700/30 hover:bg-gray-800/60"
-                    }`}
-                    onClick={() => selectSession(session.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center">
-                        <MessageSquare className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3
-                          className={`font-semibold text-sm truncate ${
-                            theme === "light" ? "text-gray-800" : "text-gray-200"
-                          }`}
-                        >
-                          {session.title}
-                        </h3>
-                        <p className={`text-xs mt-1 ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
-                          {session.created_at.toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
+        {/* 消息内容 */}
+        <div className={`flex-1 ${isUser ? "text-right" : ""}`}>
+          <div
+            className={`inline-block max-w-full ${
+              isUser
+                ? "text-gray-800"
+                : "text-gray-800"
+            }`}
+          >
+            {/* 消息文本 */}
+            <div className="whitespace-pre-wrap break-words">
+              {isLast && !isUser && isGenerating ? (
+                <div className="flex items-center gap-2">
+                  <span>{message.content}</span>
+                  <div className="flex space-x-1">
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" />
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                    <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
                   </div>
-                ))
-              ) : (
-                <div className={`text-center p-4 ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
-                  <p className="text-sm">暂无对话记录</p>
-                  <p className="text-xs mt-1">点击上方按钮开始新对话</p>
                 </div>
+              ) : (
+                message.content
               )}
             </div>
-          </ScrollArea>
-        </div>
 
-        {/* 右侧内容区域 */}
-        <div className="flex-1 flex flex-col">
-          {viewMode === "chat" ? (
-            <>
-              {currentSession ? (
-                <>
-                  {/* 消息列表 */}
-                  <ScrollArea className="flex-1 p-6">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                      {(currentSession.messages || []).map((message) => (
-                        <MessageBubble
-                          key={message.id}
-                          message={message}
-                          onOptionClick={handleOptionClick}
-                          isGenerating={isGenerating}
-                          theme={theme}
+            {/* 选项按钮 */}
+            {!isUser && message.metadata?.options && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {message.metadata.options.map((option: any, index: number) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      sendMessage(option.label, option)
+                    }}
+                    className="text-sm rounded-full border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+
+            {/* 智能确认表单 */}
+            {!isUser && message.metadata?.interaction && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <h4 className="font-medium text-gray-900 mb-3">
+                  {message.metadata.interaction.title}
+                </h4>
+                <div className="space-y-4">
+                  {message.metadata.interaction.elements?.map((element: any, index: number) => (
+                    <div key={index} className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        {element.label}
+                        {element.required && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      
+                      {element.type === 'select' && (
+                        <select 
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          defaultValue={element.value || ''}
+                        >
+                          <option value="">请选择...</option>
+                          {element.options?.map((option: any, optIndex: number) => (
+                            <option key={optIndex} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      
+                      {element.type === 'input' && (
+                        <input
+                          type="text"
+                          placeholder={element.placeholder || '请输入...'}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
-                      ))}
-                      {isGenerating && (
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center">
-                            <Bot className="w-6 h-6 text-white" />
-                          </div>
-                          <div
-                            className={`flex items-center gap-3 backdrop-blur-sm rounded-2xl px-4 py-3 border ${
-                              theme === "light" ? "bg-white/60 border-white/30" : "bg-gray-800/60 border-gray-700/30"
-                            }`}
-                          >
-                            <Sparkles className="w-5 h-5 animate-spin text-blue-500" />
-                            <span className={`font-medium ${theme === "light" ? "text-gray-700" : "text-gray-300"}`}>
-                              AI 正在思考...
-                            </span>
-                          </div>
+                      )}
+                      
+                      {element.type === 'checkbox' && (
+                        <div className="space-y-2">
+                          {element.options?.map((option: any, optIndex: number) => (
+                            <label key={optIndex} className="flex items-center space-x-2">
+                              <input type="checkbox" value={option.value} className="rounded" />
+                              <span className="text-sm text-gray-700">{option.label}</span>
+                            </label>
+                          ))}
                         </div>
                       )}
                     </div>
-                  </ScrollArea>
-
-                  {/* 输入区域 - 支持深色模式 */}
-                  <div
-                    className={`p-6 backdrop-blur-xl border-t transition-colors duration-300 ${
-                      theme === "light" ? "bg-white/40 border-white/20" : "bg-gray-900/40 border-gray-700/20"
-                    }`}
-                  >
-                    <div className="max-w-4xl mx-auto">
-                      <div
-                        className={`relative flex items-center gap-3 backdrop-blur-sm rounded-3xl border shadow-lg p-2 ${
-                          theme === "light" ? "bg-white/80 border-white/30" : "bg-gray-800/80 border-gray-700/30"
-                        }`}
-                      >
-                        <Input
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="输入消息..."
-                          className={`flex-1 border-0 bg-transparent focus:ring-0 px-4 py-3 text-base rounded-2xl ${
-                            theme === "light"
-                              ? "text-gray-800 placeholder:text-gray-500"
-                              : "text-gray-200 placeholder:text-gray-400"
-                          }`}
-                          disabled={isGenerating}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`rounded-2xl w-10 h-10 p-0 ${
-                            theme === "light"
-                              ? "text-gray-500 hover:text-gray-700"
-                              : "text-gray-400 hover:text-gray-200"
-                          }`}
-                        >
-                          <Mic className="w-5 h-5" />
-                        </Button>
-                        <Button
-                          onClick={handleSendMessage}
-                          disabled={!inputValue.trim() || isGenerating}
-                          className="rounded-2xl w-12 h-12 p-0 bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50"
-                        >
-                          <Send className="w-5 h-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                // 空状态 - 支持深色模式
-                <div className="flex-1 flex items-center justify-center p-6">
-                  <div className="text-center max-w-lg">
-                    <div className="w-32 h-32 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
-                      <Sparkles className="w-16 h-16 text-white" />
-                    </div>
-                    <h3 className={`text-2xl font-bold mb-3 ${theme === "light" ? "text-gray-800" : "text-gray-200"}`}>
-                      在时刻准备着。
-                    </h3>
-                    <p
-                      className={`text-lg leading-relaxed mb-8 ${
-                        theme === "light" ? "text-gray-600" : "text-gray-400"
-                      }`}
+                  ))}
+                  
+                  <div className="mt-6 flex gap-3">
+                    <Button
+                      onClick={() => {
+                        // 收集表单数据并发送
+                        const formData: any = {};
+                        const form = document.querySelector(`form[data-message-id="${message.id}"]`) as HTMLFormElement;
+                        if (form) {
+                          const formElements = form.elements;
+                          for (let i = 0; i < formElements.length; i++) {
+                            const element = formElements[i] as HTMLInputElement | HTMLSelectElement;
+                            if (element.name && element.value) {
+                              formData[element.name] = element.value;
+                            }
+                          }
+                        }
+                        sendMessage('确认信息', { type: 'interaction', ...formData });
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white"
                     >
-                      告诉我你想要创建什么样的 MorphID 页面，我会帮你一步步完成
-                    </p>
-                    <div className="relative">
-                      <div
-                        className={`flex items-center gap-3 backdrop-blur-sm rounded-3xl border shadow-xl p-2 ${
-                          theme === "light" ? "bg-white/80 border-white/30" : "bg-gray-800/80 border-gray-700/30"
-                        }`}
-                      >
-                        <Input
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="询问任何问题"
-                          className={`flex-1 border-0 bg-transparent focus:ring-0 px-6 py-4 text-lg rounded-2xl ${
-                            theme === "light"
-                              ? "text-gray-800 placeholder:text-gray-500"
-                              : "text-gray-200 placeholder:text-gray-400"
-                          }`}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`rounded-2xl w-12 h-12 p-0 ${
-                            theme === "light"
-                              ? "text-gray-500 hover:text-gray-700"
-                              : "text-gray-400 hover:text-gray-200"
-                          }`}
-                        >
-                          <Mic className="w-6 h-6" />
-                        </Button>
-                        <Button
-                          onClick={handleSendMessage}
-                          disabled={!inputValue.trim()}
-                          className="rounded-2xl w-14 h-14 p-0 bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
-                        >
-                          <Send className="w-6 h-6" />
-                        </Button>
-                      </div>
-                    </div>
+                      确认提交
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        sendMessage('我需要重新考虑一下');
+                      }}
+                    >
+                      重新考虑
+                    </Button>
                   </div>
                 </div>
-              )}
-            </>
-          ) : (
-            // 预览界面
-            <div
-              className={`flex-1 overflow-auto backdrop-blur-sm ${
-                theme === "light" ? "bg-white/40" : "bg-gray-900/40"
-              }`}
-            >
-              {previewPage ? (
-                <PageRenderer page={previewPage} isPreview />
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className={`text-lg ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>暂无预览内容</p>
-                </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// 更新消息气泡组件以支持深色模式
-interface MessageBubbleProps {
-  message: ChatMessage
-  onOptionClick: (option: any) => void
-  isGenerating: boolean
-  theme: "light" | "dark"
-}
-
-function MessageBubble({ message, onOptionClick, isGenerating, theme }: MessageBubbleProps) {
-  const isUser = message.type === "user"
+      </motion.div>
+    )
+  }
 
   return (
-    <div className={`flex gap-4 ${isUser ? "flex-row-reverse" : ""}`}>
-      <div className="flex-shrink-0">
-        {isUser ? (
-          <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-              theme === "light"
-                ? "bg-gradient-to-br from-gray-400 to-gray-600"
-                : "bg-gradient-to-br from-gray-500 to-gray-700"
-            }`}
+    <div
+      className={`h-screen flex transition-colors duration-300 ${
+        theme === "light" 
+          ? "bg-white" 
+          : "bg-gray-900"
+      }`}
+    >
+      {/* 左侧侧边栏 - 代码模式时收起 */}
+      <div
+        className={`border-r flex flex-col transition-all duration-500 ${
+          isCodeMode ? "w-0 overflow-hidden" : "w-64"
+        } ${
+          theme === "light" 
+            ? "bg-gray-50 border-gray-200" 
+            : "bg-gray-800 border-gray-700"
+        }`}
+      >
+        {/* 新建对话按钮 */}
+        <div className="p-3">
+          <Button
+            onClick={handleNewChat}
+            variant="outline"
+            className="w-full justify-start gap-3 h-11 border-gray-300 hover:bg-gray-100 mb-2"
           >
-            <User className="w-6 h-6 text-white" />
+            <Plus className="w-4 h-4" />
+            新建对话
+          </Button>
+          
+          {/* 测试按钮 */}
+          <Button
+            onClick={generateTestCode}
+            variant="outline"
+            className="w-full justify-start gap-3 h-11 border-blue-300 hover:bg-blue-50 text-blue-600"
+          >
+            <Code className="w-4 h-4" />
+            生成测试代码
+          </Button>
+        </div>
+
+        {/* 会话列表 */}
+        <ScrollArea className="flex-1">
+          <div className="px-3 pb-3 space-y-2">
+            {sessions.length > 0 ? (
+              sessions.map((session) => (
+                <motion.div
+                  key={session.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                    currentSession?.id === session.id
+                      ? theme === "light"
+                        ? "bg-gray-200"
+                        : "bg-gray-700"
+                      : theme === "light"
+                        ? "hover:bg-gray-100"
+                        : "hover:bg-gray-700/50"
+                  }`}
+                  onClick={() => selectSession(session.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-4 h-4 text-gray-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3
+                        className={`font-medium text-sm truncate ${
+                          theme === "light" ? "text-gray-900" : "text-gray-100"
+                        }`}
+                      >
+                        {session.title}
+                      </h3>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 w-6 h-6 p-0"
+                    >
+                      <MoreHorizontal className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className={`text-center p-6 ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
+                <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">暂无对话</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center">
-            <Bot className="w-6 h-6 text-white" />
-          </div>
-        )}
+        </ScrollArea>
       </div>
 
-      <div className={`max-w-[75%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-3`}>
-        <div
-          className={`px-6 py-4 rounded-3xl shadow-lg backdrop-blur-sm border ${
-            isUser
-              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white border-white/20"
-              : theme === "light"
-                ? "bg-white/80 text-gray-800 border-white/30"
-                : "bg-gray-800/80 text-gray-200 border-gray-700/30"
-          }`}
-        >
-          <div className="whitespace-pre-wrap text-base leading-relaxed">{message.content}</div>
-        </div>
+      {/* 主内容区域 */}
+      <div className="flex-1 flex flex-col">
+        {isCodeMode ? (
+          /* 代码编辑模式 */
+          <div className="flex-1 flex">
+            {/* 聊天区域 - 代码模式时变窄 */}
+            <div className="w-1/2 flex flex-col border-r">
+              {/* 头部工具栏 */}
+              <div className={`flex items-center justify-between p-4 border-b ${
+                theme === "light" ? "bg-gray-50 border-gray-200" : "bg-gray-800 border-gray-700"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsCodeMode(false)
+                      setGeneratedCode([])
+                      setShowReactPreview(false)
+                    }}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    返回对话
+                  </Button>
+                  <div className="text-sm font-medium">对话历史</div>
+                </div>
+              </div>
 
-        {/* 选项按钮 - 支持深色模式 */}
-        {!isUser && message.metadata?.options && (
-          <div className="flex flex-wrap gap-3 mt-2">
-            {(message.metadata.options || []).map((option: any) => (
-              <Button
-                key={option.id}
-                variant={option.type === "action" ? "default" : "outline"}
-                size="sm"
-                onClick={() => onOptionClick(option)}
-                disabled={isGenerating}
-                className={`rounded-2xl transition-all duration-300 hover:scale-105 ${
-                  option.type === "action"
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg text-white"
-                    : theme === "light"
-                      ? "bg-white/60 backdrop-blur-sm border-white/30 hover:bg-white/80"
-                      : "bg-gray-800/60 backdrop-blur-sm border-gray-700/30 hover:bg-gray-800/80 text-gray-200"
-                }`}
+              {/* 消息列表 */}
+              <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="py-4">
+                    {currentSession?.messages?.map((message, index) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        isLast={index === (currentSession?.messages?.length || 0) - 1}
+                      />
+                    ))}
+                    
+                    {/* 如果是测试模式，显示生成信息 */}
+                    {generatedCode.length > 0 && (
+                      <div className="max-w-4xl mx-auto px-6 py-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <CheckCircle className="w-5 h-5 text-blue-600" />
+                            <span className="font-medium text-blue-800">代码生成完成</span>
+                          </div>
+                          <p className="text-blue-700 text-sm">
+                            已生成包含 React 组件、样式文件和配置的完整项目代码。
+                            点击右侧的"React预览"按钮查看实时效果。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div ref={messagesEndRef} />
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* 底部输入框 */}
+              <div className="border-t border-gray-100 bg-white p-4">
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 relative">
+                    <Input
+                      ref={inputRef}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="继续对话或请求修改..."
+                      className="pr-12 py-3 border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isGenerating}
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!inputValue.trim() || isGenerating}
+                      size="sm"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 p-0 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 右侧代码预览区域 */}
+            <div className="w-1/2 flex flex-col">
+              <div className={`flex items-center justify-between p-4 border-b ${
+                theme === "light" ? "bg-gray-50 border-gray-200" : "bg-gray-800 border-gray-700"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <Code className="w-5 h-5 text-blue-500" />
+                  <div className="text-sm font-medium">
+                    {showReactPreview ? "React 应用预览" : "生成的代码"}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {!showReactPreview ? (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleCodeDownload}
+                        disabled={generatedCode.length === 0}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        下载
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handleReactPreview}
+                        disabled={generatedCode.length === 0}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        React预览
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowReactPreview(false)}
+                    >
+                      <Code className="w-4 h-4 mr-2" />
+                      返回代码
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-hidden">
+                {showReactPreview ? (
+                  /* React预览模式 */
+                  getReactPreviewData() ? (
+                    <ReactPreviewRenderer
+                      data={getReactPreviewData()!}
+                      onDownload={handleCodeDownload}
+                      onDeploy={handleDeploy}
+                      onEditCode={handleEditCode}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-500">
+                      <div className="text-center">
+                        <Code className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium mb-2">暂无预览数据</p>
+                        <p className="text-sm">请先生成代码</p>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  /* 代码查看模式 */
+                  generatedCode.length > 0 ? (
+                    <CodeBlockStreaming
+                      files={generatedCode}
+                      isStreaming={isGenerating}
+                      onPreview={handleReactPreview}
+                      onDownload={handleCodeDownload}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-500">
+                      <div className="text-center">
+                        <Code className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium mb-2">等待代码生成</p>
+                        <p className="text-sm">代码生成完成后将在此显示</p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        ) : hasStartedChat ? (
+          /* 正常对话模式 */
+          <>
+            {/* 消息列表 */}
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="py-8">
+                  {currentSession?.messages?.map((message, index) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isLast={index === (currentSession?.messages?.length || 0) - 1}
+                    />
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* 底部输入框 */}
+            <div className="border-t border-gray-100 bg-white p-4">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-end gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="p-2 h-auto text-gray-400 hover:text-gray-600"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </Button>
+                  
+                  <div className="flex-1 relative">
+                    <Input
+                      ref={inputRef}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="发送消息..."
+                      className="pr-12 py-3 border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={isGenerating}
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!inputValue.trim() || isGenerating}
+                      size="sm"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 p-0 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* 欢迎模式 */
+          <div className="flex-1 flex flex-col items-center justify-center px-6">
+            <div className="w-full max-w-2xl mx-auto text-center">
+              {/* 欢迎文本 */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-8"
               >
-                {option.label}
-              </Button>
-            ))}
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                  HeysMe AI
+                </h1>
+                
+                <div className="text-xl text-gray-600 h-16 flex items-center justify-center">
+                  {typingText}
+                  <span className="ml-1 animate-pulse">|</span>
+                </div>
+              </motion.div>
+
+              {/* 输入框 */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="w-full"
+              >
+                <div className="relative">
+                  <div className="flex items-end gap-3 p-4 border border-gray-200 rounded-2xl bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="p-2 h-auto text-gray-400 hover:text-gray-600"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </Button>
+                    
+                    <div className="flex-1 relative">
+                      <Input
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        placeholder="告诉我你想要什么样的简历..."
+                        className="border-0 p-0 text-lg placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0"
+                        autoFocus
+                      />
+                    </div>
+
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!inputValue.trim()}
+                      size="sm"
+                      className="w-8 h-8 p-0 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 示例提示 */}
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  {[
+                    "我想创建一份软件工程师简历",
+                    "帮我设计一个设计师作品集",
+                    "制作一份学生求职简历"
+                  ].map((example, index) => (
+                    <Button
+                      key={index}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setInputValue(example)}
+                      className="text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-full border border-gray-200"
+                    >
+                      {example}
+                    </Button>
+                  ))}
+                </div>
+              </motion.div>
+            </div>
           </div>
         )}
-
-        <div className={`text-xs px-2 ${theme === "light" ? "text-gray-500" : "text-gray-400"}`}>
-          {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        </div>
       </div>
     </div>
   )

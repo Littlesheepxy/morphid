@@ -8,21 +8,21 @@ import { ThemeProvider } from "@/contexts/theme-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "MorphID - AI 驱动的职业身份平台",
+  title: "HeysMe - AI 驱动的职业身份平台",
   description: "通过多轮智能对话，为你生成个性化的职业主页",
-  keywords: "MorphID, AI, 职业主页, 个人品牌, 智能生成",
-  authors: [{ name: "MorphID Team" }],
+  keywords: "HeysMe, AI, 职业主页, 个人品牌, 智能生成",
+  authors: [{ name: "HeysMe Team" }],
   openGraph: {
-    title: "MorphID - AI 驱动的职业身份平台",
+    title: "HeysMe - AI 驱动的职业身份平台",
     description: "通过多轮智能对话，为你生成个性化的职业主页",
-    url: "https://morphid.app",
-    siteName: "MorphID",
+    url: "https://HeysMe.app",
+    siteName: "HeysMe",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "MorphID - AI 驱动的职业身份平台",
+        alt: "HeysMe - AI 驱动的职业身份平台",
       },
     ],
     locale: "zh_CN",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "MorphID - AI 驱动的职业身份平台",
+    title: "HeysMe - AI 驱动的职业身份平台",
     description: "通过多轮智能对话，为你生成个性化的职业主页",
     images: ["/og-image.png"],
   },

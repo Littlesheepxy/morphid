@@ -2,7 +2,7 @@
  * 公开页面展示
  *
  * 功能：
- * - 展示用户的MorphID页面
+ * - 展示用户的HeysMe页面
  * - 支持SEO优化
  * - 访问统计
  * - 社交分享
@@ -18,7 +18,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import PageRenderer from "@/components/page-renderer"
 import { createServerClient } from "@/lib/supabase"
-import type { FlowPage } from "@/types/MorphID"
+import type { FlowPage } from "@/types/HeysMe"
 
 interface PageProps {
   params: {
@@ -54,23 +54,23 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!page) {
     return {
-      title: "页面不存在 - MorphID",
+      title: "页面不存在 - HeysMe",
     }
   }
 
   const heroBlock = page.blocks?.find((block) => block.type === "hero")
-  const description = heroBlock?.data?.description || `${page.title} - 由 MorphID 创建的专业职业主页`
+  const description = heroBlock?.data?.description || `${page.title} - 由 HeysMe 创建的专业职业主页`
 
   return {
-    title: `${page.title} - MorphID`,
+    title: `${page.title} - HeysMe`,
     description,
-    keywords: `${page.title}, MorphID, 职业主页, 个人品牌, ${heroBlock?.data?.title || ""}`,
-    authors: [{ name: page.users?.username || "MorphID用户" }],
+    keywords: `${page.title}, HeysMe, 职业主页, 个人品牌, ${heroBlock?.data?.title || ""}`,
+    authors: [{ name: page.users?.username || "HeysMe用户" }],
     openGraph: {
       title: page.title,
       description,
       type: "profile",
-      url: `https://MorphID.app/p/${page.slug}`,
+      url: `https://HeysMe.app/p/${page.slug}`,
       images: [
         {
           url: heroBlock?.data?.avatar || "/og-image.png",
@@ -107,7 +107,7 @@ export default async function PublicPageView({ params }: PageProps) {
       <footer className="border-t bg-gray-50 py-8 mt-16">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-gray-600 mb-4">
-            这个页面由 <strong>{page.users?.username}</strong> 使用 MorphID 创建
+            这个页面由 <strong>{page.users?.username}</strong> 使用 HeysMe 创建
           </p>
           <div className="flex justify-center gap-4">
             <a href="/create" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
@@ -115,7 +115,7 @@ export default async function PublicPageView({ params }: PageProps) {
             </a>
             <span className="text-gray-300">|</span>
             <a href="/about" className="text-gray-600 hover:text-gray-700 text-sm">
-              了解 MorphID
+              了解 HeysMe
             </a>
           </div>
         </div>

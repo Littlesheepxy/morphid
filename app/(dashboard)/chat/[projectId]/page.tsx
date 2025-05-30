@@ -2,7 +2,7 @@
  * 项目聊天页面
  *
  * 功能：
- * - 编辑现有MorphID项目
+ * - 编辑现有HeysMe项目
  * - 查看项目历史对话
  * - 实时预览修改效果
  *
@@ -24,7 +24,7 @@ import ChatInterface from "@/components/chat-interface"
 import PageRenderer from "@/components/page-renderer"
 import { useTheme } from "@/contexts/theme-context"
 import { supabase } from "@/lib/supabase"
-import type { FlowPage } from "@/types/MorphID"
+import type { FlowPage } from "@/types/HeysMe"
 
 export default function ProjectChatPage() {
   const { theme } = useTheme()

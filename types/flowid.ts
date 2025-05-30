@@ -1,5 +1,5 @@
 /**
- * MorphID 核心类型定义
+ * HeysMe 核心类型定义
  *
  * 功能：定义整个应用的核心数据结构
  * 用途：类型安全、数据一致性、开发体验
@@ -29,7 +29,7 @@ export interface User {
   usage_stats?: any // 使用统计
 }
 
-// 页面主体结构 - MorphID的核心实体
+// 页面主体结构 - HeysMe的核心实体
 export interface FlowPage {
   id: string // 页面唯一标识
   user_id: string // 所属用户ID

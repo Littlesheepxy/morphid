@@ -1,6 +1,6 @@
 "use client"
 
-import type { MorphPage, PageBlock } from "@/types/morphid"
+import type { MorphPage, PageBlock } from "@/types/HeysMe"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -181,7 +181,7 @@ export default function PageRenderer({
         {!isPreview && (
           <footer className="mt-16 pt-8 border-t border-gray-200/50 text-center">
             <p className={`text-sm ${themeStyle.text} opacity-70`}>
-              由 <span className="font-semibold">MorphID</span> 强力驱动 •
+              由 <span className="font-semibold">HeysMe</span> 强力驱动 •
               <a href="/create" className={`ml-1 ${themeStyle.accent} hover:underline`}>
                 创建你的专属页面
               </a>

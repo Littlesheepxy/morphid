@@ -1,401 +1,149 @@
-# 🧭 MorphID v0.1 - AI驱动的身份平台
+# 🧠 智能个性化多Agent简历生成系统
 
-> **版本**: v0.1  
-> **类型**: MVP / 创始内测计划版  
-> **目标**: 创建一个 AI 驱动的身份平台，用户通过多轮输入构建个性化主页，支持风格、结构、受众控制
+> **版本**: v2.0 - 智能个性化版  
+> **技术栈**: NextJS 14 + TypeScript + Tailwind CSS + Shadcn/ui + Framer Motion  
+> **特色**: 流式显示 + 交互式信息收集 + 智能意图识别 + 个性化定制
 
-## 🎯 产品定位
+## 🎯 系统概览
 
-MorphID 是一个基于AI的职业身份平台，通过多轮智能对话和多数据源集成，为用户生成个性化的职业主页。
+这是一个基于多Agent协作的智能简历/个人页面生成系统，通过AI驱动的对话式交互，为不同身份的用户生成个性化的专业展示页面。
 
-### 核心特色
-- **三Agent协作系统**：数据收集 → 分析总结 → 页面创建
-- **多数据源集成**：对话、文档、社交媒体等
-- **智能页面生成**：基于用户画像的个性化设计
-- **实时预览系统**：所见即所得的编辑体验
+### 🌟 核心特色
+- **🧠 智能意图识别**：区分正式需求、试用体验、学习了解、紧急需要四种意图
+- **👥 身份个性化定制**：为UI/UX设计师、产品经理、开发者、AI科学家等提供专业化方案
+- **⚡ 流式显示体验**：打字机效果 + 实时进度 + 流式代码生成
+- **🎯 交互式信息收集**：选择题按钮 + 智能表单 + 动态问题生成
+- **🚀 极致便捷部署**：Vercel一键部署，GitHub自动同步
 
-### 适用人群
-- AI 工程师 / AI产品经理
-- 自由职业者 / 应届生 / 创作者
-- 交友 / 社媒达人 / 销售
-- 需要个性化展示履历、照片、作品、项目、社交资料等的用户
+### 🏗️ 多Agent架构
+```
+用户输入 → Welcome Agent → Info Collection Agent → Prompt Output Agent → Coding Agent → 完成
+           ↓              ↓                      ↓                    ↓
+        意图识别        个性化信息收集           结构化设计方案        NextJS代码生成
+           ↓              ↓                      ↓                    ↓
+        身份判断        选择题+智能默认          风格+布局选择         流式代码输出
+```
+
+### 🎨 支持的身份类型
+- **UI/UX设计师**：作品集展示，设计思维突出
+- **产品经理**：数据驱动，商业价值体现
+- **开发者**：技术项目，代码能力展示
+- **AI/数据科学家**：研究成果，算法深度
+- **创意工作者**：创意作品，品牌案例
+- **学生/求职者**：成长轨迹，潜力展示
 
 ## 🚀 快速开始
 
 ### 前置要求
 - Node.js 18+
-- [Clerk](https://clerk.com) 账户（用于认证）
-- [Supabase](https://supabase.com) 项目（用于数据库）
+- OpenAI API Key（用于AI对话）
 
 ### 一键启动
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/your-username/morphid.git
-cd morphid
+# 1. 运行增强版启动脚本
+chmod +x quick-start-enhanced.sh
+./quick-start-enhanced.sh
 
-# 2. 安装依赖
-npm install
+# 2. 配置环境变量
+cp .env.example .env.local
+# 添加你的 OpenAI API Key
 
-# 3. 配置环境变量
-cp env.example .env.local
-# 编辑 .env.local 填入您的配置
-
-# 4. 设置数据库
-# 在 Supabase SQL Editor 中执行 supabase-migration.sql
-
-# 5. 启动开发服务器
+# 3. 启动开发服务器
 npm run dev
 ```
 
-### 🔗 共享数据库部署（推荐）
+### 立即体验
+访问 `http://localhost:3000` 开始使用智能个性化简历生成器！
 
-MorphID 支持与父项目共享 Clerk 认证和 Supabase 数据库，实现统一的用户管理：
+## 📚 文档指南
 
-#### 架构优势
-- ✅ **统一认证**：用户只需一次登录，可访问所有项目
-- ✅ **数据一致性**：用户信息实时同步，无需重复维护
-- ✅ **权限控制**：通过 `projects` 字段灵活控制项目访问权限
-- ✅ **成本优化**：共享基础设施，降低运营成本
+- **[系统设计文档](MULTI_AGENT_RESUME_SYSTEM.md)** - 完整的多Agent架构设计和流式交互方案
+- **[技术栈指南](TECH_STACK_GUIDE.md)** - NextJS + TypeScript技术栈选择说明
+- **[实现路线图](IMPLEMENTATION_ROADMAP.md)** - 4周详细开发计划和任务分解
+- **[个性化策略](lib/prompts/personalization-strategies.ts)** - 智能个性化实现代码
 
-#### 快速配置
-```bash
-# 1. 使用共享配置模板
-cp env.shared.example .env.local
+## 🛠️ 技术栈
 
-# 2. 执行数据库迁移（添加 MorphID 表）
-# 在 Supabase Dashboard 执行 supabase-migration-shared.sql
+### 核心框架
+- **NextJS 14** - React全栈框架，App Router
+- **TypeScript** - 类型安全，开发效率
+- **Tailwind CSS** - 原子化CSS，响应式设计
 
-# 3. 启动项目
-npm run dev
-```
+### UI与动效
+- **Shadcn/ui** - 开源组件库，高度可定制
+- **Framer Motion** - 流畅动画效果
+- **Lucide React** - 现代化图标库
 
-#### 数据库结构
-```sql
--- 扩展现有用户表
-users (
-  id TEXT PRIMARY KEY,              -- Clerk用户ID
-  projects TEXT[] DEFAULT '{}',     -- 项目访问权限 ['morphid', 'parent-project']
-  plan TEXT DEFAULT 'free',         -- 用户计划
-  default_model TEXT DEFAULT 'gpt-4o' -- 默认AI模型
-)
+### 部署方案
+- **Vercel** - 零配置部署，全球CDN
+- **GitHub** - 代码版本管理，自动部署
 
--- MorphID 专用表（带前缀避免冲突）
-morphid_pages, morphid_page_blocks, morphid_templates, 
-morphid_page_analytics, morphid_user_assets
-```
+## 🎯 智能个性化特性
 
-### 🔧 其他部署方案
+### 意图识别
+- **正式创建**：深度信息收集，3轮问答
+- **试用体验**：快速生成，智能默认值
+- **学习了解**：提供示例，展示模板
+- **紧急需要**：效率优先，一键生成
 
-#### 方案一：共享认证 + 独立数据库
-```env
-# 使用与父项目相同的 Clerk 配置
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_same_as_parent
-CLERK_SECRET_KEY=sk_test_same_as_parent
+### 身份定制
+- **技能选项**：根据身份动态生成专业技能列表
+- **风格建议**：个性化配色、布局、内容优先级
+- **问题定制**：针对不同身份的核心问题
 
-# 使用 MorphID 专用的 Supabase 项目
-NEXT_PUBLIC_SUPABASE_URL=https://morphid-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_morphid_key
-```
-
-#### 方案二：完全独立部署
-```env
-# 使用独立的 Clerk 和 Supabase 配置
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_morphid_only
-NEXT_PUBLIC_SUPABASE_URL=https://morphid-only.supabase.co
-```
-
-### 详细配置指南
-
-- 📖 [共享数据库配置指南](./SHARED_DATABASE_SETUP.md) **（推荐）**
-- 📖 [独立部署配置指南](./CLERK_SUPABASE_SETUP.md)
-- 🔗 [跨项目认证配置](./SHARED_AUTH_SETUP.md)
-- 🚀 [快速开始指南](./QUICKSTART.md)
-
-## 🔑 核心功能（MVP）
-
-| 模块 | 描述 |
-|------|------|
-| 用户系统 | Clerk 认证，支持邮箱、Google、GitHub 登录 |
-| 三Agent协作 | 数据收集Agent → 分析总结Agent → 页面创建Agent |
-| 多数据源集成 | 对话输入、文档上传、社交媒体API集成 |
-| 多模型接入 | Claude 3.7（默认），可选 OpenAI / Gemini / DeepSeek |
-| 智能页面生成 | 基于用户画像自动生成页面结构和内容 |
-| 页面管理 | 创建多个页面，自定义标题、风格、slug、可见性 |
-| 实时预览 | 所见即所得的编辑体验，支持模块化风格切换 |
-| Explore 社区 | 可选公开展示页面至 explore 流 |
-| 权限系统 | 页面级可见性控制（公开 / 私密 / 链接可见） |
-| 支付通行证（v1.1） | Stripe 支付 Pro 功能，内测用户解锁限制（预留） |
-
-## 👤 用户角色
-
-### 注册用户（免费）
-- 默认生成主页，可编辑一个页面
-- 使用 Claude 模型生成内容（免费额度限制）
-
-### Pro Pioneer 用户（通行证）
-- 无限页面
-- 限定风格主题
-- Explore 高亮展示
-
-### 访客
-- 可访问公开页面或链接权限页面
-
-## 🔄 产品流程（用户视角）
-
-### 1. 数据收集阶段
-- **对话收集**: 通过友好对话了解用户背景
-- **文档上传**: 支持简历PDF/Word解析
-- **社交集成**: LinkedIn、GitHub、Twitter等平台数据
-
-### 2. 分析总结阶段  
-- **数据整合**: 多源数据的统一处理
-- **画像生成**: 结构化用户职业画像
-- **偏好推断**: 基于数据推断设计偏好
-
-### 3. 页面创建阶段
-- **智能设计**: 自动选择主题和布局
-- **内容生成**: 生成具体页面内容
-- **优化建议**: 提供改进建议
-
-### 4. 编辑发布阶段
-- **实时预览**: 所见即所得的编辑体验
-- **模块调整**: 拖拽排序、显隐控制
-- **权限设置**: 设置页面可见性
-- **分享发布**: 生成分享链接
-
-## ✨ 页面结构（前端渲染 JSON 结构）
-
-```typescript
-interface MorphPage {
-  title: string
-  slug: string
-  visibility: "public" | "private" | "link-only"
-  theme: "zen" | "creative" | "devgrid" | "minimal" | "bold"
-  layout: "grid" | "hero" | "twocol" | "stack"
-  blocks: PageBlock[]
-  is_featured: boolean
+### 技术优化
+```json
+{
+  "设计师": ["Lottie动画", "主题切换", "作品集布局"],
+  "产品经理": ["数据图表", "成果展示", "商业思维"],
+  "开发者": ["代码高亮", "技术标签", "项目展示"],
+  "AI科学家": ["研究可视化", "论文列表", "算法展示"]
 }
-
-type PageBlock = 
-  | HeroBlock 
-  | ProjectBlock 
-  | SkillBlock 
-  | LinkBlock 
-  | RecruitBlock 
-  | CustomBlock
 ```
 
-## 🏗️ 技术架构
+## 🌊 流式显示体验
 
-### 前端技术栈
-- **框架**: Next.js 14 (App Router)
-- **UI库**: shadcn/ui + Tailwind CSS
-- **状态管理**: React Hooks + Context
-- **类型安全**: TypeScript
-- **主题系统**: 支持亮色/暗色模式
+### 实时流式输出
+- **500ms首字符显示**：用户无需等待即可开始阅读
+- **打字机动画效果**：自然流畅的文本显示
+- **分层JSON结构**：reply → interaction → system → data
 
-### 后端技术栈
-- **认证**: Clerk (邮箱、Google、GitHub OAuth)
-- **数据库**: Supabase (PostgreSQL)
-- **AI集成**: AI API (OpenAI, Claude, Gemini)
-- **文件存储**: Supabase Storage
+### 交互式组件
+- **选择题按钮**：降低输入门槛，提升体验
+- **多选技能面板**：快速选择专业技能
+- **实时进度指示**：用户始终了解当前状态
 
-### 核心模块
+## 📊 系统优势
 
-#### 1. Agent系统 (`/lib/agents/`)
-```
-agents/
-├── data-collection-agent.ts    # 信息收集Agent
-├── summary-agent.ts           # 分析总结Agent  
-├── page-creation-agent.ts     # 页面创建Agent
-└── workflow-manager.ts        # 工作流管理器
-```
+| 特性 | 传统方案 | 智能个性化系统 |
+|------|----------|----------------|
+| 信息收集 | 长表单填写 | 智能对话+选择题 |
+| 风格选择 | 固定模板 | 身份个性化推荐 |
+| 代码生成 | 静态输出 | 流式生成+实时预览 |
+| 部署难度 | 复杂配置 | Vercel一键部署 |
+| 用户体验 | 等待加载 | 实时响应交互 |
 
-#### 2. 组件系统 (`/components/`)
-```
-components/
-├── flow-builder.tsx           # 流程构建器
-├── page-renderer.tsx          # 页面渲染器
-├── chat-interface.tsx         # 聊天界面
-├── data-source-integration.tsx # 数据源集成
-├── model-selector.tsx         # AI模型选择器
-└── theme-toggle.tsx          # 主题切换器
-```
+## 🤝 贡献指南
 
-#### 3. API路由 (`/app/api/`)
-```
-api/
-├── pages/                     # 页面CRUD操作
-├── generate-page/             # AI页面生成
-├── intent-recognition/        # 意图识别
-├── deploy/                   # 页面部署
-└── webhooks/clerk/           # Clerk用户同步
-```
+1. Fork 项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
 
-## 🗃 数据库设计
+## 📄 开源协议
 
-### 核心表结构
-```sql
--- 用户表（Clerk集成）
-users (
-  id uuid PRIMARY KEY,
-  clerk_id text UNIQUE,        -- Clerk用户ID
-  email text,
-  username text UNIQUE,
-  first_name text,
-  last_name text,
-  avatar_url text,
-  plan text DEFAULT 'free',
-  default_model text DEFAULT 'gpt-4o',
-  created_at timestamp,
-  updated_at timestamp
-)
+本项目采用 MIT 协议 - 查看 [LICENSE](LICENSE) 文件了解详情
 
--- 页面表  
-pages (
-  id uuid PRIMARY KEY,
-  user_id uuid REFERENCES users(id),
-  slug text UNIQUE,
-  title text,
-  theme text,
-  layout text,
-  visibility text DEFAULT 'private',
-  is_featured boolean DEFAULT false,
-  created_at timestamp,
-  updated_at timestamp
-)
+## 🎯 发展路线
 
--- 页面模块表
-page_blocks (
-  id uuid PRIMARY KEY,
-  page_id uuid REFERENCES pages(id),
-  type text,
-  data jsonb,
-  position integer,
-  is_visible boolean DEFAULT true,
-  created_at timestamp,
-  updated_at timestamp
-)
-```
-
-## 🎨 主题系统
-
-### 支持的主题
-- **zen**: 极简禅意风格
-- **creative**: 创意炫酷风格  
-- **devgrid**: 科技未来风格
-- **minimal**: 现代简约风格
-- **bold**: 大胆前卫风格
-
-### 布局类型
-- **grid**: 网格布局
-- **hero**: 英雄布局
-- **twocol**: 双列布局
-- **stack**: 堆叠布局
-
-## 🧠 多模型代理设计（模型调度层）
-
-`/api/generate` 接口接收结构化用户输入，包含：
-- `role`, `purpose`, `style`, `display_priority`
-- `model_type`（可选字段）
-
-后端通过 `modelRouter` 分发至：
-- Claude 3.7（默认）
-- OpenAI GPT-4-turbo
-- Gemini 1.5-pro
-- DeepSeek-Vision / Chat
-
-## 🚀 部署与上线
-
-| 平台 | 用途 |
-|------|------|
-| Vercel | Next.js 自动部署 |
-| Supabase | Postgres + Storage |
-| Clerk | 认证、OAuth、用户管理 |
-| Stripe（后期） | 订阅 / 单次支付 |
-| Cloudflare（可选） | 缓存 + 子域配置 |
-
-## 📋 完整TODO清单
-
-### 🔥 高优先级 (P0)
-- [x] **用户认证系统**
-  - [x] Clerk 集成配置
-  - [x] 社交登录 (Google, GitHub)
-  - [x] 用户数据同步到 Supabase
-  
-- [x] **页面管理功能**
-  - [x] 页面编辑器
-  - [ ] 页面删除和恢复
-  - [ ] 页面复制功能
-  
-- [ ] **数据源集成**
-  - [ ] 简历文档解析 (PDF/Word)
-  - [ ] LinkedIn API集成
-  - [ ] GitHub API集成
-
-### 🚀 中优先级 (P1)
-- [ ] **页面功能增强**
-  - [ ] 自定义域名支持
-  - [ ] SEO优化设置
-  - [ ] 页面访问统计
-  - [ ] 社交分享功能
-  
-- [ ] **编辑体验优化**
-  - [ ] 拖拽排序模块
-  - [ ] 实时预览更新
-  - [ ] 撤销/重做功能
-  - [ ] 模块模板库
-  
-- [ ] **AI功能扩展**
-  - [ ] 更多AI模型支持
-  - [ ] 智能内容建议
-  - [ ] 自动SEO优化
-  - [ ] 多语言生成
-
-### 💡 低优先级 (P2)
-- [ ] **高级功能**
-  - [ ] 团队协作功能
-  - [ ] 页面版本控制
-  - [ ] A/B测试支持
-  - [ ] 高级分析面板
-  
-- [ ] **扩展集成**
-  - [ ] 更多社交平台
-  - [ ] CRM系统集成
-  - [ ] 邮件营销集成
-  - [ ] 第三方插件系统
-  
-- [ ] **性能优化**
-  - [ ] 图片CDN优化
-  - [ ] 页面缓存策略
-  - [ ] 数据库查询优化
-  - [ ] 移动端性能优化
-
-### 🎯 长期规划 (P3)
-- [ ] **商业化功能**
-  - [ ] 订阅计划管理
-  - [ ] 付费功能解锁
-  - [ ] 企业版功能
-  - [ ] API开放平台
-  
-- [ ] **生态建设**
-  - [ ] 模板市场
-  - [ ] 插件开发平台
-  - [ ] 开发者社区
-  - [ ] 合作伙伴计划
-
-## 📋 开发计划
-
-详细的开发步骤请参考 [DEVELOPMENT.md](./DEVELOPMENT.md) 
-
-## 🔧 配置文档
-
-- 📖 [Clerk + Supabase 配置指南](./CLERK_SUPABASE_SETUP.md)
-- 🚀 [快速开始指南](./QUICKSTART.md)
-- 🏗️ [项目结构说明](./PROJECT_STRUCTURE.md)
-- 📊 [项目总览](./PROJECT_OVERVIEW.md)
+- **v2.0** ✅ 智能个性化多Agent系统
+- **v2.1** 🚧 多语言支持，主题系统
+- **v2.2** 📋 数据可视化，图表组件
+- **v2.3** 📋 社交分享，SEO优化
+- **v3.0** 📋 实时协作，团队版本
 
 ---
 
-**MorphID** - 让每个人都能拥有专业的职业身份展示平台 ✨ 
+⭐ 如果这个项目对你有帮助，请给我们一个星标！ 

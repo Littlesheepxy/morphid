@@ -42,7 +42,7 @@ import { useTheme } from "@/contexts/theme-context"
 import { DataSourceIntegration } from "@/components/data-source-integration"
 import { ModelSelector } from "@/components/model-selector"
 import type { ChatMessage, ChatSession } from "@/types/chat"
-import type { FlowPage } from "@/types/MorphID"
+import type { FlowPage } from "@/types/HeysMe"
 
 interface ChatInterfaceProps {
   session?: ChatSession | null
@@ -141,7 +141,7 @@ export default function ChatInterface({
 
           <div>
             <h2 className={`font-semibold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-              {project ? `编辑 ${project.title}` : "MorphID AI 助手"}
+              {project ? `编辑 ${project.title}` : "HeysMe AI 助手"}
             </h2>
             {currentAgent && (
               <div className="flex items-center gap-2 mt-1">

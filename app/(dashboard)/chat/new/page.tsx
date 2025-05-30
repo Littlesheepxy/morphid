@@ -2,7 +2,7 @@
  * 新建项目聊天页面
  *
  * 功能：
- * - 启动新的MorphID创建流程
+ * - 启动新的HeysMe创建流程
  * - 使用Agent工作流系统
  * - 实时预览生成的页面
  *
@@ -17,14 +17,14 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import ChatInterface from "@/components/chat-interface"
-import { useAgentWorkflow } from "@/hooks/use-agent-workflow"
+import { useChatSystem } from "@/hooks/use-chat-system"
 import { supabase } from "@/lib/supabase"
-import PagePreview from "@/components/page-preview" // Import PagePreview component
+import PagePreview from "@/components/page-preview"  // Import PagePreview component
 
 export default function NewChatPage() {
   const router = useRouter()
-  const { currentSession, isGenerating, generatedPage, createNewSession, sendMessage, integrateDataSource } =
-    useAgentWorkflow()
+  const { currentSession, isGenerating, generatedPage, createNewSession, sendMessage } =
+    useChatSystem()
 
   // 检查用户认证状态
   useEffect(() => {
@@ -56,7 +56,6 @@ export default function NewChatPage() {
           session={currentSession}
           isGenerating={isGenerating}
           onSendMessage={sendMessage}
-          onDataIntegration={integrateDataSource}
           showBackButton={true}
           backUrl="/dashboard"
         />

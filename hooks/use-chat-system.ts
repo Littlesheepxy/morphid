@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react"
 import type { ChatMessage, ChatSession } from "@/types/chat"
 import type { Intent } from "@/types/agent"
-import type { UserInput } from "@/types/morphid"
+import type { UserInput } from "@/types/userInput"
 import { AgentManager } from "@/lib/agents"
 import { DEFAULT_MODEL } from "@/types/models"
 
@@ -91,21 +91,66 @@ export function useChatSystem() {
             const intentResult = await intentResponse.json()
             const intent: Intent = intentResult.data
 
+            console.log("🧠 处理意图识别结果:", intent)
+
             // 根据意图选择 Agent
             let agentId = "general_assistant"
-            if (intent.type === "create_morphid" && intent.confidence > 0.7) {
-              agentId = "morphid_creator"
-            } else if (intent.type === "edit_morphid" && intent.confidence > 0.7) {
-              agentId = "morphid_editor"
+            if (intent.type === "create_HeysMe" && intent.confidence > 0.7) {
+              agentId = "HeysMe_creator"
+              
+              // 智能处理提取的信息
+              if (intent.extracted_info) {
+                console.log("📊 发现提取的信息:", intent.extracted_info)
+                
+                // 预填充用户输入
+                if (intent.extracted_info.role) {
+                  updatedSession.userInput.role = intent.extracted_info.role
+                  console.log("✅ 预填充角色:", intent.extracted_info.role)
+                }
+                if (intent.extracted_info.purpose) {
+                  updatedSession.userInput.purpose = intent.extracted_info.purpose
+                  console.log("✅ 预填充目的:", intent.extracted_info.purpose)
+                }
+                if (intent.extracted_info.style) {
+                  updatedSession.userInput.style = intent.extracted_info.style
+                  console.log("✅ 预填充风格:", intent.extracted_info.style)
+                }
+                if (intent.extracted_info.display_priority) {
+                  updatedSession.userInput.display_priority = intent.extracted_info.display_priority
+                  console.log("✅ 预填充优先级:", intent.extracted_info.display_priority)
+                }
+
+                // 根据已有信息确定起始步骤
+                let startStep = "role"
+                if (updatedSession.userInput.role) {
+                  startStep = "intent_clarification" // 新增意图细化步骤
+                  if (updatedSession.userInput.purpose) {
+                    startStep = "style"
+                    if (updatedSession.userInput.style) {
+                      startStep = "priority"
+                      if (updatedSession.userInput.display_priority?.length) {
+                        startStep = "final_confirmation"
+                      }
+                    }
+                  }
+                }
+                
+                updatedSession.currentStep = startStep
+                console.log("🎯 智能设置起始步骤:", startStep)
+              } else {
+                updatedSession.currentStep = "role" // 设置初始步骤
+              }
+            } else if (intent.type === "edit_HeysMe" && intent.confidence > 0.7) {
+              agentId = "HeysMe_editor"
             }
 
             agentManager.setAgent(agentId)
 
             // 更新会话标题
-            if (intent.type === "create_morphid") {
-              updatedSession.title = "创建 MorphID"
-            } else if (intent.type === "edit_morphid") {
-              updatedSession.title = "编辑 MorphID"
+            if (intent.type === "create_HeysMe") {
+              updatedSession.title = "创建 HeysMe"
+            } else if (intent.type === "edit_HeysMe") {
+              updatedSession.title = "编辑 HeysMe"
             } else {
               updatedSession.title = content.slice(0, 20) + "..."
             }
@@ -131,14 +176,30 @@ export function useChatSystem() {
 
       // 处理选项点击
       if (option) {
+        console.log("🔄 处理选项点击:", {
+          option,
+          currentStep: activeSession.currentStep,
+          userInput: updatedSession.userInput
+        })
+        
         switch (option.type) {
           case "selection":
-            if (activeSession.currentStep === "role") {
+            if (activeSession.currentStep === "role" || !activeSession.currentStep) {
               updatedSession.userInput.role = option.value
+              updatedSession.currentStep = "intent_clarification"
+              console.log("✅ 设置角色:", option.value, "-> 下一步: intent_clarification")
+            } else if (activeSession.currentStep === "intent_clarification") {
+              updatedSession.userInput.intent_urgency = option.value
+              updatedSession.currentStep = "purpose"
+              console.log("✅ 设置意图:", option.value, "-> 下一步: purpose")
             } else if (activeSession.currentStep === "purpose") {
               updatedSession.userInput.purpose = option.value
+              updatedSession.currentStep = "style"
+              console.log("✅ 设置目的:", option.value, "-> 下一步: style")
             } else if (activeSession.currentStep === "style") {
               updatedSession.userInput.style = option.value
+              updatedSession.currentStep = "priority"
+              console.log("✅ 设置风格:", option.value, "-> 下一步: priority")
             } else if (activeSession.currentStep === "priority") {
               if (!updatedSession.userInput.display_priority) {
                 updatedSession.userInput.display_priority = []
@@ -149,16 +210,31 @@ export function useChatSystem() {
               } else {
                 updatedSession.userInput.display_priority.push(option.value)
               }
+              console.log("✅ 更新优先级:", updatedSession.userInput.display_priority)
             }
             break
           case "action":
             if (option.value === "done") {
+              updatedSession.currentStep = "final_confirmation"
+              console.log("✅ 进入最终确认阶段")
+            } else if (option.value === "confirm") {
+              updatedSession.currentStep = "generate"
+              console.log("✅ 开始生成阶段")
               // 开始生成页面
               generatePage(updatedSession.userInput as UserInput)
+            } else if (option.value === "modify") {
+              updatedSession.currentStep = "role"
+              console.log("🔄 重新开始信息收集")
             }
             break
         }
       }
+
+      console.log("💾 更新会话状态:", {
+        currentStep: updatedSession.currentStep,
+        userInput: updatedSession.userInput,
+        messagesCount: updatedSession.messages.length
+      })
 
       setCurrentSession(updatedSession)
       setSessions((prev) => {
@@ -175,7 +251,26 @@ export function useChatSystem() {
       // 生成 AI 回复
       setTimeout(async () => {
         try {
-          const agentResponse = await agentManager.processMessage(content, updatedSession.userInput)
+          console.log("🤖 调用AgentManager处理消息:", {
+            content,
+            userInput: updatedSession.userInput,
+            currentStep: updatedSession.currentStep
+          })
+          
+          // 传递当前步骤给AgentManager
+          const agentResponse = await agentManager.processMessage(
+            content, 
+            updatedSession.userInput,
+            updatedSession.currentStep // 传递当前步骤
+          )
+
+          console.log("📨 Agent响应:", {
+            content: agentResponse.content,
+            nextStep: agentResponse.nextStep,
+            hasOptions: !!agentResponse.options,
+            optionsCount: agentResponse.options?.length || 0,
+            metadata: agentResponse.metadata
+          })
 
           const aiMessage: ChatMessage = {
             id: `msg-${Date.now()}-ai`,
@@ -246,7 +341,7 @@ export function useChatSystem() {
             const successMessage: ChatMessage = {
               id: `msg-${Date.now()}-success`,
               type: "assistant",
-              content: `🎉 太棒了！使用 ${result.model || selectedModel} 生成的 MorphID 页面已经完成！
+              content: `🎉 太棒了！使用 ${result.model || selectedModel} 生成的 HeysMe 页面已经完成！
 
 你可以在右侧看到预览效果。`,
               timestamp: new Date(),

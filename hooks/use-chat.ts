@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import type { ChatMessage, ChatSession, ChatOption } from "@/types/chat"
-import type { UserInput } from "@/types/MorphID"
+import type { UserInput } from "@/types/HeysMe"
 
 export function useChat() {
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
@@ -12,7 +12,7 @@ export function useChat() {
   const startNewSession = useCallback(() => {
     const newSession: ChatSession = {
       id: `session-${Date.now()}`,
-      title: "新的 MorphID",
+      title: "新的 HeysMe",
       messages: [],
       userInput: {},
       currentStep: "welcome",
@@ -24,7 +24,7 @@ export function useChat() {
     const welcomeMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       type: "assistant",
-      content: "👋 你好！我是 MorphID AI 助手，我将帮助你创建一个专业的职业主页。\n\n让我们从了解你的身份开始吧！",
+      content: "👋 你好！我是 HeysMe AI 助手，我将帮助你创建一个专业的职业主页。\n\n让我们从了解你的身份开始吧！",
       timestamp: new Date(),
       metadata: {
         step: "role",
@@ -145,7 +145,7 @@ export function useChat() {
               id: `msg-${Date.now()}-success`,
               type: "assistant",
               content:
-                "🎉 太棒了！你的 MorphID 页面已经生成完成！\n\n你可以在右侧看到预览效果。如果满意的话，可以保存并分享给其他人。",
+                "🎉 太棒了！你的 HeysMe 页面已经生成完成！\n\n你可以在右侧看到预览效果。如果满意的话，可以保存并分享给其他人。",
               timestamp: new Date(),
               metadata: {
                 options: [
@@ -242,7 +242,7 @@ function generateAIResponse(step: string, userInput: Partial<UserInput>) {
           `🎯 目的：${userInput.purpose}\n` +
           `🎨 风格：${userInput.style}\n` +
           `📋 重点：${userInput.display_priority?.join("、")}\n\n` +
-          "正在为你生成专属的 MorphID 页面...",
+          "正在为你生成专属的 HeysMe 页面...",
         metadata: {
           step: "generating",
         },

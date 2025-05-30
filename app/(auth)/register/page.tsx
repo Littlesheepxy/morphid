@@ -179,7 +179,7 @@ export default function RegisterPage() {
         <Button variant="ghost" asChild className="rounded-2xl">
           <Link href="/">
             <Sparkles className="w-4 h-4 mr-2" />
-            MorphID
+            HeysMe
           </Link>
         </Button>
       </div>
@@ -196,7 +196,7 @@ export default function RegisterPage() {
           <CardTitle className={`text-2xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
             创建账户
           </CardTitle>
-          <p className={`${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>开始你的 MorphID 之旅</p>
+          <p className={`${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>开始你的 HeysMe 之旅</p>
         </CardHeader>
 
         <CardContent className="space-y-6">

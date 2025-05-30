@@ -4,10 +4,10 @@
  * 功能：
  * - 在共享的 Supabase 数据库中管理用户数据
  * - 支持多项目标识和权限管理
- * - 处理 MorphID 特定的业务逻辑
+ * - 处理 HeysMe 特定的业务逻辑
  * 
  * 使用场景：
- * - 用户在父项目注册后，自动获得 MorphID 访问权限
+ * - 用户在父项目注册后，自动获得 HeysMe 访问权限
  * - 用户信息更新时，所有项目实时同步
  * - 跨项目数据查询和访问控制
  */
@@ -15,18 +15,18 @@
 import { syncUserWithClerk } from "./supabase"
 
 /**
- * 同步用户数据并确保 MorphID 访问权限
+ * 同步用户数据并确保 HeysMe 访问权限
  */
 export async function syncUserAcrossProjects(clerkUser: any) {
   try {
-    console.log(`Syncing user ${clerkUser.id} with MorphID access`)
+    console.log(`Syncing user ${clerkUser.id} with HeysMe access`)
     
     // 1. 同步用户基本信息到共享数据库
     const user = await syncUserWithClerk(clerkUser)
     
-    // 2. 确保用户有 MorphID 项目访问权限
+    // 2. 确保用户有 HeysMe 项目访问权限
     if (user) {
-      await ensureMorphIDAccess(user.id)
+      await ensureHeysMeAccess(user.id)
     }
     
     return user
@@ -37,9 +37,9 @@ export async function syncUserAcrossProjects(clerkUser: any) {
 }
 
 /**
- * 确保用户有 MorphID 访问权限
+ * 确保用户有 HeysMe 访问权限
  */
-export async function ensureMorphIDAccess(userId: string) {
+export async function ensureHeysMeAccess(userId: string) {
   const { createServerClient } = await import("./supabase")
   const serverClient = createServerClient()
   
@@ -58,9 +58,9 @@ export async function ensureMorphIDAccess(userId: string) {
     
     const currentProjects = user.projects || []
     
-    // 如果用户还没有 MorphID 访问权限，则添加
-    if (!currentProjects.includes('morphid')) {
-      const updatedProjects = [...currentProjects, 'morphid']
+    // 如果用户还没有 HeysMe 访问权限，则添加
+    if (!currentProjects.includes('HeysMe')) {
+      const updatedProjects = [...currentProjects, 'HeysMe']
       
       const { error: updateError } = await serverClient
         .from("users")
@@ -70,18 +70,18 @@ export async function ensureMorphIDAccess(userId: string) {
       if (updateError) {
         console.error("Error updating user projects:", updateError)
       } else {
-        console.log(`Added MorphID access for user ${userId}`)
+        console.log(`Added HeysMe access for user ${userId}`)
       }
     }
   } catch (error) {
-    console.error("Error ensuring MorphID access:", error)
+    console.error("Error ensuring HeysMe access:", error)
   }
 }
 
 /**
- * 检查用户是否有 MorphID 访问权限
+ * 检查用户是否有 HeysMe 访问权限
  */
-export async function checkUserMorphIDAccess(clerkUserId: string): Promise<boolean> {
+export async function checkUserHeysMeAccess(clerkUserId: string): Promise<boolean> {
   try {
     const { getCurrentUser } = await import("./supabase")
     const user = await getCurrentUser()
@@ -92,9 +92,9 @@ export async function checkUserMorphIDAccess(clerkUserId: string): Promise<boole
     
     // 检查用户的项目权限
     const projects = user.projects || []
-    return projects.includes('morphid')
+    return projects.includes('HeysMe')
   } catch (error) {
-    console.error('Error checking user MorphID access:', error)
+    console.error('Error checking user HeysMe access:', error)
     return false
   }
 }
@@ -125,9 +125,9 @@ export async function getUserCrossProjectStats(clerkUserId: string) {
       clerkId: user.clerk_id,
       plan: user.plan,
       projects: user.projects || [],
-      morphidPagesCount: pagesCount || 0,
+      HeysMePagesCount: pagesCount || 0,
       joinedAt: user.created_at,
-      hasMorphIDAccess: (user.projects || []).includes('morphid')
+      hasHeysMeAccess: (user.projects || []).includes('HeysMe')
     }
   } catch (error) {
     console.error('Error fetching cross-project stats:', error)
@@ -157,9 +157,9 @@ export async function handleUserDeletion(clerkUserId: string) {
 }
 
 /**
- * 为用户创建默认的 MorphID 页面（可选）
+ * 为用户创建默认的 HeysMe 页面（可选）
  */
-export async function createDefaultMorphIDPage(userId: string) {
+export async function createDefaultHeysMePage(userId: string) {
   try {
     const { createServerClient } = await import("./supabase")
     const serverClient = createServerClient()
@@ -202,7 +202,7 @@ export async function createDefaultMorphIDPage(userId: string) {
         type: "hero",
         data: {
           title: "欢迎来到我的主页",
-          subtitle: "这是由 MorphID AI 生成的个性化页面",
+          subtitle: "这是由 HeysMe AI 生成的个性化页面",
           description: "您可以通过对话来自定义这个页面的内容和风格"
         },
         position: 0
@@ -213,9 +213,9 @@ export async function createDefaultMorphIDPage(userId: string) {
       .from("page_blocks")
       .insert(defaultBlocks)
     
-    console.log(`Created default MorphID page for user ${userId}`)
+    console.log(`Created default HeysMe page for user ${userId}`)
     return page
   } catch (error) {
-    console.error("Error creating default MorphID page:", error)
+    console.error("Error creating default HeysMe page:", error)
   }
 } 

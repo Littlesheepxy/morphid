@@ -9,6 +9,24 @@ export interface ChatMessage {
     options?: ChatOption[]
     generatedPage?: any
     step?: string
+    system_state?: {
+      current_stage?: string
+      progress?: number
+      intent?: string
+      done?: boolean
+    }
+    codeBlocks?: Array<{
+      filename: string
+      content: string
+      language: string
+      description?: string
+      type: 'page' | 'component' | 'styles' | 'config'
+    }>
+    interaction?: {
+      type: string
+      title?: string
+      elements?: any[]
+    }
   }
 }
 

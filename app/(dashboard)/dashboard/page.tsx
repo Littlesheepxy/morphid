@@ -2,7 +2,7 @@
  * 用户仪表板 - 项目管理中心
  *
  * 功能：
- * - 显示用户的所有MorphID项目
+ * - 显示用户的所有HeysMe项目
  * - 创建新项目
  * - 项目搜索和筛选
  * - 项目统计和分析
@@ -50,7 +50,7 @@ import {
 import { useTheme } from "@/contexts/theme-context"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { supabase } from "@/lib/supabase"
-import type { MorphPage } from "@/types/morphid"
+import type { MorphPage } from "@/types/HeysMe"
 
 export default function DashboardPage() {
   const { theme } = useTheme()
@@ -149,7 +149,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-                MorphID Dashboard
+                HeysMe Dashboard
               </h1>
               <p className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>管理你的职业身份页面</p>
             </div>
@@ -292,7 +292,7 @@ export default function DashboardPage() {
                   {projects.length === 0 ? "还没有项目" : "没有找到匹配的项目"}
                 </h3>
                 <p className={`mb-6 ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>
-                  {projects.length === 0 ? "创建你的第一个MorphID项目" : "尝试调整搜索条件"}
+                  {projects.length === 0 ? "创建你的第一个HeysMe项目" : "尝试调整搜索条件"}
                 </p>
                 {projects.length === 0 && (
                   <Button onClick={handleCreateProject} className="rounded-2xl">

@@ -6,7 +6,7 @@ export default function Page() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            欢迎回到 MorphID
+            欢迎回到 HeysMe
           </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             登录您的账户，继续创建个性化主页

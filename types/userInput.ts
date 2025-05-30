@@ -4,4 +4,5 @@ export interface UserInput {
   style: string
   display_priority: string[]
   model_type?: string
+  intent_urgency?: string
 }

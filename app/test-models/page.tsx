@@ -112,7 +112,7 @@ export default function TestModelsPage() {
             </div>
             <div>
               <h1 className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-                MorphID - 模型测试
+                HeysMe - 模型测试
               </h1>
               <p className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>
                 测试不同 AI 模型的效果

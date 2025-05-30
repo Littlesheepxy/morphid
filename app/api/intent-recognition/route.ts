@@ -3,17 +3,32 @@ import { z } from "zod"
 import { generateWithBestAvailableModel } from "@/lib/ai-models"
 
 const intentSchema = z.object({
-  type: z.enum(["create_morphid", "edit_morphid", "general_chat", "help"]),
+  type: z.enum(["create_HeysMe", "edit_HeysMe", "general_chat", "help"]),
   confidence: z.number().min(0).max(1),
-  entities: z.record(z.any()).optional(),
+  entities: z.object({
+    profession: z.string().optional(), // 提取的职业信息
+    purpose: z.string().optional(), // 提取的目的信息
+    style: z.string().optional(), // 提取的风格偏好
+    urgency: z.enum(["serious", "casual", "exploring"]).optional(), // 用户的认真程度
+    content_type: z.string().optional(), // 内容类型（简历、作品集等）
+  }).optional(),
   reasoning: z.string(),
+  extracted_info: z.object({
+    role: z.string().optional(),
+    purpose: z.string().optional(), 
+    style: z.string().optional(),
+    display_priority: z.array(z.string()).optional(),
+  }).optional(),
 })
 
 export async function POST(request: NextRequest) {
   try {
     const { message } = await request.json()
 
+    console.log("🎯 意图识别开始:", { message })
+
     if (!message || typeof message !== "string") {
+      console.log("❌ 消息内容无效:", { message })
       return NextResponse.json(
         {
           success: false,
@@ -24,30 +39,96 @@ export async function POST(request: NextRequest) {
     }
 
     const prompt = `
-分析用户消息的意图，确定用户想要做什么：
+你是一个智能的意图识别和信息提取助手。分析用户消息，不仅要识别意图，还要提取用户已经提供的具体信息。
 
 用户消息: "${message}"
 
-意图类型说明：
-- create_morphid: 用户想要创建新的职业主页/简历/个人页面
-- edit_morphid: 用户想要编辑或修改现有页面
+## 任务要求：
+
+### 1. 意图识别
+- create_HeysMe: 用户想要创建新的职业主页/简历/个人页面
+- edit_HeysMe: 用户想要编辑或修改现有页面
 - general_chat: 一般性聊天或询问
 - help: 寻求帮助或了解功能
 
-请分析用户的真实意图，提供置信度(0-1)，并提取相关实体信息。
+### 2. 信息提取
+从用户消息中提取以下信息（如果有的话）：
+
+**角色身份映射**：
+- "软件工程师", "程序员", "开发者", "码农" → "开发者"
+- "AI工程师", "算法工程师", "机器学习工程师" → "AI工程师"  
+- "设计师", "UI设计师", "平面设计师" → "设计师"
+- "学生", "在校生", "大学生" → "学生"
+- "自由职业者", "自由职业", "独立工作者" → "自由职业者"
+
+**目的映射**：
+- "求职", "找工作", "面试", "投简历" → "寻找工作机会"
+- "展示", "作品集", "项目展示" → "展示作品技能"
+- "合作", "商务", "客户" → "商务合作"
+- "个人品牌", "形象", "知名度" → "个人品牌建设"
+
+**风格映射**：
+- "简约", "简洁", "极简" → "极简禅意"
+- "科技", "现代", "未来" → "科技未来"
+- "专业", "商务", "正式" → "商务专业"
+- "创意", "个性", "独特" → "创意炫酷"
+
+**认真程度判断**：
+- "试试看", "看看", "了解一下", "随便" → "exploring"
+- "正式", "认真", "专业", "工作用" → "serious"  
+- "玩玩", "体验", "感受" → "casual"
+
+### 3. 输出格式
+请返回JSON格式，包含：
+- type: 意图类型
+- confidence: 置信度(0-1)
+- entities: 原始提取的实体
+- reasoning: 分析推理过程
+- extracted_info: 格式化后的信息，用于直接填入用户输入表单
+
+特别注意：如果用户提到了具体的职业、目的、风格等信息，一定要准确提取并映射到对应的选项。
 `
 
-    console.log("🎯 Starting intent recognition...")
+    console.log("🎯 Starting enhanced intent recognition...")
+    console.log("📝 Prompt:", prompt)
+    
     const result = await generateWithBestAvailableModel(prompt, {
       schema: intentSchema,
-      maxTokens: 1000,
+      maxTokens: 1500,
     })
 
-    return NextResponse.json({
-      success: true,
-      data: result.object,
-      model: "Best Available Model",
-    })
+    // 类型检查：确保返回的是带有object属性的结果
+    if ('object' in result) {
+      const intentResult = result.object as {
+        type: "create_HeysMe" | "edit_HeysMe" | "general_chat" | "help";
+        confidence: number;
+        reasoning: string;
+        entities?: any;
+        extracted_info?: {
+          role?: string;
+          purpose?: string;
+          style?: string;
+          display_priority?: string[];
+        };
+      }
+      
+      console.log("✅ 增强的意图识别结果:", {
+        type: intentResult.type,
+        confidence: intentResult.confidence,
+        reasoning: intentResult.reasoning,
+        entities: intentResult.entities,
+        extracted_info: intentResult.extracted_info
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: intentResult,
+        model: "Best Available Model",
+      })
+    } else {
+      console.error("❌ 返回结果格式不正确:", result)
+      throw new Error("意图识别返回格式不正确")
+    }
   } catch (error) {
     console.error("❌ 意图识别失败:", error)
 

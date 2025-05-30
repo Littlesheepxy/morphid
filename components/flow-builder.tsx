@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ArrowRight, ArrowLeft, Sparkles, CheckCircle, AlertCircle } from "lucide-react"
-import type { UserInput } from "@/types/morphid"
+import type { UserInput } from "@/types/HeysMe"
 
 interface FlowBuilderProps {
   onComplete: (input: UserInput) => void
@@ -393,7 +393,7 @@ export default function FlowBuilder({ onComplete, isGenerating, className = "" }
       {/* 进度指示器 */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">创建你的 MorphID</h2>
+          <h2 className="text-2xl font-bold">创建你的 HeysMe</h2>
           <span className="text-sm text-gray-500">
             {currentStep + 1} / {STEPS.length}
           </span>
