@@ -29,6 +29,14 @@ const isProtectedRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
   const authData = await auth()
   
+  // 重定向旧的登录路由到新的 Clerk 登录页面
+  if (req.nextUrl.pathname.startsWith("/auth/login")) {
+    const redirectUrl = req.nextUrl.searchParams.get("redirect_url") || "/dashboard"
+    const signInUrl = new URL("/sign-in", req.url)
+    signInUrl.searchParams.set("redirect_url", redirectUrl)
+    return NextResponse.redirect(signInUrl)
+  }
+  
   // 如果是受保护的路由且用户未登录，重定向到登录页面
   if (isProtectedRoute(req) && !authData.userId) {
     const signInUrl = new URL("/sign-in", req.url)

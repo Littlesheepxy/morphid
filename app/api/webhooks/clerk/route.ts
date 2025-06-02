@@ -1,7 +1,7 @@
 import { headers } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { Webhook } from "svix"
-import { syncUserWithClerk } from "@/lib/supabase"
+import { syncUserWithClerk } from "@/lib/supabase-server"
 import { syncUserAcrossProjects, handleUserDeletion } from "@/lib/cross-project-sync"
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET

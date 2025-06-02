@@ -1,5 +1,7 @@
 import type { Agent, AgentResponse } from "@/types/agent"
 import type { UserInput } from "@/types/userInput"
+import { WelcomeAgent } from './agents/welcome-agent'
+import { SessionData } from '@/lib/types/session'
 
 export const AGENTS: Record<string, Agent> = {
   HeysMe_creator: {
@@ -41,10 +43,20 @@ export const AGENTS: Record<string, Agent> = {
 export class AgentManager {
   private currentAgent: Agent | null = null
   private conversationState: Record<string, any> = {}
+  private welcomeAgent: WelcomeAgent
+  private sessionData: SessionData | null = null
+
+  constructor() {
+    this.welcomeAgent = new WelcomeAgent()
+  }
 
   setAgent(agentId: string) {
     this.currentAgent = AGENTS[agentId]
     this.conversationState = {}
+  }
+
+  setSessionData(sessionData: SessionData) {
+    this.sessionData = sessionData
   }
 
   async processMessage(
@@ -77,6 +89,79 @@ export class AgentManager {
         return this.handleHeysMeEditing(message, userInput)
       default:
         return this.handleGeneralChat(message)
+    }
+  }
+
+  /**
+   * 使用新的 Welcome Agent 进行智能意图识别
+   */
+  async processWithWelcomeAgent(message: string, sessionData: SessionData): Promise<any> {
+    console.log("🤖 使用 Welcome Agent 处理消息:", message)
+    
+    try {
+      // 使用 Welcome Agent 的流式处理
+      const generator = this.welcomeAgent.process(
+        { user_input: message },
+        sessionData
+      )
+      
+      let finalResponse: any = null
+      
+      // 收集所有流式响应
+      for await (const response of generator) {
+        finalResponse = response
+      }
+      
+      console.log("✅ Welcome Agent 处理完成:", finalResponse)
+      
+      // 转换为兼容格式
+      if (finalResponse?.immediate_display) {
+        return {
+          content: finalResponse.immediate_display.reply,
+          agentResponse: finalResponse,
+          sessionUpdated: true
+        }
+      }
+      
+      // 如果有交互元素，转换为选项格式
+      if (finalResponse?.interaction?.elements) {
+        const options = finalResponse.interaction.elements.map((element: any) => {
+          if (element.type === 'select' && element.options) {
+            return element.options.map((option: any) => ({
+              id: option.value.toLowerCase().replace(/\s+/g, '-'),
+              label: option.label,
+              value: option.value,
+              type: 'selection'
+            }))
+          }
+          return []
+        }).flat()
+        
+        return {
+          content: finalResponse.interaction.title || finalResponse.interaction.description || "请选择一个选项：",
+          options: options,
+          agentResponse: finalResponse,
+          sessionUpdated: true
+        }
+      }
+      
+      return {
+        content: finalResponse?.immediate_display?.reply || "我正在处理您的请求...",
+        agentResponse: finalResponse,
+        sessionUpdated: true
+      }
+      
+    } catch (error) {
+      console.error("❌ Welcome Agent 处理失败:", error)
+      
+      // 回退到旧逻辑
+      return {
+        content: "抱歉，我遇到了一些问题。让我们重新开始：您想要创建什么样的页面？",
+        options: [
+          { id: "create", label: "🆕 创建新页面", value: "create", type: "action" },
+          { id: "help", label: "❓ 了解功能", value: "help", type: "action" }
+        ]
+      }
     }
   }
 

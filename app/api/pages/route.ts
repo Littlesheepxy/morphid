@@ -22,7 +22,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 import { z } from "zod"
 
 // 请求数据验证模式

@@ -1,17 +1,17 @@
 /**
- * 用户仪表板 - 项目管理中心
+ * 项目管理仪表板 - 专业的项目管理中心
  *
- * 功能：
- * - 显示用户的所有HeysMe项目
- * - 创建新项目
- * - 项目搜索和筛选
- * - 项目统计和分析
+ * 核心功能：
+ * - 项目概览和统计分析
+ * - 项目搜索、筛选和批量操作
+ * - 项目状态管理和发布控制
+ * - 访问数据分析和性能监控
  *
- * TODO:
- * - [ ] 添加项目模板
- * - [ ] 实现项目分组
- * - [ ] 添加协作功能
- * - [ ] 支持项目导入导出
+ * 设计理念：
+ * - 专注项目管理，不是创建入口
+ * - 数据驱动的决策支持
+ * - 高效的批量操作
+ * - 清晰的项目状态展示
  */
 
 "use client"
@@ -50,14 +50,31 @@ import {
 import { useTheme } from "@/contexts/theme-context"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { supabase } from "@/lib/supabase"
-import type { MorphPage } from "@/types/HeysMe"
+// 项目数据类型定义
+interface Project {
+  id: string
+  title: string
+  slug: string
+  theme: string
+  layout: string
+  visibility: 'public' | 'private'
+  is_featured: boolean
+  blocks?: any[]
+  updated_at: string
+  created_at: string
+  views?: number
+  shares?: number
+  status: 'draft' | 'published' | 'archived'
+}
 
 export default function DashboardPage() {
   const { theme } = useTheme()
   const router = useRouter()
-  const [projects, setProjects] = useState<MorphPage[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published' | 'archived'>('all')
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [user, setUser] = useState<any>(null)
 
   // 获取用户信息和项目
@@ -91,19 +108,45 @@ export default function DashboardPage() {
     fetchUserAndProjects()
   }, [router])
 
-  // 创建新项目
-  const handleCreateProject = () => {
-    router.push("/chat/new")
+  // 返回聊天界面（主要创建入口）
+  const handleBackToChat = () => {
+    router.push("/chat")
   }
 
-  // 打开项目聊天
-  const handleOpenProject = (projectId: string) => {
-    router.push(`/chat/${projectId}`)
+  // 创建新项目（从dashboard快速创建）
+  const handleQuickCreate = () => {
+    router.push("/chat")
+  }
+
+  // 编辑项目
+  const handleEditProject = (projectId: string) => {
+    router.push(`/chat?session=${projectId}`)
   }
 
   // 预览项目
   const handlePreviewProject = (slug: string) => {
     window.open(`/p/${slug}`, "_blank")
+  }
+
+  // 发布/取消发布项目
+  const handleTogglePublish = async (projectId: string, currentStatus: string) => {
+    // TODO: 实现发布状态切换
+    console.log('Toggle publish:', projectId, currentStatus)
+  }
+
+  // 删除项目
+  const handleDeleteProject = async (projectId: string) => {
+    if (confirm('确定要删除这个项目吗？此操作不可恢复。')) {
+      // TODO: 实现删除功能
+      console.log('Delete project:', projectId)
+    }
+  }
+
+  // 批量操作
+  const handleBatchAction = (action: 'publish' | 'unpublish' | 'delete') => {
+    if (selectedProjects.length === 0) return
+    console.log('Batch action:', action, selectedProjects)
+    // TODO: 实现批量操作
   }
 
   // 登出
@@ -112,12 +155,26 @@ export default function DashboardPage() {
     router.push("/")
   }
 
-  // 过滤项目
-  const filteredProjects = projects.filter(
-    (project) =>
+  // 高级过滤项目
+  const filteredProjects = projects.filter((project) => {
+    const matchesSearch = 
       project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.slug.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+      project.slug.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesStatus = filterStatus === 'all' || project.status === filterStatus
+    
+    return matchesSearch && matchesStatus
+  })
+
+  // 计算统计数据
+  const stats = {
+    total: projects.length,
+    published: projects.filter(p => p.status === 'published').length,
+    draft: projects.filter(p => p.status === 'draft').length,
+    totalViews: projects.reduce((sum, p) => sum + (p.views || 0), 0),
+    totalShares: projects.reduce((sum, p) => sum + (p.shares || 0), 0),
+    thisMonthGrowth: 23 // TODO: 计算真实增长率
+  }
 
   if (isLoading) {
     return (
@@ -149,13 +206,20 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
-                HeysMe Dashboard
+                项目管理中心
               </h1>
-              <p className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>管理你的职业身份页面</p>
+              <p className={`text-sm ${theme === "light" ? "text-gray-600" : "text-gray-400"}`}>专业的项目管理和数据分析</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              onClick={handleBackToChat}
+              className="rounded-2xl"
+            >
+              回到聊天界面
+            </Button>
             <ThemeToggle />
 
             {/* 用户菜单 */}
@@ -206,7 +270,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">总项目</p>
-                  <p className="text-2xl font-bold">{projects.length}</p>
+                  <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-xs text-gray-500">
+                    {stats.published} 已发布 · {stats.draft} 草稿
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -220,7 +287,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">总访问</p>
-                  <p className="text-2xl font-bold">12.3K</p>
+                  <p className="text-2xl font-bold">{stats.totalViews.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">
+                    平均 {Math.round(stats.totalViews / Math.max(stats.published, 1))} 次/项目
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -234,7 +304,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">本月增长</p>
-                  <p className="text-2xl font-bold">+23%</p>
+                  <p className="text-2xl font-bold">+{stats.thisMonthGrowth}%</p>
+                  <p className="text-xs text-green-600">
+                    较上月增长
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -248,7 +321,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">分享次数</p>
-                  <p className="text-2xl font-bold">456</p>
+                  <p className="text-2xl font-bold">{stats.totalShares}</p>
+                  <p className="text-xs text-gray-500">
+                    平均 {Math.round(stats.totalShares / Math.max(stats.published, 1))} 次/项目
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -260,9 +336,9 @@ export default function DashboardPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className={theme === "light" ? "text-gray-900" : "text-white"}>我的项目</CardTitle>
-              <Button onClick={handleCreateProject} className="rounded-2xl">
+              <Button onClick={handleQuickCreate} className="rounded-2xl">
                 <Plus className="w-4 h-4 mr-2" />
-                新建项目
+                快速创建
               </Button>
             </div>
 
@@ -277,10 +353,50 @@ export default function DashboardPage() {
                   className="pl-10 rounded-2xl"
                 />
               </div>
-              <Button variant="outline" size="sm" className="rounded-2xl">
-                <Filter className="w-4 h-4 mr-2" />
-                筛选
-              </Button>
+              
+              {/* 状态筛选 */}
+              <div className="flex gap-2">
+                {(['all', 'published', 'draft', 'archived'] as const).map((status) => (
+                  <Button
+                    key={status}
+                    variant={filterStatus === status ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterStatus(status)}
+                    className="rounded-2xl"
+                  >
+                    {status === 'all' && '全部'}
+                    {status === 'published' && '已发布'}
+                    {status === 'draft' && '草稿'}
+                    {status === 'archived' && '已归档'}
+                  </Button>
+                ))}
+              </div>
+
+              {/* 批量操作 */}
+              {selectedProjects.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="rounded-2xl">
+                      批量操作 ({selectedProjects.length})
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleBatchAction('publish')}>
+                      批量发布
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleBatchAction('unpublish')}>
+                      批量取消发布
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => handleBatchAction('delete')}
+                      className="text-red-600"
+                    >
+                      批量删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </CardHeader>
 
@@ -295,9 +411,9 @@ export default function DashboardPage() {
                   {projects.length === 0 ? "创建你的第一个HeysMe项目" : "尝试调整搜索条件"}
                 </p>
                 {projects.length === 0 && (
-                  <Button onClick={handleCreateProject} className="rounded-2xl">
+                  <Button onClick={handleQuickCreate} className="rounded-2xl">
                     <Plus className="w-4 h-4 mr-2" />
-                    创建项目
+                    开始创建
                   </Button>
                 )}
               </div>
@@ -309,7 +425,7 @@ export default function DashboardPage() {
                     className={`cursor-pointer transition-all duration-300 hover:shadow-lg hover:scale-105 ${
                       theme === "light" ? "bg-gray-50/80" : "bg-gray-700/80"
                     }`}
-                    onClick={() => handleOpenProject(project.id)}
+                    onClick={() => handleEditProject(project.id)}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
@@ -332,7 +448,7 @@ export default function DashboardPage() {
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleOpenProject(project.id)
+                                handleEditProject(project.id)
                               }}
                             >
                               <Edit className="mr-2 h-4 w-4" />
@@ -382,20 +498,42 @@ export default function DashboardPage() {
                           </span>
                         </div>
 
-                        {/* 可见性状态 */}
+                        {/* 状态和标签 */}
                         <div className="flex items-center justify-between">
-                          <Badge
-                            variant={project.visibility === "public" ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {project.visibility === "public" ? "公开" : "私有"}
-                          </Badge>
-
-                          {project.is_featured && (
-                            <Badge variant="default" className="text-xs bg-yellow-500">
-                              精选
+                          <div className="flex gap-2">
+                            <Badge
+                              variant={project.status === 'published' ? "default" : 
+                                      project.status === 'draft' ? "secondary" : "outline"}
+                              className="text-xs"
+                            >
+                              {project.status === 'published' && '已发布'}
+                              {project.status === 'draft' && '草稿'}
+                              {project.status === 'archived' && '已归档'}
                             </Badge>
-                          )}
+                            
+                            <Badge
+                              variant={project.visibility === "public" ? "outline" : "secondary"}
+                              className="text-xs"
+                            >
+                              {project.visibility === "public" ? "公开" : "私有"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {project.is_featured && (
+                              <Badge variant="default" className="text-xs bg-yellow-500">
+                                精选
+                              </Badge>
+                            )}
+                            
+                            {/* 访问量显示 */}
+                            {project.views && project.views > 0 && (
+                              <span className="text-xs text-gray-500 flex items-center gap-1">
+                                <Eye className="w-3 h-3" />
+                                {project.views}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>

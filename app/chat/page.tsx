@@ -21,12 +21,12 @@ import {
   Eye,
   CheckCircle
 } from "lucide-react"
-import { useChatSystem } from "@/hooks/use-chat-system"
+import { useChatSystemV2 as useChatSystem } from "@/hooks/use-chat-system-v2"
 import { useTheme } from "@/contexts/theme-context"
 import { motion, AnimatePresence } from "framer-motion"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { CodeBlockStreaming } from "@/components/code/CodeBlockStreaming"
-import { ReactPreviewRenderer } from "@/components/code/ReactPreviewRenderer"
+import { CodeBlockStreaming } from "@/components/layout/CodeBlockStreaming"
+import { ReactPreviewRenderer } from "@/components/layout/ReactPreviewRenderer"
 import { generateMockResumeCode } from "@/lib/utils/mockCodeGenerator"
 
 export default function ChatPage() {
@@ -70,30 +70,30 @@ export default function ChatPage() {
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [currentSession?.messages])
+  }, [currentSession?.conversationHistory])
 
   // 监听当前会话变化，如果有会话且有消息，则显示对话模式
   useEffect(() => {
-    if (currentSession && currentSession.messages && currentSession.messages.length > 0) {
+    if (currentSession && currentSession.conversationHistory && currentSession.conversationHistory.length > 0) {
       setHasStartedChat(true)
     }
   }, [currentSession])
 
   // 监听当前会话变化，检查是否进入代码生成阶段
   useEffect(() => {
-    if (currentSession && currentSession.messages && currentSession.messages.length > 0) {
+    if (currentSession && currentSession.conversationHistory && currentSession.conversationHistory.length > 0) {
       setHasStartedChat(true)
       
       // 检查是否有代码生成相关的消息
-      const hasCodeGeneration = currentSession.messages.some(message => 
-        message.metadata?.system_state?.current_stage === '代码生成中' ||
+      const hasCodeGeneration = currentSession.conversationHistory.some(message => 
+        message.metadata?.systemState?.current_stage === '代码生成中' ||
         message.metadata?.codeBlocks
       )
       
       if (hasCodeGeneration && !isCodeMode) {
         setIsCodeMode(true)
         // 提取生成的代码
-        const codeMessages = currentSession.messages.filter(msg => msg.metadata?.codeBlocks)
+        const codeMessages = currentSession.conversationHistory.filter(msg => msg.metadata?.codeBlocks)
         if (codeMessages.length > 0) {
           const latestCodeMessage = codeMessages[codeMessages.length - 1]
           if (latestCodeMessage.metadata?.codeBlocks) {
@@ -146,7 +146,7 @@ export default function ChatPage() {
   const handleCodeDownload = () => {
     // 创建下载逻辑
     const projectData = {
-      name: currentSession?.title || 'HeysMe项目',
+      name: currentSession?.id || 'HeysMe项目',
       files: generatedCode
     }
     
@@ -178,7 +178,7 @@ export default function ChatPage() {
         type: code.type || 'component',
         description: code.description
       })),
-      projectName: currentSession?.title || 'HeysMe项目',
+      projectName: currentSession?.id || 'HeysMe项目',
       description: '基于AI生成的个人简历和作品集',
       assets: extractAssetsFromCode(generatedCode)
     }
@@ -400,12 +400,51 @@ export default function ChatPage() {
 
   return (
     <div
-      className={`h-screen flex transition-colors duration-300 ${
+      className={`h-screen flex flex-col transition-colors duration-300 ${
         theme === "light" 
           ? "bg-white" 
           : "bg-gray-900"
       }`}
     >
+      {/* 顶部导航栏 */}
+      <header className={`border-b px-6 py-4 ${
+        theme === "light" ? "bg-white border-gray-200" : "bg-gray-900 border-gray-700"
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <span className={`text-xl font-bold ${theme === "light" ? "text-gray-900" : "text-white"}`}>
+              HeysMe AI
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="rounded-lg"
+            >
+              <a href="/dashboard">
+                <Eye className="w-4 h-4 mr-2" />
+                工作台
+              </a>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-lg"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* 主要内容区域 */}
+      <div className="flex-1 flex">
       {/* 左侧侧边栏 - 代码模式时收起 */}
       <div
         className={`border-r flex flex-col transition-all duration-500 ${
@@ -466,7 +505,7 @@ export default function ChatPage() {
                           theme === "light" ? "text-gray-900" : "text-gray-100"
                         }`}
                       >
-                        {session.title}
+                        {session.id}
                       </h3>
                     </div>
                     <Button
@@ -521,11 +560,11 @@ export default function ChatPage() {
               <div className="flex-1 overflow-hidden">
                 <ScrollArea className="h-full">
                   <div className="py-4">
-                    {currentSession?.messages?.map((message, index) => (
+                    {currentSession?.conversationHistory?.map((message, index) => (
                       <MessageBubble
                         key={message.id}
                         message={message}
-                        isLast={index === (currentSession?.messages?.length || 0) - 1}
+                        isLast={index === (currentSession?.conversationHistory?.length || 0) - 1}
                       />
                     ))}
                     
@@ -670,11 +709,11 @@ export default function ChatPage() {
             <div className="flex-1 overflow-hidden">
               <ScrollArea className="h-full">
                 <div className="py-8">
-                  {currentSession?.messages?.map((message, index) => (
+                  {currentSession?.conversationHistory?.map((message, index) => (
                     <MessageBubble
                       key={message.id}
                       message={message}
-                      isLast={index === (currentSession?.messages?.length || 0) - 1}
+                      isLast={index === (currentSession?.conversationHistory?.length || 0) - 1}
                     />
                   ))}
                   <div ref={messagesEndRef} />
@@ -802,6 +841,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

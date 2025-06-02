@@ -7,6 +7,8 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { generateWithBestAvailableModel } from '@/lib/ai-models';
+import { z } from 'zod';
 
 /**
  * Prompt Output Agent - 页面结构设计和开发任务生成
@@ -41,8 +43,8 @@ export class PromptOutputAgent extends BaseAgent {
       const userType = this.extractUserType(sessionData);
       const collectedData = sessionData.collectedData;
 
-      // 步骤2: 生成页面设计策略
-      const designStrategy = this.generateDesignStrategy(userGoal, userType, collectedData, sessionData.personalization);
+      // 步骤2: 使用 AI 生成页面设计策略
+      const designStrategy = await this.generateDesignStrategyWithAI(userGoal, userType, collectedData, sessionData.personalization);
       
       yield this.createResponse({
         immediate_display: {
@@ -96,7 +98,123 @@ export class PromptOutputAgent extends BaseAgent {
   }
 
   /**
-   * 生成设计策略
+   * 使用 AI 生成设计策略
+   */
+  private async generateDesignStrategyWithAI(
+    userGoal: string,
+    userType: string,
+    collectedData: any,
+    personalization?: PersonalizationProfile
+  ): Promise<DesignStrategy> {
+    try {
+      console.log("🤖 PromptOutputAgent 调用 AI 生成设计策略...");
+      
+      // 构建设计策略生成的 prompt
+      const prompt = `
+你是一个专业的页面设计策略专家，需要为用户生成个性化的页面设计方案。
+
+## 用户信息：
+- 身份角色：${userType}
+- 目标用途：${userGoal}
+- 个人偏好：${JSON.stringify(personalization?.preferences || {})}
+
+## 用户数据：
+${JSON.stringify(collectedData, null, 2)}
+
+请生成一个完整的页面设计策略，包括：
+
+1. **布局类型选择** - 从以下选项中选择最适合的：
+   - portfolio_showcase: 作品集展示型
+   - project_grid: 项目网格型
+   - classic_timeline: 经典时间线型
+   - professional_blocks: 专业模块型
+   - modern_card: 现代卡片型
+
+2. **主题风格选择** - 从以下选项中选择：
+   - tech_blue: 科技蓝调
+   - creative_purple: 创意紫调
+   - business_gray: 商务灰调
+   - nature_green: 自然绿调
+   - vibrant_orange: 活力橙调
+
+3. **页面模块配置** - 为每个模块指定：
+   - id: 模块标识
+   - title: 模块标题
+   - type: 模块类型（hero_banner, tech_stack_visual, project_cards等）
+   - priority: 优先级（high/medium/low）
+   - required: 是否必需
+
+4. **功能特性配置** - 启用合适的功能：
+   - darkMode, responsive, animations
+   - downloadPdf, socialLinks, contactForm
+   - analytics, seo
+
+5. **个性化定制** - 配色、字体、间距等
+
+请严格按照JSON格式返回设计策略。
+`;
+
+      // 定义设计策略的 Schema
+      const designStrategySchema = z.object({
+        layout: z.enum(['portfolio_showcase', 'project_grid', 'classic_timeline', 'professional_blocks', 'modern_card', 'consultation_layout']),
+        theme: z.enum(['tech_blue', 'creative_purple', 'business_gray', 'nature_green', 'vibrant_orange', 'modern', 'classic', 'creative', 'minimal', 'corporate']),
+        sections: z.array(z.object({
+          id: z.string(),
+          title: z.string(),
+          type: z.string(),
+          priority: z.enum(['high', 'medium', 'low']),
+          required: z.boolean()
+        })),
+        features: z.object({
+          darkMode: z.boolean(),
+          responsive: z.boolean(),
+          animations: z.boolean(),
+          downloadPdf: z.boolean(),
+          socialLinks: z.boolean(),
+          contactForm: z.boolean(),
+          analytics: z.boolean(),
+          seo: z.boolean()
+        }),
+        customizations: z.object({
+          colorScheme: z.string(),
+          typography: z.string(),
+          spacing: z.string(),
+          borderRadius: z.string(),
+          shadows: z.string()
+        }),
+        priority: z.enum(['speed', 'quality', 'features']),
+        audience: z.string()
+      });
+
+      // 调用 AI API
+      const result = await generateWithBestAvailableModel(prompt, {
+        schema: designStrategySchema,
+        maxTokens: 2000,
+        system: "你是一个专业的页面设计策略专家，严格按照要求的JSON格式返回设计方案。"
+      });
+
+      if ('object' in result) {
+        console.log("✅ AI 设计策略生成成功");
+        // 补充内容生成
+        const strategy = result.object as any;
+        strategy.sections = strategy.sections.map((section: any) => ({
+          ...section,
+          content: this.generateSectionContent(section.type, collectedData, userType)
+        }));
+        
+        return strategy;
+      } else {
+        throw new Error('AI 返回格式不正确');
+      }
+    } catch (error) {
+      console.error("❌ AI 设计策略生成失败，使用默认策略:", error);
+      // 回退到原有的逻辑生成方法
+      return this.generateDesignStrategy(userGoal, userType, collectedData, personalization);
+    }
+  }
+
+  /**
+   * 生成设计策略（回退方法）
    */
   private generateDesignStrategy(
     userGoal: string,
@@ -502,6 +620,28 @@ ${JSON.stringify(collectedData, null, 2)}
     };
     
     sessionData.agentFlow.push(designEntry);
+  }
+
+  /**
+   * 根据模块类型生成内容
+   */
+  private generateSectionContent(sectionType: string, collectedData: any, userType: string): any {
+    switch (sectionType) {
+      case 'hero_banner':
+        return this.generateHeroContent(collectedData);
+      case 'tech_stack_visual':
+      case 'skill_cloud':
+      case 'progress_bars':
+        return this.generateSkillsContent(collectedData.professional?.skills || [], userType);
+      case 'project_cards':
+        return this.generateProjectsContent(collectedData.projects || [], userType);
+      case 'timeline':
+        return this.generateExperienceContent(collectedData.experience || []);
+      case 'contact_info':
+        return this.generateContactContent(collectedData.personal || {});
+      default:
+        return {};
+    }
   }
 
   // 生成内容的辅助方法

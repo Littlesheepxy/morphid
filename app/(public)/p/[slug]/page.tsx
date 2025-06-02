@@ -17,7 +17,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import PageRenderer from "@/components/page-renderer"
-import { createServerClient } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 import type { FlowPage } from "@/types/HeysMe"
 
 interface PageProps {

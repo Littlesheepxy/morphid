@@ -12,7 +12,7 @@
  * - 跨项目数据查询和访问控制
  */
 
-import { syncUserWithClerk } from "./supabase"
+import { syncUserWithClerk } from "./supabase-server"
 
 /**
  * 同步用户数据并确保 HeysMe 访问权限
@@ -40,7 +40,7 @@ export async function syncUserAcrossProjects(clerkUser: any) {
  * 确保用户有 HeysMe 访问权限
  */
 export async function ensureHeysMeAccess(userId: string) {
-  const { createServerClient } = await import("./supabase")
+  const { createServerClient } = await import("./supabase-server")
   const serverClient = createServerClient()
   
   try {
@@ -83,7 +83,7 @@ export async function ensureHeysMeAccess(userId: string) {
  */
 export async function checkUserHeysMeAccess(clerkUserId: string): Promise<boolean> {
   try {
-    const { getCurrentUser } = await import("./supabase")
+    const { getCurrentUser } = await import("./supabase-server")
     const user = await getCurrentUser()
     
     if (!user) {
@@ -104,14 +104,14 @@ export async function checkUserHeysMeAccess(clerkUserId: string): Promise<boolea
  */
 export async function getUserCrossProjectStats(clerkUserId: string) {
   try {
-    const { getCurrentUser } = await import("./supabase")
+    const { getCurrentUser } = await import("./supabase-server")
     const user = await getCurrentUser()
     
     if (!user) {
       return null
     }
     
-    const { createServerClient } = await import("./supabase")
+    const { createServerClient } = await import("./supabase-server")
     const serverClient = createServerClient()
     
     // 获取用户的页面数量
@@ -140,7 +140,7 @@ export async function getUserCrossProjectStats(clerkUserId: string) {
  */
 export async function handleUserDeletion(clerkUserId: string) {
   try {
-    const { createServerClient } = await import("./supabase")
+    const { createServerClient } = await import("./supabase-server")
     const serverClient = createServerClient()
     
     // 在共享数据库中，用户删除会通过级联删除自动清理相关数据
@@ -161,7 +161,7 @@ export async function handleUserDeletion(clerkUserId: string) {
  */
 export async function createDefaultHeysMePage(userId: string) {
   try {
-    const { createServerClient } = await import("./supabase")
+    const { createServerClient } = await import("./supabase-server")
     const serverClient = createServerClient()
     
     // 检查用户是否已经有页面
@@ -209,13 +209,19 @@ export async function createDefaultHeysMePage(userId: string) {
       }
     ]
     
-    await serverClient
-      .from("page_blocks")
-      .insert(defaultBlocks)
+    if (defaultBlocks.length > 0) {
+      await serverClient
+        .from("page_blocks")
+        .insert(defaultBlocks.map((block, index) => ({
+          ...block,
+          page_id: page.id,
+          position: index
+        })))
+    }
     
-    console.log(`Created default HeysMe page for user ${userId}`)
+    console.log(`Created default page for user ${userId}`)
     return page
   } catch (error) {
-    console.error("Error creating default HeysMe page:", error)
+    console.error('Error creating default HeysMe page:', error)
   }
 } 

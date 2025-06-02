@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/contexts/theme-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://heysme.app'),
   title: "HeysMe - AI 驱动的职业身份平台",
   description: "通过多轮智能对话，为你生成个性化的职业主页",
   keywords: "HeysMe, AI, 职业主页, 个人品牌, 智能生成",

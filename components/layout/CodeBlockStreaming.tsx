@@ -252,3 +252,5 @@ function SyntaxHighlighter({ content, language }: { content: string; language: s
 
   return <div dangerouslySetInnerHTML={{ __html: highlightedContent }} />;
 }
+
+export default CodeBlockStreaming; 

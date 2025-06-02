@@ -7,6 +7,8 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { generateWithBestAvailableModel } from '@/lib/ai-models';
+import { z } from 'zod';
 
 /**
  * Info Collection Agent - 材料和链接收集
@@ -523,6 +525,185 @@ export class InfoCollectionAgent extends BaseAgent {
    */
   protected delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 使用大模型增强用户意图理解（可选功能）
+   */
+  private async enhanceUserIntentUnderstanding(
+    userInput: string, 
+    sessionData: SessionData
+  ): Promise<{
+    intent: 'skip' | 'provide_materials' | 'ask_question' | 'continue_collection';
+    confidence: number;
+    suggestedAction: string;
+    naturalResponse: string;
+  }> {
+    try {
+      console.log("🧠 使用AI增强用户意图理解...");
+      
+      const userType = this.extractUserType(sessionData);
+      const currentState = this.assessMaterialCollectionState(sessionData);
+      
+      const prompt = `
+你是一个专业的信息收集助手，正在帮助${userType}收集材料创建个人页面。
+
+用户输入："${userInput}"
+
+当前收集状态：
+- 用户类型：${userType}
+- 收集完整度：${currentState.completeness}%
+- 已有材料：${currentState.hasDocuments ? '有文档' : '无文档'}，${currentState.hasLinks ? '有链接' : '无链接'}
+- 是否已选择跳过：${currentState.userOptedOut}
+
+请分析用户意图并返回JSON格式：
+{
+  "intent": "skip | provide_materials | ask_question | continue_collection",
+  "confidence": 0.95,
+  "suggestedAction": "具体建议的下一步行动",
+  "naturalResponse": "友好自然的回复，引导用户继续"
+}
+
+意图说明：
+- skip: 用户想跳过材料收集
+- provide_materials: 用户准备提供材料
+- ask_question: 用户有疑问需要解答
+- continue_collection: 继续当前收集流程
+`;
+
+      const result = await generateWithBestAvailableModel(prompt, {
+        maxTokens: 300,
+        system: "你是一个专业的用户意图分析师，返回准确的JSON格式数据。"
+      });
+
+      if ('text' in result) {
+        const parsed = JSON.parse(result.text);
+        console.log("✅ AI意图理解成功:", parsed.intent);
+        return parsed;
+      } else {
+        throw new Error('AI返回格式不正确');
+      }
+    } catch (error) {
+      console.error("❌ AI意图理解失败，使用默认逻辑:", error);
+      
+      // 回退到代码逻辑
+      return this.fallbackIntentAnalysis(userInput, sessionData);
+    }
+  }
+
+  /**
+   * 回退的代码逻辑意图分析
+   */
+  private fallbackIntentAnalysis(userInput: string, sessionData: SessionData): any {
+    const input = userInput.toLowerCase();
+    
+    // 简单的关键词匹配
+    if (input.includes('跳过') || input.includes('不用') || input.includes('直接')) {
+      return {
+        intent: 'skip',
+        confidence: 0.8,
+        suggestedAction: '跳过材料收集，使用默认数据',
+        naturalResponse: '好的，我理解您想快速体验效果。我们可以跳过材料收集，直接为您生成页面！'
+      };
+    }
+    
+    if (input.includes('github') || input.includes('简历') || input.includes('作品')) {
+      return {
+        intent: 'provide_materials',
+        confidence: 0.7,
+        suggestedAction: '引导用户提供具体材料',
+        naturalResponse: '太好了！请您提供相关的材料链接，这样能让页面更加精准。'
+      };
+    }
+    
+    return {
+      intent: 'continue_collection',
+      confidence: 0.5,
+      suggestedAction: '继续当前收集流程',
+      naturalResponse: '我来帮您收集一些材料，让页面更加个性化。您可以提供，也可以选择跳过。'
+    };
+  }
+
+  /**
+   * 增强版的用户输入处理
+   */
+  async* processWithAIEnhancement(
+    input: { user_input: string },
+    sessionData: SessionData
+  ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
+    try {
+      // 如果有用户输入，先用AI分析意图
+      if (input.user_input) {
+        yield this.createThinkingResponse('正在理解您的意图...', 35);
+        
+        const intentAnalysis = await this.enhanceUserIntentUnderstanding(
+          input.user_input, 
+          sessionData
+        );
+        
+        // 根据AI分析结果，使用代码逻辑执行具体操作
+        if (intentAnalysis.intent === 'skip') {
+          // 直接标记为跳过并推进
+          sessionData.collectedData = {
+            ...sessionData.collectedData,
+            userOptedOut: true
+          } as any;
+          
+          yield this.createAdvanceResponse(
+            this.assessMaterialCollectionState(sessionData), 
+            sessionData
+          );
+          return;
+        }
+        
+        // 生成带AI增强回复的收集请求
+        yield this.createEnhancedMaterialRequest(intentAnalysis, sessionData);
+      } else {
+        // 正常流程
+        yield* this.process(input, sessionData);
+      }
+      
+    } catch (error) {
+      // 发生错误时回退到原始流程
+      yield* this.process(input, sessionData);
+    }
+  }
+
+  /**
+   * 创建AI增强的材料收集请求
+   */
+  private createEnhancedMaterialRequest(
+    intentAnalysis: any, 
+    sessionData: SessionData
+  ): StreamableAgentResponse {
+    const userType = this.extractUserType(sessionData);
+    const materialGuide = this.getMaterialGuide(userType);
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: intentAnalysis.naturalResponse + '\n\n' + 
+               this.generateMaterialRequestMessage(userType, this.extractUserGoal(sessionData), 'standard'),
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      interaction: {
+        type: 'form',
+        title: '材料收集',
+        description: intentAnalysis.suggestedAction,
+        elements: this.buildMaterialCollectionElements(materialGuide, this.assessMaterialCollectionState(sessionData))
+      },
+      system_state: {
+        intent: 'collecting_materials',
+        done: false,
+        progress: 40,
+        current_stage: '材料收集',
+        metadata: {
+          aiEnhanced: true,
+          userIntent: intentAnalysis.intent,
+          confidence: intentAnalysis.confidence
+        }
+      }
+    });
   }
 }
 

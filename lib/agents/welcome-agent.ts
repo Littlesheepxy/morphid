@@ -6,6 +6,8 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { generateWithBestAvailableModel } from '@/lib/ai-models';
+import { z } from 'zod';
 
 /**
  * Welcome Agent - 欢迎用户并识别意图和身份类型
@@ -24,7 +26,7 @@ export class WelcomeAgent extends BaseAgent {
   }
 
   /**
-   * 主处理流程 - 欢迎用户并识别意图
+   * 主处理流程 - 智能意图识别和信息收集
    */
   async* process(
     input: { user_input: string },
@@ -33,18 +35,24 @@ export class WelcomeAgent extends BaseAgent {
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     try {
       // 步骤1: 思考阶段
-      yield this.createThinkingResponse('正在深度分析您的需求...', 10);
-      await this.delay(800);
+      yield this.createThinkingResponse('正在分析您的需求并智能推荐...', 15);
+      await this.delay(1000);
 
-      // 步骤2: 使用新的prompt模板
+      // 步骤2: 准备对话上下文
+      const collectedInfo = this.extractCollectedInfo(sessionData);
+      const conversationRound = this.getConversationRound(sessionData);
+
+      // 步骤3: 使用新的prompt模板
       const prompt = formatPrompt(AGENT_PROMPTS.WELCOME_AGENT, {
-        user_input: input.user_input
+        user_input: input.user_input,
+        collected_info: JSON.stringify(collectedInfo),
+        conversation_round: conversationRound
       });
 
-      // 步骤3: 调用LLM进行意图识别
+      // 步骤4: 调用LLM进行意图识别
       const llmResponse = await this.callLLM(prompt, {
-        temperature: 0.3, // 较低温度确保一致性
-        max_tokens: 1200,
+        temperature: 0.3,
+        max_tokens: 1500,
         response_format: { type: "json_object" }
       });
 
@@ -55,16 +63,19 @@ export class WelcomeAgent extends BaseAgent {
         throw new Error('LLM返回的JSON格式无效');
       }
 
-      // 步骤4: 验证响应格式
-      const validatedResponse = this.validateEnhancedWelcomeResponse(parsedResponse);
+      // 步骤5: 验证新的响应格式
+      const validatedResponse = this.validateIntentResponse(parsedResponse);
 
-      // 步骤5: 根据确定性决定下一步动作
-      if (validatedResponse.next_action === 'direct_proceed' && validatedResponse.confidence === 'high') {
-        // 信息确定，直接推进
-        yield this.createDirectProceedResponse(validatedResponse, sessionData);
+      // 步骤6: 更新会话数据
+      this.updateSessionData(validatedResponse, sessionData);
+
+      // 步骤7: 根据完成状态决定下一步
+      if (validatedResponse.completion_status === 'ready') {
+        // 信息收集完成，准备推进到下一阶段
+        yield this.createReadyToAdvanceResponse(validatedResponse, sessionData);
       } else {
-        // 需要确认不确定信息
-        yield this.createSmartConfirmationResponse(validatedResponse, sessionData);
+        // 需要继续收集信息
+        yield this.createCollectionResponse(validatedResponse, sessionData);
       }
 
     } catch (error) {
@@ -73,23 +84,242 @@ export class WelcomeAgent extends BaseAgent {
   }
 
   /**
-   * 调用LLM的模拟方法（实际实现时需要集成真实的LLM API）
+   * 调用真实的LLM API进行意图识别
    */
   private async callLLM(prompt: string, options: any): Promise<string> {
-    // 这里是模拟实现，实际需要调用OpenAI API或其他LLM服务
-    await this.delay(1000); // 模拟API调用延迟
-    
-    // 根据prompt内容返回模拟的JSON响应
-    const mockResponse = {
-      reply: "您好！欢迎使用个性化页面生成助手！🎉 我可以帮您快速创建专业的个人展示页面，让您在求职、展示作品或寻找合作时更加出色。",
-      user_goal: "试试看",
-      user_type: "其他",
-      confidence: "medium",
-      intent: "advance",
-      done: false
+    try {
+      console.log("🤖 Welcome Agent 调用 LLM API...");
+      
+      // 定义意图识别响应的 Schema
+      const intentResponseSchema = z.object({
+        identified: z.object({
+          user_role: z.string().nullable(),
+          use_case: z.string().nullable(),
+          style: z.string().nullable(),
+          highlight_focus: z.array(z.string()).default([])
+        }),
+        follow_up: z.object({
+          missing_fields: z.array(z.string()).default([]),
+          suggestions: z.record(z.object({
+            prompt_text: z.string(),
+            options: z.array(z.string())
+          })).default({})
+        }),
+        completion_status: z.enum(['collecting', 'optimizing', 'ready']),
+        direction_suggestions: z.array(z.string()).default([]),
+        smart_defaults: z.any().default({})
+      });
+
+      // 调用真实的AI API
+      const result = await generateWithBestAvailableModel(prompt, {
+        schema: intentResponseSchema,
+        maxTokens: options.max_tokens || 1500,
+        system: "你是一个专业的意图识别助手，严格按照要求的JSON格式返回结构化数据。"
+      });
+
+      // 检查返回结果
+      if ('object' in result) {
+        console.log("✅ Welcome Agent LLM 调用成功");
+        return JSON.stringify(result.object);
+      } else {
+        throw new Error('LLM返回格式不正确');
+      }
+    } catch (error) {
+      console.error("❌ Welcome Agent LLM 调用失败:", error);
+      
+      // 返回默认的响应结构，避免系统崩溃
+      const fallbackResponse = {
+        identified: {
+          user_role: null,
+          use_case: null,
+          style: null,
+          highlight_focus: []
+        },
+        follow_up: {
+          missing_fields: ["user_role", "use_case"],
+          suggestions: {
+            user_role: {
+              prompt_text: "请告诉我您的身份角色",
+              options: ["学生", "开发者", "设计师", "产品经理", "其他"]
+            }
+          }
+        },
+        completion_status: "collecting",
+        direction_suggestions: [
+          "请告诉我更多关于您想要创建的页面的信息"
+        ],
+        smart_defaults: {}
+      };
+      
+      return JSON.stringify(fallbackResponse);
+    }
+  }
+
+  /**
+   * 提取已收集的信息
+   */
+  private extractCollectedInfo(sessionData: SessionData): any {
+    const intentData = (sessionData.metadata as any)?.intentData;
+    return {
+      user_role: intentData?.user_role || null,
+      use_case: intentData?.use_case || null,
+      style: intentData?.style || null,
+      highlight_focus: intentData?.highlight_focus || []
     };
+  }
+
+  /**
+   * 获取对话轮次
+   */
+  private getConversationRound(sessionData: SessionData): number {
+    return (sessionData.metadata as any)?.conversationRound || 1;
+  }
+
+  /**
+   * 验证新的意图识别响应格式
+   */
+  private validateIntentResponse(response: any): IntentResponse {
+    if (!response.identified || !response.follow_up || !response.completion_status) {
+      throw new Error('响应格式不完整：缺少 identified、follow_up 或 completion_status');
+    }
+
+    return {
+      identified: {
+        user_role: response.identified.user_role || null,
+        use_case: response.identified.use_case || null,
+        style: response.identified.style || null,
+        highlight_focus: response.identified.highlight_focus || []
+      },
+      follow_up: {
+        missing_fields: response.follow_up.missing_fields || [],
+        suggestions: response.follow_up.suggestions || {}
+      },
+      completion_status: response.completion_status,
+      direction_suggestions: response.direction_suggestions || [],
+      smart_defaults: response.smart_defaults || {}
+    };
+  }
+
+  /**
+   * 更新会话数据
+   */
+  private updateSessionData(response: IntentResponse, sessionData: SessionData): void {
+    // 确保有必要的数据结构
+    if (!sessionData.collectedData) {
+      sessionData.collectedData = {
+        personal: {},
+        professional: {} as any, // 使用类型断言避免冲突
+        experience: [],
+        education: [],
+        projects: [],
+        certifications: []
+      } as any; // 完全绕过类型检查
+    }
+
+    // 使用类型断言来扩展元数据
+    const metadata = sessionData.metadata as any;
+    if (!metadata) {
+      (sessionData as any).metadata = {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastActive: new Date().toISOString(),
+        version: '1.0.0',
+        tags: [],
+        notes: '',
+        customFields: {}
+      };
+    }
     
-    return JSON.stringify(mockResponse);
+    // 存储意图识别结果
+    const identified = response.identified;
+    (sessionData as any).metadata.intentData = {
+      user_role: identified.user_role,
+      use_case: identified.use_case,
+      style: identified.style,
+      highlight_focus: identified.highlight_focus
+    };
+
+    (sessionData as any).metadata.conversationRound = ((sessionData as any).metadata.conversationRound || 0) + 1;
+    (sessionData as any).metadata.completionStatus = response.completion_status;
+  }
+
+  /**
+   * 创建信息收集完成，准备推进的响应
+   */
+  private createReadyToAdvanceResponse(response: IntentResponse, sessionData: SessionData): StreamableAgentResponse {
+    const identified = response.identified;
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: `完美！我已经收集到完整的信息：\n\n` +
+               `👤 身份：${identified.user_role}\n` +
+               `🎯 目的：${identified.use_case}\n` +
+               `🎨 风格：${identified.style}\n` +
+               `📋 重点：${identified.highlight_focus?.join('、')}\n\n` +
+               `现在开始为您创建专属的页面！`,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'advance',
+        done: true,
+        progress: 50,
+        current_stage: '意图识别完成',
+        metadata: {
+          collectedIntents: identified,
+          completionStatus: response.completion_status
+        }
+      }
+    });
+  }
+
+  /**
+   * 创建继续收集信息的响应
+   */
+  private createCollectionResponse(response: IntentResponse, sessionData: SessionData): StreamableAgentResponse {
+    const missingFields = response.follow_up.missing_fields;
+    const suggestions = response.follow_up.suggestions;
+    
+    // 构建交互元素
+    const elements = [];
+    
+    for (const field of missingFields) {
+      const suggestion = suggestions[field];
+      if (suggestion) {
+        elements.push({
+          id: field,
+          type: 'select' as const,
+          label: suggestion.prompt_text,
+          options: suggestion.options.map((option: string) => ({
+            value: option,
+            label: option
+          })),
+          required: false
+        });
+      }
+    }
+
+    // 构建回复消息
+    let replyMessage = '';
+    if (response.direction_suggestions?.length) {
+      replyMessage = response.direction_suggestions.join('\n\n') + '\n\n';
+    }
+    
+    const firstSuggestion = Object.values(suggestions)[0] as any;
+    if (firstSuggestion) {
+      replyMessage += firstSuggestion.prompt_text;
+    }
+
+    return this.createInteractionResponse(
+      replyMessage,
+      {
+        type: 'form',
+        title: '完善您的需求',
+        description: '请选择最符合您需求的选项',
+        elements,
+        required: false
+      }
+    );
   }
 
   /**
@@ -495,6 +725,27 @@ export class WelcomeAgent extends BaseAgent {
 }
 
 // 类型定义
+// 新的意图识别响应接口
+interface IntentResponse {
+  identified: {
+    user_role: string | null;
+    use_case: string | null;
+    style: string | null;
+    highlight_focus: string[];
+  };
+  follow_up: {
+    missing_fields: string[];
+    suggestions: Record<string, {
+      prompt_text: string;
+      options: string[];
+    }>;
+  };
+  completion_status: 'collecting' | 'optimizing' | 'ready';
+  direction_suggestions: string[];
+  smart_defaults: any;
+}
+
+// 兼容性接口保留
 interface EnhancedWelcomeResponse {
   reply: string;
   analysis: {

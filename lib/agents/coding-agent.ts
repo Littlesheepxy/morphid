@@ -7,6 +7,8 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { generateWithBestAvailableModel } from '@/lib/ai-models';
+import { z } from 'zod';
 
 /**
  * Coding Agent - 基于设计方案生成高质量代码
@@ -65,8 +67,8 @@ export class CodingAgent extends BaseAgent {
 
       await this.delay(1500);
 
-      // 生成package.json
-      const packageJson = this.generatePackageJson(designStrategy, userType);
+      // 生成package.json - 使用 AI 增强
+      const packageJson = await this.generatePackageJsonWithAI(designStrategy, userType);
       
       yield this.createCodeResponse('📦 **依赖配置文件**', [{
         filename: 'package.json',
@@ -149,7 +151,8 @@ export class CodingAgent extends BaseAgent {
           metadata: {
             success: true,
             filesGenerated: true,
-            deploymentReady: true
+            deploymentReady: true,
+            readyToGenerate: true
           }
         }
       });
@@ -177,7 +180,48 @@ export class CodingAgent extends BaseAgent {
   }
 
   /**
-   * 生成package.json
+   * 使用 AI 增强生成 package.json
+   */
+  private async generatePackageJsonWithAI(strategy: any, userType: string): Promise<string> {
+    try {
+      console.log("🤖 CodingAgent 使用 AI 生成 package.json...");
+      
+      const prompt = `
+生成一个 Next.js + TypeScript + Tailwind CSS 项目的 package.json 文件。
+
+用户类型：${userType}
+设计策略：${JSON.stringify(strategy.features || {})}
+
+请包含：
+1. 基础的 Next.js 14 依赖
+2. TypeScript 配置
+3. Tailwind CSS 和 PostCSS
+4. Shadcn/ui 相关依赖
+5. 根据用户类型添加特定依赖（如开发者需要代码高亮，设计师需要图片处理等）
+6. 部署脚本
+
+返回完整的 JSON 格式 package.json 内容。
+`;
+
+      const result = await generateWithBestAvailableModel(prompt, {
+        maxTokens: 1000,
+        system: "你是一个 Node.js 项目配置专家，返回有效的 package.json 内容。"
+      });
+
+      if ('text' in result) {
+        console.log("✅ AI package.json 生成成功");
+        return result.text;
+      } else {
+        throw new Error('AI 返回格式不正确');
+      }
+    } catch (error) {
+      console.error("❌ AI package.json 生成失败，使用默认方法:", error);
+      return this.generatePackageJson(strategy, userType);
+    }
+  }
+
+  /**
+   * 生成package.json（回退方法）
    */
   private generatePackageJson(strategy: any, userType: string): string {
     const basePackage: any = {
