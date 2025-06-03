@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { generateWithBestAvailableModel } from "@/lib/ai-models"
 
 const intentSchema = z.object({
   type: z.enum(["create_HeysMe", "edit_HeysMe", "general_chat", "help"]),
@@ -110,14 +109,30 @@ export async function POST(request: NextRequest) {
     console.log("🎯 Starting enhanced intent recognition...")
     console.log("📝 Prompt:", prompt)
     
-    const result = await generateWithBestAvailableModel(prompt, {
-      schema: intentSchema,
-      maxTokens: 1500,
+    // 统一调用 /api/ai/generate
+    const aiResponse = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt,
+        options: {
+          schema: intentSchema,
+          maxTokens: 1500,
+        }
+      })
     })
 
+    const aiResult = await aiResponse.json()
+
+    if (!aiResponse.ok || !aiResult.success) {
+      throw new Error(aiResult.error || 'AI API 调用失败')
+    }
+
     // 类型检查：确保返回的是带有object属性的结果
-    if ('object' in result) {
-      const intentResult = result.object as {
+    if ('object' in aiResult.data) {
+      const intentResult = aiResult.data.object as {
         type: "create_HeysMe" | "edit_HeysMe" | "general_chat" | "help";
         confidence: number;
         reasoning: string;
@@ -144,7 +159,7 @@ export async function POST(request: NextRequest) {
         model: "Best Available Model",
       })
     } else {
-      console.error("❌ 返回结果格式不正确:", result)
+      console.error("❌ 返回结果格式不正确:", aiResult.data)
       throw new Error("意图识别返回格式不正确")
     }
   } catch (error) {

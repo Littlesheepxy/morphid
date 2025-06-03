@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { AgentOrchestrator } from "@/lib/utils/agent-orchestrator"
+import { agentOrchestrator } from "@/lib/utils/agent-orchestrator"
 import { SessionData } from "@/lib/types/session"
 import { StreamableAgentResponse } from "@/lib/types/streaming"
 import { DEFAULT_MODEL } from "@/types/models"
@@ -12,76 +12,193 @@ export function useChatSystemV2() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedPage, setGeneratedPage] = useState<any>(null)
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL)
-  const [agentOrchestrator] = useState(() => new AgentOrchestrator())
   const [streamingResponses, setStreamingResponses] = useState<StreamableAgentResponse[]>([])
   const [currentError, setCurrentError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
-  const createNewSession = useCallback(() => {
-    const newSession: SessionData = {
-      id: `session-${Date.now()}`,
-      status: 'active',
-      userIntent: {
-        type: 'career_guidance',
-        target_audience: 'internal_review',
-        urgency: 'exploring',
-        primary_goal: '创建个人页面'
-      },
-      personalization: {
-        identity: {
-          profession: 'other',
-          experience_level: 'mid'
+  const createNewSession = useCallback(async () => {
+    try {
+      // 🔧 修复：通过API调用后端创建会话
+      const response = await fetch('/api/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        preferences: {
-          style: 'modern',
-          tone: 'professional',
-          detail_level: 'detailed'
+        body: JSON.stringify({})
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+
+      const { sessionId } = await response.json();
+      console.log(`✅ [前端会话创建] 后端sessionId: ${sessionId}`);
+      
+      // 创建前端会话数据结构，使用后端返回的sessionId
+      const newSession: SessionData = {
+        id: sessionId, // 🔧 使用后端返回的sessionId
+        status: 'active',
+        userIntent: {
+          type: 'career_guidance',
+          target_audience: 'internal_review',
+          urgency: 'exploring',
+          primary_goal: '创建个人页面'
         },
-        context: {}
-      },
-      collectedData: {
-        personal: {},
-        professional: { skills: [] },
-        experience: [],
-        education: [],
-        projects: [],
-        achievements: [],
-        certifications: []
-      },
-      conversationHistory: [],
-      agentFlow: [],
-      metadata: {
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastActive: new Date(),
-        version: '1.0.0',
-        progress: {
-          currentStage: 'welcome',
-          completedStages: [],
-          totalStages: 4,
-          percentage: 0
+        personalization: {
+          identity: {
+            profession: 'other',
+            experience_level: 'mid'
+          },
+          preferences: {
+            style: 'modern',
+            tone: 'professional',
+            detail_level: 'detailed'
+          },
+          context: {}
         },
-        metrics: {
-          totalTime: 0,
-          userInteractions: 0,
-          agentTransitions: 0,
-          errorsEncountered: 0
+        collectedData: {
+          personal: {},
+          professional: { skills: [] },
+          experience: [],
+          education: [],
+          projects: [],
+          achievements: [],
+          certifications: []
         },
-        settings: {
-          autoSave: true,
-          reminderEnabled: false,
-          privacyLevel: 'private'
+        conversationHistory: [],
+        agentFlow: [],
+        metadata: {
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastActive: new Date(),
+          version: '1.0.0',
+          progress: {
+            currentStage: 'welcome',
+            completedStages: [],
+            totalStages: 4,
+            percentage: 0
+          },
+          metrics: {
+            totalTime: 0,
+            userInteractions: 0,
+            agentTransitions: 0,
+            errorsEncountered: 0
+          },
+          settings: {
+            autoSave: true,
+            reminderEnabled: false,
+            privacyLevel: 'private'
+          }
         }
       }
+
+      // 🔧 修复：将会话数据同步到后端AgentOrchestrator
+      try {
+        const syncResponse = await fetch('/api/session/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId,
+            sessionData: newSession
+          })
+        });
+        
+        if (syncResponse.ok) {
+          console.log(`✅ [会话同步] 前端会话数据已同步到后端`);
+        } else {
+          console.warn(`⚠️ [会话同步] 同步失败，但继续使用本地会话`);
+        }
+      } catch (syncError) {
+        console.warn(`⚠️ [会话同步] 同步请求失败:`, syncError);
+      }
+
+      // 确保不会有重复的session
+      setSessions((prev) => {
+        const filtered = prev.filter(s => s.id !== sessionId)
+        return [newSession, ...filtered]
+      })
+      setCurrentSession(newSession)
+      setGeneratedPage(null)
+      setCurrentError(null)
+      setRetryCount(0)
+
+      return newSession
+
+    } catch (error) {
+      console.error('❌ [会话创建失败]', error);
+      setCurrentError('创建会话失败，请刷新页面重试');
+      
+      // 如果API调用失败，回退到本地会话创建（保持兼容性）
+      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      const fallbackSession: SessionData = {
+        id: sessionId,
+        status: 'active',
+        userIntent: {
+          type: 'career_guidance',
+          target_audience: 'internal_review',
+          urgency: 'exploring',
+          primary_goal: '创建个人页面'
+        },
+        personalization: {
+          identity: {
+            profession: 'other',
+            experience_level: 'mid'
+          },
+          preferences: {
+            style: 'modern',
+            tone: 'professional',
+            detail_level: 'detailed'
+          },
+          context: {}
+        },
+        collectedData: {
+          personal: {},
+          professional: { skills: [] },
+          experience: [],
+          education: [],
+          projects: [],
+          achievements: [],
+          certifications: []
+        },
+        conversationHistory: [],
+        agentFlow: [],
+        metadata: {
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastActive: new Date(),
+          version: '1.0.0',
+          progress: {
+            currentStage: 'welcome',
+            completedStages: [],
+            totalStages: 4,
+            percentage: 0
+          },
+          metrics: {
+            totalTime: 0,
+            userInteractions: 0,
+            agentTransitions: 0,
+            errorsEncountered: 0
+          },
+          settings: {
+            autoSave: true,
+            reminderEnabled: false,
+            privacyLevel: 'private'
+          }
+        }
+      }
+      
+      setSessions((prev) => {
+        const filtered = prev.filter(s => s.id !== sessionId)
+        return [fallbackSession, ...filtered]
+      })
+      setCurrentSession(fallbackSession)
+      setGeneratedPage(null)
+      setRetryCount(0)
+
+      return fallbackSession;
     }
-
-    setSessions((prev) => [newSession, ...prev])
-    setCurrentSession(newSession)
-    setGeneratedPage(null)
-    setCurrentError(null)
-    setRetryCount(0)
-
-    return newSession
   }, [])
 
   const selectSession = useCallback(
@@ -98,25 +215,96 @@ export function useChatSystemV2() {
 
   const sendMessage = useCallback(
     async (content: string, option?: any) => {
-      try {
-        setCurrentError(null)
+      // 🔧 修复异步处理：如果没有会话，先创建会话
+      let targetSession = currentSession;
+      
+      if (!targetSession) {
+        console.log('🔄 [发送消息] 没有当前会话，创建新会话');
+        try {
+          targetSession = await createNewSession();
+        } catch (error) {
+          console.error('❌ [创建会话失败]', error);
+          setCurrentError('创建会话失败，请重试');
+          return;
+        }
+      }
+
+      // 🔧 检查是否为系统消息
+      const isSystemMessage = option?.sender === 'assistant' || option?.agent === 'system' || option?.type?.startsWith('system_');
+      
+      // 🔧 如果是系统消息，直接添加到历史记录，不需要触发Agent处理
+      if (isSystemMessage) {
+        const systemMessage = {
+          id: `msg-${Date.now()}-system`,
+          agent: option?.agent || 'system',
+          sender: option?.sender || 'assistant',
+          type: 'system_event' as const,
+          content,
+          timestamp: new Date(),
+          metadata: option || {}
+        };
+
+        targetSession.conversationHistory.push(systemMessage);
+        targetSession.metadata.updatedAt = new Date();
         
-        if (!currentSession) {
-          // 如果没有当前会话，创建一个新的
-          const newSession = createNewSession()
-          return await processMessage(newSession, content, option)
+        // 立即更新会话状态以显示系统消息
+        setCurrentSession({ ...targetSession });
+        setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)));
+        return;
+      }
+
+      // 🔧 修复：设置加载状态
+      setIsGenerating(true);
+      setCurrentError(null);
+
+      try {
+        // 记录用户消息到对话历史
+        const userMessage = {
+          id: `msg-${Date.now()}-user`,
+          agent: 'user',
+          sender: 'user', // 🔧 确保有sender字段
+          type: 'user_message' as const,
+          content,
+          timestamp: new Date(),
+          metadata: option ? { userOption: option } : undefined
         }
 
-        return await processMessage(currentSession, content, option)
+        targetSession.conversationHistory.push(userMessage)
+        targetSession.metadata.updatedAt = new Date()
+        targetSession.metadata.lastActive = new Date()
+        targetSession.metadata.metrics.userInteractions++
+
+        // 立即更新会话状态以显示用户消息
+        setCurrentSession({ ...targetSession })
+        setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)))
+
+        // 处理用户交互
+        if (option) {
+          const interactionResult = await agentOrchestrator.handleUserInteraction(
+            targetSession.id,
+            'interaction',
+            option,
+            targetSession
+          )
+
+          if (interactionResult?.action === 'advance') {
+            // 推进到下一个Agent
+            return await startAgentProcessing(targetSession)
+          }
+        } else {
+          // 常规消息处理
+          return await startAgentProcessing(targetSession, content)
+        }
+        
       } catch (error) {
         console.error("发送消息失败:", error)
         const errorMessage = error instanceof Error ? error.message : "未知错误"
         setCurrentError(errorMessage)
         
         // 增加错误计数
-        if (currentSession) {
-          currentSession.metadata.metrics.errorsEncountered++
-          setCurrentSession({ ...currentSession })
+        if (targetSession) {
+          targetSession.metadata.metrics.errorsEncountered++
+          setCurrentSession({ ...targetSession })
         }
         
         // 如果重试次数少于3次，可以自动重试
@@ -124,55 +312,31 @@ export function useChatSystemV2() {
           setRetryCount(prev => prev + 1)
           console.log(`自动重试 (${retryCount + 1}/3)...`)
           setTimeout(() => sendMessage(content, option), 1000 * (retryCount + 1))
+        } else {
+          // 🔧 修复：显示系统错误消息
+          if (targetSession) {
+            const systemErrorMessage = {
+              id: `msg-${Date.now()}-error`,
+              agent: 'system',
+              sender: 'assistant', // 🔧 明确标识为助手消息
+              type: 'system_event' as const,
+              content: '抱歉，处理过程中出现了问题，请重试 😅',
+              timestamp: new Date(),
+              metadata: { error: errorMessage, retryCount }
+            }
+
+            targetSession.conversationHistory.push(systemErrorMessage)
+            setCurrentSession({ ...targetSession })
+            setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)))
+          }
         }
+      } finally {
+        // 🔧 修复：确保在处理完成后关闭加载状态
+        setIsGenerating(false);
       }
     },
-    [currentSession, createNewSession, retryCount],
+    [currentSession, createNewSession, agentOrchestrator, retryCount]
   )
-
-  const processMessage = async (session: SessionData, content: string, option?: any) => {
-    try {
-      // 记录用户消息到对话历史
-      const userMessage = {
-        id: `msg-${Date.now()}-user`,
-        agent: 'user',
-        type: 'user_message' as const,
-        content,
-        timestamp: new Date(),
-        metadata: option ? { userOption: option } : undefined
-      }
-
-      session.conversationHistory.push(userMessage)
-      session.metadata.updatedAt = new Date()
-      session.metadata.lastActive = new Date()
-      session.metadata.metrics.userInteractions++
-
-      // 更新会话状态
-      setCurrentSession({ ...session })
-      setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)))
-
-      // 处理用户交互
-      if (option) {
-        const interactionResult = await agentOrchestrator.handleUserInteraction(
-          session.id,
-          'interaction',
-          option,
-          session
-        )
-
-        if (interactionResult?.action === 'advance') {
-          // 推进到下一个Agent
-          return await startAgentProcessing(session)
-        }
-      } else {
-        // 常规消息处理
-        return await startAgentProcessing(session, content)
-      }
-    } catch (error) {
-      console.error("处理消息失败:", error)
-      throw error
-    }
-  }
 
   const startAgentProcessing = async (session: SessionData, userInput?: string) => {
     try {
@@ -196,6 +360,7 @@ export function useChatSystemV2() {
           const agentMessage = {
             id: `msg-${Date.now()}-agent`,
             agent: response.immediate_display.agent_name || 'system',
+            sender: 'assistant', // 🔧 确保有sender字段用于MessageBubble识别
             type: 'agent_response' as const,
             content: response.immediate_display.reply,
             timestamp: new Date(),
@@ -207,6 +372,10 @@ export function useChatSystemV2() {
 
           session.conversationHistory.push(agentMessage)
           session.metadata.updatedAt = new Date()
+          
+          // 🔧 立即更新会话状态以显示Agent消息
+          setCurrentSession({ ...session })
+          setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)))
         }
 
         // 检查是否需要生成页面
@@ -230,6 +399,9 @@ export function useChatSystemV2() {
     } catch (error) {
       console.error("Agent处理失败:", error)
       throw error
+    } finally {
+      // 🔧 确保在Agent处理完成后关闭加载状态
+      setIsGenerating(false);
     }
   }
 
@@ -313,7 +485,7 @@ export function useChatSystemV2() {
 
   const resetToStage = useCallback((stageName: string) => {
     if (currentSession) {
-      agentOrchestrator.resetToStage(currentSession, stageName)
+      agentOrchestrator.resetSessionToStage(currentSession.id, stageName)
       setCurrentSession({ ...currentSession })
       setSessions((prev) => prev.map((s) => (s.id === currentSession.id ? currentSession : s)))
       setCurrentError(null)

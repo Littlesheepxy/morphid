@@ -6,7 +6,6 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
-import { generateWithBestAvailableModel } from '@/lib/ai-models';
 import { z } from 'zod';
 
 /**
@@ -33,52 +32,71 @@ export class WelcomeAgent extends BaseAgent {
     sessionData: SessionData,
     context?: Record<string, any>
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
+    console.log(`\n🤖 [Welcome Agent] 开始处理用户输入`);
+    console.log(`📝 [用户输入] "${input.user_input}"`);
+    console.log(`🆔 [会话ID] ${sessionData.id}`);
+    
     try {
-      // 步骤1: 思考阶段
-      yield this.createThinkingResponse('正在分析您的需求并智能推荐...', 15);
-      await this.delay(1000);
-
-      // 步骤2: 准备对话上下文
-      const collectedInfo = this.extractCollectedInfo(sessionData);
-      const conversationRound = this.getConversationRound(sessionData);
-
-      // 步骤3: 使用新的prompt模板
-      const prompt = formatPrompt(AGENT_PROMPTS.WELCOME_AGENT, {
-        user_input: input.user_input,
-        collected_info: JSON.stringify(collectedInfo),
-        conversation_round: conversationRound
-      });
-
-      // 步骤4: 调用LLM进行意图识别
-      const llmResponse = await this.callLLM(prompt, {
-        temperature: 0.3,
-        max_tokens: 1500,
-        response_format: { type: "json_object" }
-      });
-
-      let parsedResponse;
-      try {
-        parsedResponse = JSON.parse(llmResponse);
-      } catch (error) {
-        throw new Error('LLM返回的JSON格式无效');
+      // 🔧 修复：对话历史模式处理
+      const sessionId = sessionData.id;
+      const isFirstCall = !this.systemPromptSent.get(sessionId);
+      
+      console.log(`💬 [对话模式] ${isFirstCall ? '首次调用' : '继续对话'}`);
+      console.log(`📊 [已收集信息] ${JSON.stringify(this.extractCollectedInfo(sessionData))}`);
+      console.log(`🔢 [对话轮次] ${this.getConversationRound(sessionData)}`);
+      
+      let promptToSend;
+      if (isFirstCall) {
+        // 首次调用，构建完整的 prompt
+        promptToSend = formatPrompt(AGENT_PROMPTS.WELCOME_AGENT, {
+          user_input: input.user_input,
+          collected_info: JSON.stringify(this.extractCollectedInfo(sessionData)),
+          conversation_round: this.getConversationRound(sessionData)
+        });
+        console.log(`📄 [Prompt构建] 首次调用，使用完整模板 (长度: ${promptToSend.length})`);
+      } else {
+        // 后续调用，只传递用户输入和当前状态
+        promptToSend = `用户输入: ${input.user_input}\n已收集信息: ${JSON.stringify(this.extractCollectedInfo(sessionData))}\n对话轮次: ${this.getConversationRound(sessionData)}`;
+        console.log(`📄 [Prompt构建] 继续对话，使用简化格式 (长度: ${promptToSend.length})`);
       }
 
-      // 步骤5: 验证新的响应格式
-      const validatedResponse = this.validateIntentResponse(parsedResponse);
+      // 调用真实LLM API进行意图识别  
+      console.log(`🔗 [LLM调用] 准备调用AI API...`);
+      const llmResponse = await this.callLLM(promptToSend, {
+        schema_type: 'intentResponse',
+        max_tokens: 1500,
+        sessionId: sessionId
+      });
 
-      // 步骤6: 更新会话数据
-      this.updateSessionData(validatedResponse, sessionData);
+      console.log(`✅ [LLM响应] 收到AI响应 (长度: ${llmResponse.length})`);
+      const response: IntentResponse = this.validateIntentResponse(JSON.parse(llmResponse));
+      
+      console.log(`📋 [意图识别结果]`, {
+        user_role: response.identified.user_role,
+        use_case: response.identified.use_case,
+        style: response.identified.style,
+        highlight_focus: response.identified.highlight_focus,
+        completion_status: response.completion_status,
+        missing_fields: response.follow_up.missing_fields
+      });
+      
+      // 更新会话数据
+      this.updateSessionData(response, sessionData);
+      console.log(`💾 [会话更新] 数据已更新到会话中`);
 
-      // 步骤7: 根据完成状态决定下一步
-      if (validatedResponse.completion_status === 'ready') {
-        // 信息收集完成，准备推进到下一阶段
-        yield this.createReadyToAdvanceResponse(validatedResponse, sessionData);
+      // 🔧 修复：根据 completion_status 决定 intent
+      if (response.completion_status === 'ready') {
+        console.log(`🎉 [收集完成] 信息收集完整，准备推进到下一阶段`);
+        // 收集完成，准备推进
+        yield this.createReadyToAdvanceResponse(response, sessionData);
       } else {
-        // 需要继续收集信息
-        yield this.createCollectionResponse(validatedResponse, sessionData);
+        console.log(`🔄 [继续收集] 信息不完整，继续收集 (状态: ${response.completion_status})`);
+        // 继续收集信息，不推进
+        yield this.createCollectionResponse(response, sessionData);
       }
 
     } catch (error) {
+      console.error(`❌ [Welcome Agent错误] 处理失败:`, error);
       yield await this.handleError(error as Error, sessionData, context);
     }
   }
@@ -86,45 +104,40 @@ export class WelcomeAgent extends BaseAgent {
   /**
    * 调用真实的LLM API进行意图识别
    */
-  private async callLLM(prompt: string, options: any): Promise<string> {
-    console.log("🤖 Welcome Agent 调用 LLM API...");
-    console.log("📝 Prompt:", prompt.substring(0, 200) + "...");
-    
-    // 定义意图识别响应的 Schema
-    const intentResponseSchema = z.object({
-      identified: z.object({
-        user_role: z.string().nullable(),
-        use_case: z.string().nullable(),
-        style: z.string().nullable(),
-        highlight_focus: z.array(z.string()).default([])
-      }),
-      follow_up: z.object({
-        missing_fields: z.array(z.string()).default([]),
-        suggestions: z.record(z.object({
-          prompt_text: z.string(),
-          options: z.array(z.string())
-        })).default({})
-      }),
-      completion_status: z.enum(['collecting', 'optimizing', 'ready']),
-      direction_suggestions: z.array(z.string()).default([]),
-      smart_defaults: z.any().default({})
-    });
+  protected async callLLM(prompt: string, options: any): Promise<string> {
+    console.log(`\n🤖 [Welcome Agent LLM] 开始调用`);
+    console.log(`📝 [Prompt预览] ${prompt.substring(0, 200)}...`);
 
-    // 调用真实的AI API - 移除try-catch，让错误直接抛出
-    console.log("🔗 正在调用 generateWithBestAvailableModel...");
-    const result = await generateWithBestAvailableModel(prompt, {
-      schema: intentResponseSchema,
+    // 🔧 修复：使用对话历史模式，避免重复发送 system prompt
+    const sessionId = options.sessionId || 'default';
+    const isFirstCall = !this.systemPromptSent.get(sessionId);
+    
+    console.log(`💬 [对话历史] 会话ID: ${sessionId}, 首次调用: ${isFirstCall}`);
+    
+    // 检查对话历史状态
+    const historyExists = this.conversationHistory.has(sessionId);
+    const historyLength = historyExists ? this.conversationHistory.get(sessionId)!.length : 0;
+    console.log(`📚 [历史状态] 历史存在: ${historyExists}, 历史长度: ${historyLength}`);
+
+    // 调用基类的 AI API 方法，使用对话历史
+    console.log(`🔗 [API调用] 调用父类 callLLM 方法，使用对话历史模式`);
+    const result = await super.callLLM(prompt, {
+      schemaType: 'intentResponse',
       maxTokens: options.max_tokens || 1500,
-      system: "你是一个专业的意图识别助手，严格按照要求的JSON格式返回结构化数据。"
+      system: AGENT_PROMPTS.WELCOME_AGENT, // system prompt 只在首次发送
+      sessionId: sessionId,
+      useHistory: true // 🆕 启用对话历史
     });
 
     // 检查返回结果
     if ('object' in result) {
-      console.log("✅ Welcome Agent LLM 调用成功");
-      console.log("📄 返回结果:", JSON.stringify(result.object, null, 2));
-      return JSON.stringify(result.object);
+      console.log(`✅ [LLM成功] Welcome Agent LLM 调用成功`);
+      console.log(`📊 [结果统计] 返回对象类型, 字段数: ${Object.keys(result.object).length}`);
+      const resultString = JSON.stringify(result.object);
+      console.log(`📄 [结果内容] ${resultString.substring(0, 300)}...`);
+      return resultString;
     } else {
-      console.error("❌ LLM返回格式不正确:", result);
+      console.error(`❌ [LLM错误] 返回格式不正确:`, result);
       throw new Error('LLM返回格式不正确: ' + JSON.stringify(result));
     }
   }
@@ -248,7 +261,7 @@ export class WelcomeAgent extends BaseAgent {
   }
 
   /**
-   * 创建继续收集信息的响应
+   * 创建继续收集信息的响应 - 使用动态生成的选项
    */
   private createCollectionResponse(response: IntentResponse, sessionData: SessionData): StreamableAgentResponse {
     const missingFields = response.follow_up.missing_fields;
@@ -260,18 +273,41 @@ export class WelcomeAgent extends BaseAgent {
     for (const field of missingFields) {
       const suggestion = suggestions[field];
       if (suggestion) {
+        // 🔧 为每个字段添加自定义选项
+        const options = suggestion.options.map((option: string) => ({
+          value: option,
+          label: option
+        }));
+        
+        // 添加自定义选项
+        if (field === 'user_role') {
+          options.push({ value: 'custom', label: '✏️ 让我自己描述我的身份' });
+        } else if (field === 'use_case') {
+          options.push({ value: 'custom', label: '✏️ 我有其他目的' });
+        } else if (field === 'style') {
+          options.push({ value: 'custom', label: '🎨 我有其他风格想法' });
+        } else {
+          options.push({ value: 'custom', label: '✏️ 其他选项' });
+        }
+
         elements.push({
           id: field,
           type: 'select' as const,
           label: suggestion.prompt_text,
-          options: suggestion.options.map((option: string) => ({
-            value: option,
-            label: option
-          })),
+          options,
           required: false
         });
       }
     }
+
+    // 🔧 始终提供开放式输入选项
+    elements.push({
+      id: 'free_form_input',
+      type: 'input' as const,
+      label: '💭 或者，请用您自己的话来描述',
+      placeholder: '例如：我是一个刚入行的UI设计师，想要创建一个能吸引客户的作品展示页面...',
+      required: false
+    });
 
     // 构建回复消息
     let replyMessage = '';
@@ -289,7 +325,7 @@ export class WelcomeAgent extends BaseAgent {
       {
         type: 'form',
         title: '完善您的需求',
-        description: '请选择最符合您需求的选项',
+        description: '您可以选择推荐选项，也可以用自己的话来描述',
         elements,
         required: false
       }
@@ -415,15 +451,15 @@ export class WelcomeAgent extends BaseAgent {
   }
 
   /**
-   * 构建确认表单元素
+   * 构建确认表单元素 - 基于LLM动态生成的选项
    */
   private buildConfirmationElements(analysis: any): any[] {
     const elements = [];
     const confirmed = analysis.confirmed_info;
     const uncertain = analysis.uncertain_info;
 
-    // 用户目标确认
-    if (!confirmed.user_goal && uncertain.user_goal_suggestions.length > 0) {
+    // 🔧 动态生成：用户目标确认
+    if (!confirmed.user_goal && uncertain.user_goal_suggestions?.length > 0) {
       elements.push({
         id: 'user_goal',
         type: 'select',
@@ -431,13 +467,15 @@ export class WelcomeAgent extends BaseAgent {
         options: uncertain.user_goal_suggestions.map((suggestion: string) => ({
           value: suggestion,
           label: this.getGoalIcon(suggestion) + ' ' + suggestion
-        })),
+        })).concat([
+          { value: 'custom', label: '✏️ 让我自己描述' }
+        ]),
         required: true
       });
     }
 
-    // 用户身份确认
-    if (!confirmed.user_type && uncertain.user_type_suggestions.length > 0) {
+    // 🔧 动态生成：用户身份确认
+    if (!confirmed.user_type && uncertain.user_type_suggestions?.length > 0) {
       elements.push({
         id: 'user_type',
         type: 'select',
@@ -445,13 +483,15 @@ export class WelcomeAgent extends BaseAgent {
         options: uncertain.user_type_suggestions.map((suggestion: string) => ({
           value: suggestion,
           label: this.getTypeIcon(suggestion) + ' ' + suggestion
-        })),
+        })).concat([
+          { value: 'custom', label: '✏️ 其他身份' }
+        ]),
         required: true
       });
     }
 
-    // 风格偏好确认
-    if (!confirmed.style_preference && uncertain.style_suggestions.length > 0) {
+    // 🔧 动态生成：风格偏好确认
+    if (!confirmed.style_preference && uncertain.style_suggestions?.length > 0) {
       elements.push({
         id: 'style_preference',
         type: 'select',
@@ -459,13 +499,15 @@ export class WelcomeAgent extends BaseAgent {
         options: uncertain.style_suggestions.map((suggestion: string) => ({
           value: suggestion,
           label: this.getStyleIcon(suggestion) + ' ' + suggestion
-        })),
+        })).concat([
+          { value: 'custom', label: '🎨 我有其他想法' }
+        ]),
         required: false
       });
     }
 
-    // 上下文问题
-    if (uncertain.context_questions.length > 0) {
+    // 🔧 动态生成：上下文问题
+    if (uncertain.context_questions?.length > 0) {
       uncertain.context_questions.forEach((question: string, index: number) => {
         elements.push({
           id: `context_${index}`,
@@ -477,21 +519,14 @@ export class WelcomeAgent extends BaseAgent {
       });
     }
 
-    // 紧急程度确认
-    if (!confirmed.urgency) {
-      elements.push({
-        id: 'urgency',
-        type: 'select',
-        label: '您希望多久完成？',
-        options: [
-          { value: '立即需要', label: '⚡ 立即需要 - 今天就要用' },
-          { value: '这周内', label: '📅 这周内 - 近期有需要' },
-          { value: '这个月', label: '📆 这个月 - 不是很急' },
-          { value: '随时都行', label: '😊 随时都行 - 慢慢来' }
-        ],
-        required: true
-      });
-    }
+    // 🔧 如果需要自定义输入，添加文本框
+    elements.push({
+      id: 'custom_description',
+      type: 'input',
+      label: '💬 或者，您可以用自己的话来描述',
+      placeholder: '例如：我是一个热爱AI的独立研究者，想要展示我的研究成果...',
+      required: false
+    });
 
     return elements;
   }
@@ -647,44 +682,53 @@ export class WelcomeAgent extends BaseAgent {
     data: any,
     sessionData: SessionData
   ): Promise<any> {
+    console.log(`\n🎯 [Welcome Agent交互] 处理用户交互`);
+    console.log(`📝 [交互类型] ${interactionType}`);
+    console.log(`📄 [交互数据] ${JSON.stringify(data)}`);
+    
     if (interactionType === 'interaction') {
-      // 处理智能确认表单的提交
-      const confirmedInfo = {
-        user_goal: data.user_goal || null,
-        user_type: data.user_type || null,
-        style_preference: data.style_preference || null,
-        urgency: data.urgency || null
-      };
-
-      // 添加上下文信息
-      const contextInfo: any = {};
-      Object.keys(data).forEach(key => {
-        if (key.startsWith('context_')) {
-          const questionIndex = key.replace('context_', '');
-          contextInfo[`additional_info_${questionIndex}`] = data[key];
-        }
-      });
-
-      // 更新会话数据
-      this.updateSessionFromConfirmedInfo(confirmedInfo, sessionData);
+      // 处理表单提交，更新已收集的信息
+      const currentInfo = this.extractCollectedInfo(sessionData);
+      console.log(`📊 [交互前状态] ${JSON.stringify(currentInfo)}`);
       
-      // 如果有上下文信息，添加到个性化数据中
-      if (Object.keys(contextInfo).length > 0) {
-        sessionData.personalization = sessionData.personalization || {
-          identity: { profession: 'other', experience_level: 'mid' },
-          preferences: { style: 'modern', tone: 'professional', detail_level: 'detailed' },
-          context: {}
-        };
-        sessionData.personalization.context = { ...sessionData.personalization.context, ...contextInfo };
-      }
-
-      // 返回推进到下一阶段的动作
-      return { 
-        action: 'advance',
-        confirmed_info: confirmedInfo,
-        context_info: contextInfo,
-        summary: `已确认：${confirmedInfo.user_type} - ${confirmedInfo.user_goal}${confirmedInfo.style_preference ? ` (${confirmedInfo.style_preference})` : ''}`
+      // 从表单数据中提取新信息
+      const newInfo = {
+        user_role: data.user_role || currentInfo.user_role,
+        use_case: data.use_case || currentInfo.use_case, 
+        style: data.style || currentInfo.style,
+        highlight_focus: data.highlight_focus || currentInfo.highlight_focus
       };
+      
+      console.log(`📊 [交互后状态] ${JSON.stringify(newInfo)}`);
+      
+      // 更新会话数据中的意图信息
+      const metadata = sessionData.metadata as any;
+      metadata.intentData = newInfo;
+      metadata.conversationRound = (metadata.conversationRound || 0) + 1;
+      
+      // 检查信息完整性 - 必需字段：user_role, use_case
+      const isComplete = newInfo.user_role && newInfo.use_case;
+      console.log(`🔍 [完整性检查] user_role: ${newInfo.user_role}, use_case: ${newInfo.use_case}, 完整: ${isComplete}`);
+      
+      if (isComplete) {
+        console.log(`✅ [交互结果] 信息收集完整，允许推进到下一阶段`);
+        metadata.completionStatus = 'ready';
+        
+        return { 
+          action: 'advance',
+          confirmed_info: newInfo,
+          summary: `已确认：${newInfo.user_role} - ${newInfo.use_case}${newInfo.style ? ` (${newInfo.style})` : ''}`
+        };
+      } else {
+        console.log(`⏸️  [交互结果] 信息不完整，继续收集`);
+        metadata.completionStatus = 'collecting';
+        
+        return {
+          action: 'continue',
+          updated_info: newInfo,
+          summary: `已更新部分信息，还需要：${!newInfo.user_role ? '身份类型' : ''}${!newInfo.use_case ? '使用目的' : ''}`
+        };
+      }
     }
 
     return data;

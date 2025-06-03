@@ -7,7 +7,6 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
-import { generateWithBestAvailableModel } from '@/lib/ai-models';
 import { z } from 'zod';
 
 /**
@@ -186,8 +185,10 @@ export class CodingAgent extends BaseAgent {
     try {
       console.log("🤖 CodingAgent 使用 AI 生成 package.json...");
       
-      const prompt = `
-生成一个 Next.js + TypeScript + Tailwind CSS 项目的 package.json 文件。
+      // 使用模板生成prompt
+      const prompt = formatPrompt(AGENT_PROMPTS.CODING_AGENT, {
+        page_design: JSON.stringify(strategy, null, 2),
+        development_prompt: `生成一个 Next.js + TypeScript + Tailwind CSS 项目的 package.json 文件。
 
 用户类型：${userType}
 设计策略：${JSON.stringify(strategy.features || {})}
@@ -200,10 +201,10 @@ export class CodingAgent extends BaseAgent {
 5. 根据用户类型添加特定依赖（如开发者需要代码高亮，设计师需要图片处理等）
 6. 部署脚本
 
-返回完整的 JSON 格式 package.json 内容。
-`;
+返回完整的 JSON 格式 package.json 内容。`
+      });
 
-      const result = await generateWithBestAvailableModel(prompt, {
+      const result = await this.callLLM(prompt, {
         maxTokens: 1000,
         system: "你是一个 Node.js 项目配置专家，返回有效的 package.json 内容。"
       });

@@ -41,7 +41,7 @@ export function getModelClient(provider: ModelProvider, modelId: string) {
 export async function generateWithModel(
   provider: ModelProvider,
   modelId: string,
-  prompt: string,
+  input: string | Array<{ role: 'system' | 'user' | 'assistant', content: string }>,
   options?: {
     system?: string
     schema?: any
@@ -49,45 +49,77 @@ export async function generateWithModel(
   },
 ) {
   try {
-    console.log(`🚀 Generating with ${provider} model: ${modelId}`)
+    console.log(`\n🚀 [Model] 开始生成 - Provider: ${provider}, Model: ${modelId}`);
     const model = getModelClient(provider, modelId)
 
+    // 🆕 处理输入类型
+    const isMessagesMode = Array.isArray(input);
+    
+    console.log(`📊 [输入分析]`, {
+      mode: isMessagesMode ? 'messages' : 'prompt',
+      inputLength: isMessagesMode ? input.length : (input as string).length,
+      hasSchema: !!options?.schema,
+      hasSystem: !!options?.system,
+      maxTokens: options?.maxTokens
+    });
+    
+    if (isMessagesMode) {
+      console.log(`💬 [Messages模式] 使用对话历史，消息数: ${input.length}`);
+      (input as any[]).forEach((msg, index) => {
+        const roleIcon = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : '📝';
+        const roleName = msg.role === 'user' ? '用户' : msg.role === 'assistant' ? '助手' : '系统';
+        console.log(`  ${roleIcon} [${roleName}${index}] ${msg.content?.substring(0, 150)}...`);
+      });
+    } else {
+      console.log(`📝 [Prompt模式] 使用单次提示，长度: ${(input as string).length}`);
+      console.log(`📄 [Prompt内容] ${(input as string).substring(0, 200)}...`);
+    }
+
     if (options?.schema) {
+      console.log(`🔧 [结构化输出] 使用 generateObject`);
       // 使用结构化输出
       const result = await generateObject({
         model,
-        prompt,
-        system: options.system,
+        prompt: isMessagesMode ? undefined : input as string,
+        messages: isMessagesMode ? input as any : undefined, // 🆕 支持 messages
+        system: isMessagesMode ? undefined : options.system, // messages 模式下 system 已包含在 messages 中
         schema: options.schema,
         maxTokens: options.maxTokens,
       })
-      console.log(`✅ Generated object successfully with ${provider}`)
+      console.log(`✅ [生成成功] 结构化对象生成完成 (Provider: ${provider})`);
+      console.log(`📊 [结果统计] 对象字段数: ${result.object && typeof result.object === 'object' ? Object.keys(result.object as object).length : 0}`);
       return result
     } else {
+      console.log(`📝 [文本输出] 使用 generateText`);
       // 使用文本生成
       const result = await generateText({
         model,
-        prompt,
-        system: options?.system,
+        prompt: isMessagesMode ? undefined : input as string,
+        messages: isMessagesMode ? input as any : undefined, // 🆕 支持 messages
+        system: isMessagesMode ? undefined : options?.system, // messages 模式下 system 已包含在 messages 中
         maxTokens: options?.maxTokens,
       })
-      console.log(`✅ Generated text successfully with ${provider}`)
+      console.log(`✅ [生成成功] 文本生成完成 (Provider: ${provider})`);
+      console.log(`📊 [结果统计] 文本长度: ${result.text.length}`);
       return result
     }
   } catch (error) {
-    console.error(`❌ Error generating with ${provider} model ${modelId}:`, error)
+    console.error(`❌ [生成失败] ${provider} model ${modelId} 错误:`, {
+      error: error instanceof Error ? error.message : error,
+      inputType: Array.isArray(input) ? 'messages' : 'prompt',
+      hasSchema: !!options?.schema
+    })
 
     // 如果是 Claude 模型失败，尝试回退到 OpenAI
     if (provider === "claude" && process.env.OPENAI_API_KEY) {
-      console.log("🔄 Claude failed, falling back to GPT-4o...")
+      console.log(`🔄 [模型回退] Claude 失败，尝试回退到 GPT-4o...`)
       try {
-        return await generateWithModel("openai", "gpt-4o", prompt, options)
+        return await generateWithModel("openai", "gpt-4o", input, options)
       } catch (fallbackError) {
-        console.error("❌ Fallback to OpenAI also failed:", fallbackError)
+        console.error(`❌ [回退失败] OpenAI 回退也失败:`, fallbackError)
       }
     }
 
-    // 重新抛出原始错误
     throw error
   }
 }
@@ -129,31 +161,31 @@ export async function testModelConnection(provider: ModelProvider, modelId: stri
 
 // 便捷函数：使用 GPT-4o
 export async function generateWithGPT4o(
-  prompt: string,
+  input: string | Array<{ role: 'system' | 'user' | 'assistant', content: string }>,
   options?: {
     system?: string
     schema?: any
     maxTokens?: number
   },
 ) {
-  return generateWithModel("openai", "gpt-4o", prompt, options)
+  return generateWithModel("openai", "gpt-4o", input, options)
 }
 
 // 便捷函数：使用 claude 4 Sonnet
 export async function generateWithClaude(
-  prompt: string,
+  input: string | Array<{ role: 'system' | 'user' | 'assistant', content: string }>,
   options?: {
     system?: string
     schema?: any
     maxTokens?: number
   },
 ) {
-  return generateWithModel("claude", "claude-sonnet-4-20250514", prompt, options)
+  return generateWithModel("claude", "claude-sonnet-4-20250514", input, options)
 }
 
 // 智能模型选择：优先使用可用的模型
 export async function generateWithBestAvailableModel(
-  prompt: string,
+  input: string | Array<{ role: 'system' | 'user' | 'assistant', content: string }>,
   options?: {
     system?: string
     schema?: any
@@ -162,19 +194,18 @@ export async function generateWithBestAvailableModel(
 ) {
   const { openaiKey, anthropicKey } = validateApiKeys()
 
-  // 优先使用 Claude，如果不可用则使用 OpenAI
   if (anthropicKey) {
     try {
-      return await generateWithClaude(prompt, options)
+      return await generateWithClaude(input, options)
     } catch (error) {
       console.log("Claude failed, trying OpenAI...")
       if (openaiKey) {
-        return await generateWithGPT4o(prompt, options)
+        return await generateWithGPT4o(input, options)
       }
       throw error
     }
   } else if (openaiKey) {
-    return await generateWithGPT4o(prompt, options)
+    return await generateWithGPT4o(input, options)
   } else {
     throw new Error("No API keys configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
   }

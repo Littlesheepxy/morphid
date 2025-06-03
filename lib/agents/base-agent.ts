@@ -6,6 +6,8 @@ import {
   PersonalizationProfile
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { agentOrchestrator } from '@/lib/utils/agent-orchestrator';
 
 /**
  * 基础Agent抽象类
@@ -15,6 +17,8 @@ export abstract class BaseAgent {
   protected name: string;
   protected capabilities: AgentCapabilities;
   protected retryCount: number = 0;
+  protected conversationHistory: Map<string, Array<{ role: 'system' | 'user' | 'assistant', content: string }>> = new Map();
+  protected systemPromptSent: Map<string, boolean> = new Map();
 
   constructor(name: string, capabilities: AgentCapabilities) {
     this.name = name;
@@ -304,6 +308,188 @@ export abstract class BaseAgent {
   protected updateSessionMetadata(sessionData: SessionData): void {
     sessionData.metadata.lastActive = new Date();
     sessionData.metadata.metrics.userInteractions++;
+  }
+
+  // 调用 LLM 的通用方法
+  protected async callLLM(
+    prompt: string,
+    options?: {
+      system?: string
+      schema?: any
+      schemaType?: string
+      maxTokens?: number
+      sessionId?: string
+      useHistory?: boolean
+    }
+  ): Promise<any> {
+    try {
+      console.log(`\n🔗 [Base Agent LLM] ${this.name} - 开始调用 AI API`)
+      
+      const sessionId = options?.sessionId || 'default';
+      const useHistory = options?.useHistory || false;
+      
+      console.log(`⚙️  [调用配置]`, {
+        sessionId,
+        useHistory,
+        hasSystem: !!options?.system,
+        systemLength: options?.system?.length || 0,
+        schemaType: options?.schemaType,
+        maxTokens: options?.maxTokens
+      });
+      
+      let messages = [];
+      
+      if (useHistory) {
+        console.log(`💬 [对话历史模式] 启用对话历史管理`);
+        
+        if (!this.conversationHistory.has(sessionId)) {
+          this.conversationHistory.set(sessionId, []);
+          console.log(`🆕 [历史创建] 为会话 ${sessionId} 创建新的对话历史`);
+        }
+        
+        const history = this.conversationHistory.get(sessionId)!;
+        console.log(`📚 [历史状态] 当前历史长度: ${history.length}`);
+        
+        if (!this.systemPromptSent.get(sessionId) && options?.system) {
+          history.push({ role: 'system', content: options.system });
+          this.systemPromptSent.set(sessionId, true);
+          console.log(`📝 [System Prompt] 首次添加 system prompt (长度: ${options.system.length})`);
+        } else if (this.systemPromptSent.get(sessionId)) {
+          console.log(`✅ [System Prompt] System prompt 已存在，跳过添加`);
+        }
+        
+        history.push({ role: 'user', content: prompt });
+        messages = history;
+        
+        console.log(`💬 [消息数组] 构建完成，总消息数: ${messages.length}`);
+        messages.forEach((msg, index) => {
+          const roleIcon = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : '📝';
+          const roleName = msg.role === 'user' ? '用户' : msg.role === 'assistant' ? '助手' : '系统';
+          
+          // 添加内容类型提示
+          let contentHint = '';
+          if (msg.role === 'system') {
+            contentHint = ' (Agent Prompt模板)';
+          } else if (msg.role === 'assistant') {
+            contentHint = ' (AI返回结果)';
+          } else {
+            contentHint = ' (用户输入)';
+          }
+          
+          console.log(`  ${roleIcon} [${roleName}${index}]${contentHint} ${msg.content.substring(0, 150)}...`);
+        });
+      } else {
+        messages = [{ role: 'user', content: prompt }];
+        console.log(`📝 [单次模式] 使用单次 prompt 模式，消息长度: ${prompt.length}`);
+      }
+      
+      console.log(`🚀 [API请求] 发送请求到 /api/ai/generate`);
+      const requestBody = {
+        prompt: useHistory ? undefined : prompt,
+        messages: useHistory ? messages : undefined,
+        options: {
+          ...options,
+          system: useHistory ? undefined : options?.system
+        }
+      };
+      console.log(`📦 [请求体] 结构:`, {
+        hasPrompt: !!requestBody.prompt,
+        hasMessages: !!requestBody.messages,
+        messagesCount: requestBody.messages?.length || 0,
+        optionsKeys: Object.keys(requestBody.options || {})
+      });
+      
+      // 🔧 修复：在服务器端直接调用AI API，避免HTTP调用
+      let response, result;
+      
+      if (typeof window === 'undefined') {
+        // 服务器端环境：直接导入并调用AI API函数
+        try {
+          const { POST } = await import('@/app/api/ai/generate/route');
+          const mockRequest = {
+            json: async () => requestBody
+          } as NextRequest;
+          
+          const apiResponse = await POST(mockRequest);
+          result = await apiResponse.json();
+          response = { ok: apiResponse.status === 200, status: apiResponse.status };
+          
+          console.log(`📡 [直接调用] AI API 响应状态: ${response.status}`);
+          
+        } catch (importError) {
+          console.warn(`⚠️ [降级处理] 无法直接调用AI API，使用HTTP请求: ${importError instanceof Error ? importError.message : String(importError)}`);
+          
+          // 降级到HTTP调用
+          const apiUrl = `http://localhost:3000/api/ai/generate`;
+          console.log(`🌐 [HTTP请求] ${apiUrl}`);
+
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          result = await response.json();
+        }
+      } else {
+        // 客户端环境：正常HTTP调用
+        response = await fetch('/api/ai/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        result = await response.json();
+      }
+
+      if (!response.ok || !result.success) {
+        console.error(`❌ [API错误] 请求失败:`, {
+          status: response.status,
+          success: result.success,
+          error: result.error
+        });
+        throw new Error(result.error || 'AI API 调用失败')
+      }
+
+      if (useHistory && result.data) {
+        const history = this.conversationHistory.get(sessionId)!;
+        const responseContent = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+        history.push({ role: 'assistant', content: responseContent });
+        console.log(`💾 [历史保存] AI响应已保存到历史，新历史长度: ${history.length}`);
+        console.log(`📄 [响应内容] ${responseContent.substring(0, 200)}...`);
+      }
+
+      console.log(`✅ [调用成功] ${this.name} - AI 响应成功，数据类型: ${typeof result.data}`);
+      return result.data
+
+    } catch (error) {
+      console.error(`❌ [调用失败] ${this.name} - AI 调用失败:`, {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined
+      })
+      throw error
+    }
+  }
+
+  /**
+   * 清理对话历史
+   */
+  protected clearConversationHistory(sessionId: string): void {
+    this.conversationHistory.delete(sessionId);
+    this.systemPromptSent.delete(sessionId);
+    console.log(`🗑️ ${this.name} - 清理对话历史: ${sessionId}`);
+  }
+
+  /**
+   * 重置 system prompt 状态 (用于切换 Agent 时)
+   */
+  protected resetSystemPrompt(sessionId: string): void {
+    this.systemPromptSent.set(sessionId, false);
+    console.log(`🔄 ${this.name} - 重置 system prompt 状态: ${sessionId}`);
   }
 }
 

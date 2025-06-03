@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Paperclip } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
+import { ThinkingLoader } from '@/components/ui/unified-loading';
 
 interface ChatModeViewProps {
   currentSession: any;
@@ -14,6 +15,7 @@ interface ChatModeViewProps {
   isGenerating: boolean;
   onSendMessage: (message: string, option?: any) => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
+  sessionId?: string;
 }
 
 export function ChatModeView({
@@ -22,7 +24,8 @@ export function ChatModeView({
   setInputValue,
   isGenerating,
   onSendMessage,
-  onKeyPress
+  onKeyPress,
+  sessionId
 }: ChatModeViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,8 +53,30 @@ export function ChatModeView({
                 isLast={index === (currentSession?.conversationHistory?.length || 0) - 1}
                 isGenerating={isGenerating}
                 onSendMessage={onSendMessage}
+                sessionId={sessionId}
               />
             ))}
+            
+            {/* 🔄 加载状态显示 */}
+            {isGenerating && (
+              <div className="flex items-start gap-4 max-w-4xl mx-auto px-6 py-4">
+                <div className="w-8 h-8 shrink-0 bg-gray-100 rounded-full flex items-center justify-center">
+                  <div className="w-4 h-4 text-gray-400">
+                    <svg className="animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <ThinkingLoader 
+                    text="HeysMe AI 正在思考中"
+                    size="md"
+                  />
+                </div>
+              </div>
+            )}
+            
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>

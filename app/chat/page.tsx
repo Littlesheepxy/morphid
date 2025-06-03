@@ -62,13 +62,13 @@ export default function ChatPage() {
   }, [currentSession, isCodeMode])
 
   // 发送消息
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputValue.trim()) return
 
     if (!hasStartedChat) {
       setHasStartedChat(true)
       if (!currentSession) {
-        createNewSession()
+        await createNewSession()
       }
     }
 
@@ -85,12 +85,12 @@ export default function ChatPage() {
   }
 
   // 开始新对话
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     setHasStartedChat(false)
     setInputValue("")
     setIsCodeMode(false)
     setGeneratedCode([])
-    createNewSession()
+    await createNewSession()
   }
 
   // 处理代码下载
@@ -172,7 +172,7 @@ export default function ChatPage() {
   }
 
   // 生成测试代码用于演示
-  const generateTestCode = () => {
+  const generateTestCode = async () => {
     const mockUserData = {
       name: "张三",
       title: "前端开发工程师",
@@ -189,7 +189,7 @@ export default function ChatPage() {
     setHasStartedChat(true)
 
     if (!currentSession) {
-      createNewSession()
+      await createNewSession()
     }
   }
 
@@ -249,6 +249,7 @@ export default function ChatPage() {
               isGenerating={isGenerating}
               onSendMessage={sendMessage}
               onKeyPress={handleKeyPress}
+              sessionId={currentSession?.id}
             />
           ) : (
             /* 欢迎模式 */

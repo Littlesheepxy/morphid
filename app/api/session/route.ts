@@ -10,6 +10,8 @@ export async function POST(req: NextRequest) {
     // 创建新会话
     const sessionId = agentOrchestrator.createSession(initialInput);
 
+    console.log(`✅ [会话API] 创建新会话: ${sessionId}`);
+
     return NextResponse.json({
       success: true,
       sessionId,
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Session creation error:', error);
+    console.error('❌ [会话API] 创建会话失败:', error);
     return NextResponse.json(
       { 
         error: 'Failed to create session',
@@ -33,6 +35,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const sessionId = searchParams.get('sessionId');
+    const debug = searchParams.get('debug') === 'true';
 
     if (!sessionId) {
       return NextResponse.json(
@@ -41,15 +44,38 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    console.log(`🔍 [会话API] 查询会话: ${sessionId}`);
+
     // 获取会话状态
     const sessionStatus = agentOrchestrator.getSessionStatus(sessionId);
 
     if (!sessionStatus) {
+      console.log(`❌ [会话API] 会话未找到: ${sessionId}`);
+      
+      // 如果开启调试模式，返回调试信息
+      if (debug) {
+        const sessionData = agentOrchestrator.getSessionData(sessionId);
+        const allSessions = agentOrchestrator.getAllActiveSessions();
+        
+        return NextResponse.json({
+          error: 'Session not found',
+          debug: {
+            requestedSessionId: sessionId,
+            sessionData: !!sessionData,
+            totalActiveSessions: allSessions.length,
+            allSessionIds: allSessions.map((s: any) => s.id),
+            timestamp: new Date().toISOString()
+          }
+        }, { status: 404 });
+      }
+      
       return NextResponse.json(
         { error: 'Session not found' },
         { status: 404 }
       );
     }
+
+    console.log(`✅ [会话API] 找到会话: ${sessionId}, 阶段: ${sessionStatus.currentStage}`);
 
     return NextResponse.json({
       success: true,
@@ -58,7 +84,7 @@ export async function GET(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Session retrieval error:', error);
+    console.error('❌ [会话API] 检索会话失败:', error);
     return NextResponse.json(
       { 
         error: 'Failed to retrieve session',
@@ -82,7 +108,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // 重置会话
-    const success = await agentOrchestrator.resetToStage(sessionId, targetStage);
+    const success = await agentOrchestrator.resetSessionToStage(sessionId, targetStage);
 
     if (!success) {
       return NextResponse.json(

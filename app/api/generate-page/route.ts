@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { generateWithModel } from "@/lib/ai-models"
 import { getModelById } from "@/types/models"
 
 // HeysMe页面结构Schema
@@ -125,17 +124,33 @@ ${JSON.stringify(collectedData, null, 2)}
 现在时间：${new Date().toISOString()}
 `
 
-    const result = await generateWithModel(modelConfig.provider, modelConfig.id, prompt, {
-      schema: heysMePageSchema,
-      maxTokens: 4000,
+    // 统一调用 /api/ai/generate
+    const aiResponse = await fetch('/api/ai/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt,
+        options: {
+          schema: heysMePageSchema,
+          maxTokens: 4000,
+        }
+      })
     })
 
+    const aiResult = await aiResponse.json()
+
+    if (!aiResponse.ok || !aiResult.success) {
+      throw new Error(aiResult.error || 'AI API 调用失败')
+    }
+
     // 检查返回结果类型并提取数据
-    if (!('object' in result)) {
+    if (!('object' in aiResult.data)) {
       throw new Error('生成结果格式不正确');
     }
 
-    const generatedData = result.object as z.infer<typeof heysMePageSchema>;
+    const generatedData = aiResult.data.object as z.infer<typeof heysMePageSchema>;
 
     // 为生成的页面添加ID
     const pageData = {

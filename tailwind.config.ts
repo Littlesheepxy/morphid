@@ -105,11 +105,56 @@ const config: Config = {
   				to: {
   					height: '0'
   				}
+  			},
+  			'shimmer': {
+  				'0%': {
+  					transform: 'translateX(-100%)',
+  					opacity: '0'
+  				},
+  				'50%': {
+  					opacity: '1'
+  				},
+  				'100%': {
+  					transform: 'translateX(300%)',
+  					opacity: '0'
+  				}
+  			},
+  			'typing-dots': {
+  				'0%, 60%, 100%': {
+  					transform: 'translateY(0)',
+  					opacity: '0.4'
+  				},
+  				'30%': {
+  					transform: 'translateY(-8px)',
+  					opacity: '1'
+  				}
+  			},
+  			'scan-line': {
+  				'0%': {
+  					transform: 'translateX(-100%)'
+  				},
+  				'100%': {
+  					transform: 'translateX(100%)'
+  				}
+  			},
+  			'pulse-glow': {
+  				'0%, 100%': {
+  					opacity: '0.4',
+  					transform: 'scale(1)'
+  				},
+  				'50%': {
+  					opacity: '1',
+  					transform: 'scale(1.05)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'shimmer': 'shimmer 2.5s infinite',
+  			'typing-dots': 'typing-dots 1.4s infinite ease-in-out',
+  			'scan-line': 'scan-line 2s infinite ease-in-out',
+  			'pulse-glow': 'pulse-glow 2s infinite ease-in-out'
   		},
   		fontFamily: {
   			mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', 'monospace'],

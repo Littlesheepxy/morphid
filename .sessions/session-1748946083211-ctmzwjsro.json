@@ -1,0 +1,69 @@
+{
+  "id": "session-1748946083211-ctmzwjsro",
+  "status": "active",
+  "userIntent": {
+    "type": "formal_resume",
+    "urgency": "this_week",
+    "target_audience": "recruiters",
+    "primary_goal": "创建专业简历以求职"
+  },
+  "personalization": {
+    "identity": {
+      "profession": "other",
+      "experience_level": "mid"
+    },
+    "preferences": {
+      "style": "modern",
+      "tone": "professional",
+      "detail_level": "detailed"
+    },
+    "context": {
+      "current_situation": "准备求职或更新简历",
+      "career_goals": "获得更好的职业机会"
+    }
+  },
+  "collectedData": {
+    "personal": {},
+    "professional": {
+      "skills": []
+    },
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "achievements": [],
+    "certifications": []
+  },
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2025-06-03T10:21:23.212Z",
+    "updatedAt": "2025-06-03T10:21:47.145Z",
+    "lastActive": "2025-06-03T10:21:47.145Z",
+    "version": "1.0.0",
+    "progress": {
+      "currentStage": "welcome",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 1,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": false,
+      "privacyLevel": "private"
+    },
+    "intentData": {
+      "user_role": "转行求职者",
+      "use_case": null,
+      "style": "技术导向型",
+      "highlight_focus": []
+    },
+    "conversationRound": 1,
+    "completionStatus": "collecting"
+  }
+}

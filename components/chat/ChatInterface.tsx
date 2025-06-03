@@ -26,6 +26,8 @@ import {
   AgentSessionState 
 } from '@/lib/types/streaming';
 import { SessionData, ConversationEntry } from '@/lib/types/session';
+import { MessageBubble } from './MessageBubble';
+import { UnifiedLoading, ThinkingLoader } from '@/components/ui/unified-loading';
 
 interface ChatInterfaceProps {
   sessionId?: string;
@@ -260,58 +262,32 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
 
   const renderMessage = (message: ConversationEntry) => {
     const isUser = message.type === 'user_message';
+    const isLast = messages[messages.length - 1]?.id === message.id;
     
     return (
-      <motion.div
+      <MessageBubble
         key={message.id}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
-      >
-        <div className={`flex items-start space-x-2 max-w-[80%] ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
-          {/* Avatar */}
-          <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-            isUser ? 'bg-blue-500' : 'bg-gray-500'
-          }`}>
-            {isUser ? (
-              <User className="w-4 h-4 text-white" />
-            ) : (
-              <Bot className="w-4 h-4 text-white" />
-            )}
-          </div>
-          
-          {/* Message Content */}
-          <Card className={`${isUser ? 'bg-blue-50 border-blue-200' : 'bg-white'}`}>
-            <CardContent className="p-3">
-              {!isUser && message.agent && (
-                <div className="text-xs text-gray-500 mb-1 flex items-center">
-                  <Cpu className="w-3 h-3 mr-1" />
-                  {message.agent}
-                </div>
-              )}
-              
-              <div className="text-sm text-gray-800">
-                {message.content}
-              </div>
-              
-              <div className="text-xs text-gray-400 mt-1">
-                {message.timestamp.toLocaleTimeString()}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </motion.div>
+        message={{
+          sender: isUser ? 'user' : 'agent',
+          content: message.content,
+          metadata: message.metadata
+        }}
+        isLast={isLast}
+        isGenerating={isLast && isStreaming && !isUser}
+        isStreaming={isLast && isStreaming && !isUser}
+        onSendMessage={sendMessage}
+        sessionId={sessionId || undefined}
+      />
     );
   };
 
   if (!sessionId) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
-          <p className="text-sm text-gray-600">正在初始化会话...</p>
-        </div>
+        <ThinkingLoader 
+          text="正在初始化会话"
+          size="lg"
+        />
       </div>
     );
   }

@@ -7,7 +7,6 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
-import { generateWithBestAvailableModel } from '@/lib/ai-models';
 import { z } from 'zod';
 
 /**
@@ -542,37 +541,29 @@ export class InfoCollectionAgent extends BaseAgent {
     console.log("🧠 使用AI增强用户意图理解...");
     console.log("📝 用户输入:", userInput);
     
+    const userGoal = this.extractUserGoal(sessionData);
     const userType = this.extractUserType(sessionData);
+    const urgency = this.extractUrgency(sessionData);
     const currentState = this.assessMaterialCollectionState(sessionData);
+    const confirmedInfo = {
+      user_goal: userGoal,
+      user_type: userType,
+      urgency: urgency
+    };
+    const currentCollectionState = JSON.stringify(currentState);
     
-    const prompt = `
-你是一个专业的信息收集助手，正在帮助${userType}收集材料创建个人页面。
+    // 使用模板生成prompt
+    const prompt = formatPrompt(AGENT_PROMPTS.INFO_COLLECTION_AGENT, {
+      user_goal: userGoal,
+      user_type: userType,
+      urgency: urgency,
+      confirmed_info: JSON.stringify(confirmedInfo),
+      current_collection_state: currentCollectionState,
+      user_input: userInput
+    });
 
-用户输入："${userInput}"
-
-当前收集状态：
-- 用户类型：${userType}
-- 收集完整度：${currentState.completeness}%
-- 已有材料：${currentState.hasDocuments ? '有文档' : '无文档'}，${currentState.hasLinks ? '有链接' : '无链接'}
-- 是否已选择跳过：${currentState.userOptedOut}
-
-请分析用户意图并返回JSON格式：
-{
-  "intent": "skip | provide_materials | ask_question | continue_collection",
-  "confidence": 0.95,
-  "suggestedAction": "具体建议的下一步行动",
-  "naturalResponse": "友好自然的回复，引导用户继续"
-}
-
-意图说明：
-- skip: 用户想跳过材料收集
-- provide_materials: 用户准备提供材料
-- ask_question: 用户有疑问需要解答
-- continue_collection: 继续当前收集流程
-`;
-
-    console.log("🔗 正在调用 generateWithBestAvailableModel...");
-    const result = await generateWithBestAvailableModel(prompt, {
+    console.log("🔗 正在调用 callLLM...");
+    const result = await this.callLLM(prompt, {
       maxTokens: 300,
       system: "你是一个专业的用户意图分析师，返回准确的JSON格式数据。"
     });

@@ -7,7 +7,6 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
-import { generateWithBestAvailableModel } from '@/lib/ai-models';
 import { z } from 'zod';
 
 /**
@@ -109,50 +108,12 @@ export class PromptOutputAgent extends BaseAgent {
     try {
       console.log("🤖 PromptOutputAgent 调用 AI 生成设计策略...");
       
-      // 构建设计策略生成的 prompt
-      const prompt = `
-你是一个专业的页面设计策略专家，需要为用户生成个性化的页面设计方案。
-
-## 用户信息：
-- 身份角色：${userType}
-- 目标用途：${userGoal}
-- 个人偏好：${JSON.stringify(personalization?.preferences || {})}
-
-## 用户数据：
-${JSON.stringify(collectedData, null, 2)}
-
-请生成一个完整的页面设计策略，包括：
-
-1. **布局类型选择** - 从以下选项中选择最适合的：
-   - portfolio_showcase: 作品集展示型
-   - project_grid: 项目网格型
-   - classic_timeline: 经典时间线型
-   - professional_blocks: 专业模块型
-   - modern_card: 现代卡片型
-
-2. **主题风格选择** - 从以下选项中选择：
-   - tech_blue: 科技蓝调
-   - creative_purple: 创意紫调
-   - business_gray: 商务灰调
-   - nature_green: 自然绿调
-   - vibrant_orange: 活力橙调
-
-3. **页面模块配置** - 为每个模块指定：
-   - id: 模块标识
-   - title: 模块标题
-   - type: 模块类型（hero_banner, tech_stack_visual, project_cards等）
-   - priority: 优先级（high/medium/low）
-   - required: 是否必需
-
-4. **功能特性配置** - 启用合适的功能：
-   - darkMode, responsive, animations
-   - downloadPdf, socialLinks, contactForm
-   - analytics, seo
-
-5. **个性化定制** - 配色、字体、间距等
-
-请严格按照JSON格式返回设计策略。
-`;
+      // 使用模板生成prompt
+      const prompt = formatPrompt(AGENT_PROMPTS.PROMPT_OUTPUT_AGENT, {
+        collected_user_info: JSON.stringify(collectedData, null, 2),
+        user_goal: userGoal,
+        user_type: userType
+      });
 
       // 定义设计策略的 Schema
       const designStrategySchema = z.object({
@@ -187,7 +148,7 @@ ${JSON.stringify(collectedData, null, 2)}
       });
 
       // 调用 AI API
-      const result = await generateWithBestAvailableModel(prompt, {
+      const result = await this.callLLM(prompt, {
         schema: designStrategySchema,
         maxTokens: 2000,
         system: "你是一个专业的页面设计策略专家，严格按照要求的JSON格式返回设计方案。"
