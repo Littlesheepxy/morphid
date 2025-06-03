@@ -16,6 +16,12 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*.local
+.env.*.backup
+.env.backup
+.env.broken
+.env.local.backup
+.env.local.broken
 
 # IDE and editor files
 .vscode/
@@ -85,3 +91,6 @@ temp/
 .cursor/ 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Test files that might contain sensitive data
+test-env.js

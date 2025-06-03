@@ -60,10 +60,29 @@ const config: Config = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
+  			},
+  			gray: {
+  				750: '#374151',
+  				850: '#1F2937',
+  				950: '#0F172A',
+  			},
+  			vscode: {
+  				bg: '#1e1e1e',
+  				sidebar: '#252526',
+  				panel: '#2d2d30',
+  				border: '#3e3e42',
+  				text: '#cccccc',
+  				comment: '#6a9955',
+  				keyword: '#569cd6',
+  				string: '#ce9178',
+  				number: '#b5cea8',
+  				function: '#dcdcaa',
+  				tag: '#f44747'
   			}
   		},
   		borderColor: {
-  			DEFAULT: 'hsl(var(--border))'
+  			DEFAULT: 'hsl(var(--border))',
+  			'gray-750': '#374151',
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
@@ -91,7 +110,14 @@ const config: Config = {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
-  		}
+  		},
+  		fontFamily: {
+  			mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', 'monospace'],
+  		},
+  		backgroundColor: {
+  			'gray-750': '#374151',
+  			'gray-850': '#1F2937',
+  		},
   	}
   },
   plugins: [require("tailwindcss-animate")],

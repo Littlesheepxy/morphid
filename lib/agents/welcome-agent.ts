@@ -87,71 +87,45 @@ export class WelcomeAgent extends BaseAgent {
    * 调用真实的LLM API进行意图识别
    */
   private async callLLM(prompt: string, options: any): Promise<string> {
-    try {
-      console.log("🤖 Welcome Agent 调用 LLM API...");
-      
-      // 定义意图识别响应的 Schema
-      const intentResponseSchema = z.object({
-        identified: z.object({
-          user_role: z.string().nullable(),
-          use_case: z.string().nullable(),
-          style: z.string().nullable(),
-          highlight_focus: z.array(z.string()).default([])
-        }),
-        follow_up: z.object({
-          missing_fields: z.array(z.string()).default([]),
-          suggestions: z.record(z.object({
-            prompt_text: z.string(),
-            options: z.array(z.string())
-          })).default({})
-        }),
-        completion_status: z.enum(['collecting', 'optimizing', 'ready']),
-        direction_suggestions: z.array(z.string()).default([]),
-        smart_defaults: z.any().default({})
-      });
+    console.log("🤖 Welcome Agent 调用 LLM API...");
+    console.log("📝 Prompt:", prompt.substring(0, 200) + "...");
+    
+    // 定义意图识别响应的 Schema
+    const intentResponseSchema = z.object({
+      identified: z.object({
+        user_role: z.string().nullable(),
+        use_case: z.string().nullable(),
+        style: z.string().nullable(),
+        highlight_focus: z.array(z.string()).default([])
+      }),
+      follow_up: z.object({
+        missing_fields: z.array(z.string()).default([]),
+        suggestions: z.record(z.object({
+          prompt_text: z.string(),
+          options: z.array(z.string())
+        })).default({})
+      }),
+      completion_status: z.enum(['collecting', 'optimizing', 'ready']),
+      direction_suggestions: z.array(z.string()).default([]),
+      smart_defaults: z.any().default({})
+    });
 
-      // 调用真实的AI API
-      const result = await generateWithBestAvailableModel(prompt, {
-        schema: intentResponseSchema,
-        maxTokens: options.max_tokens || 1500,
-        system: "你是一个专业的意图识别助手，严格按照要求的JSON格式返回结构化数据。"
-      });
+    // 调用真实的AI API - 移除try-catch，让错误直接抛出
+    console.log("🔗 正在调用 generateWithBestAvailableModel...");
+    const result = await generateWithBestAvailableModel(prompt, {
+      schema: intentResponseSchema,
+      maxTokens: options.max_tokens || 1500,
+      system: "你是一个专业的意图识别助手，严格按照要求的JSON格式返回结构化数据。"
+    });
 
-      // 检查返回结果
-      if ('object' in result) {
-        console.log("✅ Welcome Agent LLM 调用成功");
-        return JSON.stringify(result.object);
-      } else {
-        throw new Error('LLM返回格式不正确');
-      }
-    } catch (error) {
-      console.error("❌ Welcome Agent LLM 调用失败:", error);
-      
-      // 返回默认的响应结构，避免系统崩溃
-      const fallbackResponse = {
-        identified: {
-          user_role: null,
-          use_case: null,
-          style: null,
-          highlight_focus: []
-        },
-        follow_up: {
-          missing_fields: ["user_role", "use_case"],
-          suggestions: {
-            user_role: {
-              prompt_text: "请告诉我您的身份角色",
-              options: ["学生", "开发者", "设计师", "产品经理", "其他"]
-            }
-          }
-        },
-        completion_status: "collecting",
-        direction_suggestions: [
-          "请告诉我更多关于您想要创建的页面的信息"
-        ],
-        smart_defaults: {}
-      };
-      
-      return JSON.stringify(fallbackResponse);
+    // 检查返回结果
+    if ('object' in result) {
+      console.log("✅ Welcome Agent LLM 调用成功");
+      console.log("📄 返回结果:", JSON.stringify(result.object, null, 2));
+      return JSON.stringify(result.object);
+    } else {
+      console.error("❌ LLM返回格式不正确:", result);
+      throw new Error('LLM返回格式不正确: ' + JSON.stringify(result));
     }
   }
 
