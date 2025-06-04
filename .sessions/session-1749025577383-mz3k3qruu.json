@@ -1,0 +1,58 @@
+{
+  "id": "session-1749025577383-mz3k3qruu",
+  "status": "active",
+  "userIntent": {
+    "type": "career_guidance",
+    "target_audience": "internal_review",
+    "urgency": "exploring",
+    "primary_goal": "创建个人页面"
+  },
+  "personalization": {
+    "identity": {
+      "profession": "other",
+      "experience_level": "mid"
+    },
+    "preferences": {
+      "style": "modern",
+      "tone": "professional",
+      "detail_level": "detailed"
+    },
+    "context": {}
+  },
+  "collectedData": {
+    "personal": {},
+    "professional": {
+      "skills": []
+    },
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "achievements": [],
+    "certifications": []
+  },
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2025-06-04T08:26:17.397Z",
+    "updatedAt": "2025-06-04T08:26:18.186Z",
+    "lastActive": "2025-06-04T08:26:18.186Z",
+    "version": "1.0.0",
+    "progress": {
+      "currentStage": "welcome",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 0,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": false,
+      "privacyLevel": "private"
+    }
+  }
+}

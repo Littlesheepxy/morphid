@@ -1,0 +1,72 @@
+{
+  "id": "session-1749023974515-vpj1w69df",
+  "status": "active",
+  "userIntent": {
+    "type": "career_guidance",
+    "target_audience": "internal_review",
+    "urgency": "exploring",
+    "primary_goal": "创建个人页面"
+  },
+  "personalization": {
+    "identity": {
+      "profession": "other",
+      "experience_level": "mid"
+    },
+    "preferences": {
+      "style": "modern",
+      "tone": "professional",
+      "detail_level": "detailed"
+    },
+    "context": {}
+  },
+  "collectedData": {
+    "personal": {},
+    "professional": {
+      "skills": []
+    },
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "achievements": [],
+    "certifications": [],
+    "documents": [],
+    "links": [],
+    "userOptedOut": false
+  },
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2025-06-04T07:59:34.525Z",
+    "updatedAt": "2025-06-04T08:00:31.868Z",
+    "lastActive": "2025-06-04T08:00:31.868Z",
+    "version": "1.0.0",
+    "progress": {
+      "currentStage": "info_collection",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 7,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": false,
+      "privacyLevel": "private"
+    },
+    "intentData": {
+      "user_role": "让我自己描述",
+      "use_case": "展示技术项目和代码作品",
+      "style": "技术导向型",
+      "highlight_focus": [
+        "技术导向",
+        "自定义身份"
+      ]
+    },
+    "conversationRound": 10,
+    "completionStatus": "ready"
+  }
+}

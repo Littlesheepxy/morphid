@@ -226,18 +226,42 @@ export class SessionStorageManager {
    * 序列化会话数据（处理日期对象）
    */
   private serializeSession(session: SessionData): any {
+    // 辅助函数：安全地转换日期为ISO字符串
+    const safeToISOString = (dateValue: any): string => {
+      if (dateValue instanceof Date) {
+        return dateValue.toISOString();
+      }
+      if (typeof dateValue === 'string') {
+        // 如果已经是字符串，尝试验证是否为有效的ISO日期格式
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString();
+        }
+      }
+      // 如果无法转换，使用当前时间
+      return new Date().toISOString();
+    };
+
     return {
       ...session,
       metadata: {
         ...session.metadata,
-        createdAt: session.metadata.createdAt.toISOString(),
-        updatedAt: session.metadata.updatedAt.toISOString(),
-        lastActive: session.metadata.lastActive.toISOString()
+        createdAt: safeToISOString(session.metadata.createdAt),
+        updatedAt: safeToISOString(session.metadata.updatedAt),
+        lastActive: safeToISOString(session.metadata.lastActive)
       },
+      conversationHistory: session.conversationHistory.map(entry => ({
+        ...entry,
+        timestamp: safeToISOString(entry.timestamp),
+        userInteraction: entry.userInteraction ? {
+          ...entry.userInteraction,
+          timestamp: safeToISOString(entry.userInteraction.timestamp)
+        } : undefined
+      })),
       agentFlow: session.agentFlow.map(flow => ({
         ...flow,
-        startTime: flow.startTime.toISOString(),
-        endTime: flow.endTime?.toISOString()
+        startTime: safeToISOString(flow.startTime),
+        endTime: flow.endTime ? safeToISOString(flow.endTime) : undefined
       }))
     };
   }
@@ -246,18 +270,41 @@ export class SessionStorageManager {
    * 反序列化会话数据（恢复日期对象）
    */
   private deserializeSession(sessionData: any): SessionData {
+    // 辅助函数：安全地转换字符串为Date对象
+    const safeToDate = (dateValue: any): Date => {
+      if (dateValue instanceof Date) {
+        return dateValue;
+      }
+      if (typeof dateValue === 'string') {
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          return date;
+        }
+      }
+      // 如果无法转换，使用当前时间
+      return new Date();
+    };
+
     return {
       ...sessionData,
       metadata: {
         ...sessionData.metadata,
-        createdAt: new Date(sessionData.metadata.createdAt),
-        updatedAt: new Date(sessionData.metadata.updatedAt),
-        lastActive: new Date(sessionData.metadata.lastActive)
+        createdAt: safeToDate(sessionData.metadata.createdAt),
+        updatedAt: safeToDate(sessionData.metadata.updatedAt),
+        lastActive: safeToDate(sessionData.metadata.lastActive)
       },
+      conversationHistory: sessionData.conversationHistory.map((entry: any) => ({
+        ...entry,
+        timestamp: safeToDate(entry.timestamp),
+        userInteraction: entry.userInteraction ? {
+          ...entry.userInteraction,
+          timestamp: safeToDate(entry.userInteraction.timestamp)
+        } : undefined
+      })),
       agentFlow: sessionData.agentFlow.map((flow: any) => ({
         ...flow,
-        startTime: new Date(flow.startTime),
-        endTime: flow.endTime ? new Date(flow.endTime) : undefined
+        startTime: safeToDate(flow.startTime),
+        endTime: flow.endTime ? safeToDate(flow.endTime) : undefined
       }))
     };
   }

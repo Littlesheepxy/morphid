@@ -198,6 +198,28 @@ function LoadingDemoContent() {
               <GeneratingLoader text="AI正在为您生成个性化建议" size="md" />
             </div>
           </div>
+
+          <div className="space-y-3">
+            <h4 className="font-medium">交互分析状态</h4>
+            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 text-sm">AI</span>
+                </div>
+                <div className="flex-1">
+                  <GeneratingLoader text="正在分析您的选择，请稍候" size="sm" />
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 text-sm">AI</span>
+                </div>
+                <div className="flex-1">
+                  <GeneratingLoader text="正在为您生成个性化建议" size="sm" />
+                </div>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

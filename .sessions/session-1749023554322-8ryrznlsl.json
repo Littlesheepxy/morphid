@@ -1,11 +1,11 @@
 {
-  "id": "session-1748946082477-879uuso1h",
+  "id": "session-1749023554322-8ryrznlsl",
   "status": "active",
   "userIntent": {
-    "type": "formal_resume",
-    "urgency": "this_week",
-    "target_audience": "recruiters",
-    "primary_goal": "创建专业简历以求职"
+    "type": "career_guidance",
+    "target_audience": "internal_review",
+    "urgency": "exploring",
+    "primary_goal": "创建个人页面"
   },
   "personalization": {
     "identity": {
@@ -17,10 +17,7 @@
       "tone": "professional",
       "detail_level": "detailed"
     },
-    "context": {
-      "current_situation": "准备求职或更新简历",
-      "career_goals": "获得更好的职业机会"
-    }
+    "context": {}
   },
   "collectedData": {
     "personal": {},
@@ -36,9 +33,9 @@
   "conversationHistory": [],
   "agentFlow": [],
   "metadata": {
-    "createdAt": "2025-06-03T10:21:22.478Z",
-    "updatedAt": "2025-06-03T10:21:22.478Z",
-    "lastActive": "2025-06-03T10:21:22.478Z",
+    "createdAt": "2025-06-04T07:52:34.327Z",
+    "updatedAt": "2025-06-04T07:52:34.347Z",
+    "lastActive": "2025-06-04T07:52:34.347Z",
     "version": "1.0.0",
     "progress": {
       "currentStage": "welcome",

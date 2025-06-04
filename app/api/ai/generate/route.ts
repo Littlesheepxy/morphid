@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 处理 schema - 使用预定义的 schema 映射
-    let processedOptions = { ...options }
+    const processedOptions = { ...options }
     if (options?.schemaType && SCHEMA_MAP[options.schemaType as keyof typeof SCHEMA_MAP]) {
       console.log(`🔧 [Schema处理] 使用预定义 schema: ${options.schemaType}`)
       processedOptions.schema = SCHEMA_MAP[options.schemaType as keyof typeof SCHEMA_MAP]

@@ -1,0 +1,32 @@
+{
+  "id": "test-session",
+  "status": "active",
+  "userIntent": {},
+  "personalization": {},
+  "collectedData": {},
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2025-06-04T07:43:02.901Z",
+    "lastActive": "2025-06-04T07:43:02.901Z",
+    "version": "1.0",
+    "progress": {
+      "currentStage": "start",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 0,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": true,
+      "privacyLevel": "private"
+    }
+  }
+}

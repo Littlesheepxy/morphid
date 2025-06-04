@@ -288,6 +288,19 @@ export function MessageBubble({
                 );
               }
               
+              // 🔧 新增：检测特定的loading文本并使用GeneratingLoader
+              if (!actualIsUser && (
+                message.content === '正在分析您的选择，请稍候...' ||
+                message.content === '正在为您生成个性化建议...'
+              )) {
+                return (
+                  <GeneratingLoader 
+                    text={message.content.replace('...', '')}
+                    size="sm"
+                  />
+                );
+              }
+              
               // 如果是流式输出
               if (isStreaming && !contentComplete) {
                 return (

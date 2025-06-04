@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { agentOrchestrator } from "@/lib/utils/agent-orchestrator"
+// 移除对agentOrchestrator的导入，客户端应该通过API调用后端
+// import { agentOrchestrator } from "@/lib/utils/agent-orchestrator"
 import { SessionData } from "@/lib/types/session"
 import { StreamableAgentResponse } from "@/lib/types/streaming"
 import { DEFAULT_MODEL } from "@/types/models"
@@ -18,6 +19,8 @@ export function useChatSystemV2() {
 
   const createNewSession = useCallback(async () => {
     try {
+      console.log('🔄 [会话创建] 开始创建新会话...');
+      
       // 🔧 修复：通过API调用后端创建会话
       const response = await fetch('/api/session', {
         method: 'POST',
@@ -33,6 +36,14 @@ export function useChatSystemV2() {
 
       const { sessionId } = await response.json();
       console.log(`✅ [前端会话创建] 后端sessionId: ${sessionId}`);
+      
+      // 🔧 检查是否已存在相同ID的会话，避免重复创建
+      const existingSession = sessions.find(s => s.id === sessionId);
+      if (existingSession) {
+        console.log(`⚠️ [会话创建] 会话 ${sessionId} 已存在，返回现有会话`);
+        setCurrentSession(existingSession);
+        return existingSession;
+      }
       
       // 创建前端会话数据结构，使用后端返回的sessionId
       const newSession: SessionData = {
@@ -124,6 +135,7 @@ export function useChatSystemV2() {
       setCurrentError(null)
       setRetryCount(0)
 
+      console.log(`✅ [会话创建] 新会话创建完成: ${sessionId}`);
       return newSession
 
     } catch (error) {
@@ -132,6 +144,8 @@ export function useChatSystemV2() {
       
       // 如果API调用失败，回退到本地会话创建（保持兼容性）
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+      console.log(`🔄 [会话创建] 回退到本地会话: ${sessionId}`);
+      
       const fallbackSession: SessionData = {
         id: sessionId,
         status: 'active',
@@ -199,7 +213,7 @@ export function useChatSystemV2() {
 
       return fallbackSession;
     }
-  }, [])
+  }, [sessions])
 
   const selectSession = useCallback(
     (sessionId: string) => {
@@ -215,85 +229,98 @@ export function useChatSystemV2() {
 
   const sendMessage = useCallback(
     async (content: string, option?: any) => {
-      // 🔧 修复异步处理：如果没有会话，先创建会话
-      let targetSession = currentSession;
-      
-      if (!targetSession) {
-        console.log('🔄 [发送消息] 没有当前会话，创建新会话');
-        try {
-          targetSession = await createNewSession();
-        } catch (error) {
-          console.error('❌ [创建会话失败]', error);
-          setCurrentError('创建会话失败，请重试');
-          return;
-        }
-      }
-
-      // 🔧 检查是否为系统消息
-      const isSystemMessage = option?.sender === 'assistant' || option?.agent === 'system' || option?.type?.startsWith('system_');
-      
-      // 🔧 如果是系统消息，直接添加到历史记录，不需要触发Agent处理
-      if (isSystemMessage) {
-        const systemMessage = {
-          id: `msg-${Date.now()}-system`,
-          agent: option?.agent || 'system',
-          sender: option?.sender || 'assistant',
-          type: 'system_event' as const,
-          content,
-          timestamp: new Date(),
-          metadata: option || {}
-        };
-
-        targetSession.conversationHistory.push(systemMessage);
-        targetSession.metadata.updatedAt = new Date();
-        
-        // 立即更新会话状态以显示系统消息
-        setCurrentSession({ ...targetSession });
-        setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)));
-        return;
-      }
-
-      // 🔧 修复：设置加载状态
-      setIsGenerating(true);
-      setCurrentError(null);
-
       try {
-        // 记录用户消息到对话历史
+        setIsGenerating(true)
+        setCurrentError(null)
+
+        // 🔧 确保有当前会话 - 优化逻辑，避免重复创建
+        let targetSession = currentSession;
+        
+        // 🆕 严格检查会话存在性
+        console.log('📋 [发送消息] 检查会话状态:', {
+          hasCurrentSession: !!currentSession,
+          sessionId: currentSession?.id,
+          sessionStatus: currentSession?.status
+        });
+
+        if (!targetSession || targetSession.status === 'abandoned') {
+          console.log('📝 [发送消息] 当前无有效会话，创建新会话...');
+          targetSession = await createNewSession();
+          if (!targetSession) {
+            throw new Error("无法创建或获取会话")
+          }
+        } else {
+          console.log('✅ [发送消息] 使用现有会话:', targetSession.id);
+        }
+
+        // 添加用户消息到会话历史
         const userMessage = {
           id: `msg-${Date.now()}-user`,
           agent: 'user',
-          sender: 'user', // 🔧 确保有sender字段
+          sender: 'user',
           type: 'user_message' as const,
           content,
           timestamp: new Date(),
-          metadata: option ? { userOption: option } : undefined
+          metadata: { option }
         }
 
         targetSession.conversationHistory.push(userMessage)
-        targetSession.metadata.updatedAt = new Date()
         targetSession.metadata.lastActive = new Date()
         targetSession.metadata.metrics.userInteractions++
 
-        // 立即更新会话状态以显示用户消息
         setCurrentSession({ ...targetSession })
         setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)))
 
-        // 处理用户交互
+        // 🔧 修复：通过API调用后端进行消息处理
         if (option) {
-          const interactionResult = await agentOrchestrator.handleUserInteraction(
-            targetSession.id,
-            'interaction',
-            option,
-            targetSession
-          )
+          // 处理用户交互
+          const response = await fetch('/api/chat/interact', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId: targetSession.id,
+              interactionType: 'interaction',
+              data: option
+            })
+          });
 
-          if (interactionResult?.action === 'advance') {
-            // 推进到下一个Agent
-            return await startAgentProcessing(targetSession)
+          if (!response.ok) {
+            throw new Error(`交互API调用失败: ${response.status}`);
+          }
+
+          // 检查是否是流式响应
+          const contentType = response.headers.get('content-type');
+          if (contentType?.includes('text/event-stream')) {
+            await handleStreamingResponse(response, targetSession);
+          } else {
+            const result = await response.json();
+            if (result.success) {
+              console.log('✅ 交互处理成功:', result);
+            } else {
+              throw new Error(result.error || '交互处理失败');
+            }
           }
         } else {
           // 常规消息处理
-          return await startAgentProcessing(targetSession, content)
+          const response = await fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId: targetSession.id,
+              message: content
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`消息API调用失败: ${response.status}`);
+          }
+
+          // 处理流式响应
+          await handleStreamingResponse(response, targetSession);
         }
         
       } catch (error) {
@@ -302,9 +329,9 @@ export function useChatSystemV2() {
         setCurrentError(errorMessage)
         
         // 增加错误计数
-        if (targetSession) {
-          targetSession.metadata.metrics.errorsEncountered++
-          setCurrentSession({ ...targetSession })
+        if (currentSession) {
+          currentSession.metadata.metrics.errorsEncountered++
+          setCurrentSession({ ...currentSession })
         }
         
         // 如果重试次数少于3次，可以自动重试
@@ -314,7 +341,7 @@ export function useChatSystemV2() {
           setTimeout(() => sendMessage(content, option), 1000 * (retryCount + 1))
         } else {
           // 🔧 修复：显示系统错误消息
-          if (targetSession) {
+          if (currentSession) {
             const systemErrorMessage = {
               id: `msg-${Date.now()}-error`,
               agent: 'system',
@@ -325,9 +352,9 @@ export function useChatSystemV2() {
               metadata: { error: errorMessage, retryCount }
             }
 
-            targetSession.conversationHistory.push(systemErrorMessage)
-            setCurrentSession({ ...targetSession })
-            setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)))
+            currentSession.conversationHistory.push(systemErrorMessage)
+            setCurrentSession({ ...currentSession })
+            setSessions((prev) => prev.map((s) => (s.id === currentSession!.id ? currentSession : s)))
           }
         }
       } finally {
@@ -335,75 +362,179 @@ export function useChatSystemV2() {
         setIsGenerating(false);
       }
     },
-    [currentSession, createNewSession, agentOrchestrator, retryCount]
+    [currentSession, createNewSession, retryCount]
   )
 
-  const startAgentProcessing = async (session: SessionData, userInput?: string) => {
+  // 新增：处理流式响应的辅助函数
+  const handleStreamingResponse = async (response: Response, session: SessionData) => {
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    
+    if (!reader) {
+      throw new Error('无法获取响应流');
+    }
+
+    let buffer = '';
+    let messageReceived = false;
+    
     try {
-      setStreamingResponses([])
-      
-      // 使用 AgentOrchestrator 的流式处理
-      const responseGenerator = agentOrchestrator.processUserInputStreaming(
-        session.id,
-        userInput || '',
-        session
-      )
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log('🔄 [流式响应] 读取完成');
+          break;
+        }
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            
+            if (data === '[DONE]') {
+              console.log('✅ [流式完成] 所有数据接收完毕');
+              break;
+            }
+            
+            try {
+              const chunk = JSON.parse(data);
+              console.log('📦 [流式数据]', {
+                type: chunk.type || 'unknown',
+                hasImmediate: !!chunk.immediate_display,
+                hasReply: !!chunk.immediate_display?.reply,
+                replyLength: chunk.immediate_display?.reply?.length || 0
+              });
+              
+              // 🔧 修复：更灵活的响应处理
+              let shouldProcessResponse = false;
+              let agentMessage: any = null;
 
-      const responses: StreamableAgentResponse[] = []
-      
-      for await (const response of responseGenerator) {
-        responses.push(response)
-        setStreamingResponses([...responses])
+              // 检查多种可能的响应格式
+              if (chunk.type === 'agent_response' && chunk.data?.immediate_display?.reply) {
+                // 格式1: { type: 'agent_response', data: { immediate_display: { reply: '...' } } }
+                shouldProcessResponse = true;
+                agentMessage = {
+                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
+                  agent: chunk.data.immediate_display.agent_name || 'system',
+                  sender: 'assistant',
+                  type: 'agent_response' as const,
+                  content: chunk.data.immediate_display.reply,
+                  timestamp: new Date(),
+                  metadata: { 
+                    systemState: chunk.data.system_state,
+                    interaction: chunk.data.interaction
+                  }
+                };
+              } else if (chunk.immediate_display?.reply) {
+                // 格式2: { immediate_display: { reply: '...' } }
+                shouldProcessResponse = true;
+                agentMessage = {
+                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
+                  agent: chunk.immediate_display.agent_name || 'system',
+                  sender: 'assistant',
+                  type: 'agent_response' as const,
+                  content: chunk.immediate_display.reply,
+                  timestamp: new Date(),
+                  metadata: { 
+                    systemState: chunk.system_state,
+                    interaction: chunk.interaction
+                  }
+                };
+              } else if (typeof chunk === 'string' && chunk.trim()) {
+                // 格式3: 直接字符串响应
+                shouldProcessResponse = true;
+                agentMessage = {
+                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
+                  agent: 'system',
+                  sender: 'assistant',
+                  type: 'agent_response' as const,
+                  content: chunk,
+                  timestamp: new Date(),
+                  metadata: {}
+                };
+              }
 
-        // 记录Agent响应到对话历史
-        if (response.immediate_display) {
-          const agentMessage = {
-            id: `msg-${Date.now()}-agent`,
-            agent: response.immediate_display.agent_name || 'system',
-            sender: 'assistant', // 🔧 确保有sender字段用于MessageBubble识别
-            type: 'agent_response' as const,
-            content: response.immediate_display.reply,
-            timestamp: new Date(),
-            metadata: { 
-              systemState: response.system_state,
-              interaction: response.interaction
+              if (shouldProcessResponse && agentMessage) {
+                messageReceived = true;
+                session.conversationHistory.push(agentMessage);
+                session.metadata.updatedAt = new Date();
+                
+                console.log('💬 [新消息] 添加助手回复:', agentMessage.content.substring(0, 50) + '...');
+                setCurrentSession({ ...session });
+                setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+              }
+              
+              // 检查是否需要生成页面
+              const systemState = chunk.data?.system_state || chunk.system_state;
+              if (systemState?.metadata?.readyToGenerate) {
+                console.log('🎨 [页面生成] 触发页面生成...');
+                generatePage(session);
+              }
+
+              // 如果流程完成
+              if (systemState?.intent === 'done' && systemState?.done) {
+                console.log('🏁 [流程完成] 会话已完成');
+                session.status = 'completed';
+                setCurrentSession({ ...session });
+                setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+              }
+              
+            } catch (parseError) {
+              console.error('❌ [解析错误] 无法解析流式数据:', parseError);
+              console.error('❌ [错误数据]:', data);
+              
+              // 尝试处理为普通文本
+              if (data && data.trim() && data !== 'undefined') {
+                messageReceived = true;
+                const textMessage = {
+                  id: `msg-${Date.now()}-text-${Math.random().toString(36).substr(2, 9)}`,
+                  agent: 'system',
+                  sender: 'assistant',
+                  type: 'agent_response' as const,
+                  content: data.trim(),
+                  timestamp: new Date(),
+                  metadata: { parseError: true }
+                };
+                
+                session.conversationHistory.push(textMessage);
+                setCurrentSession({ ...session });
+                setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                console.log('📝 [文本回退] 作为普通文本处理:', data.trim().substring(0, 50) + '...');
+              }
             }
           }
-
-          session.conversationHistory.push(agentMessage)
-          session.metadata.updatedAt = new Date()
-          
-          // 🔧 立即更新会话状态以显示Agent消息
-          setCurrentSession({ ...session })
-          setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)))
-        }
-
-        // 检查是否需要生成页面
-        if (response.system_state?.metadata?.readyToGenerate) {
-          generatePage(session)
-        }
-
-        // 如果流程完成
-        if (response.system_state?.intent === 'done' && response.system_state?.done) {
-          session.status = 'completed'
-          setCurrentSession({ ...session })
-          setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)))
         }
       }
-
-      // 更新最终状态
-      setCurrentSession({ ...session })
-      setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)))
-      setRetryCount(0) // 重置重试计数
-
-    } catch (error) {
-      console.error("Agent处理失败:", error)
-      throw error
+      
+      // 如果没有收到任何消息，添加一个提示
+      if (!messageReceived) {
+        console.warn('⚠️ [流式响应] 未收到任何agent响应消息');
+        const systemMessage = {
+          id: `msg-${Date.now()}-system`,
+          agent: 'system',
+          sender: 'assistant',
+          type: 'system_event' as const,
+          content: '正在处理您的请求，请稍候...',
+          timestamp: new Date(),
+          metadata: {}
+        };
+        
+        session.conversationHistory.push(systemMessage);
+        setCurrentSession({ ...session });
+        setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+      }
+      
+    } catch (streamError) {
+      console.error('❌ [流式响应错误]:', streamError);
+      throw streamError;
     } finally {
-      // 🔧 确保在Agent处理完成后关闭加载状态
-      setIsGenerating(false);
+      reader.releaseLock();
     }
-  }
+    
+    setRetryCount(0); // 重置重试计数
+  };
 
   const generatePage = useCallback(
     async (session: SessionData) => {
@@ -485,13 +616,10 @@ export function useChatSystemV2() {
 
   const resetToStage = useCallback((stageName: string) => {
     if (currentSession) {
-      agentOrchestrator.resetSessionToStage(currentSession.id, stageName)
-      setCurrentSession({ ...currentSession })
-      setSessions((prev) => prev.map((s) => (s.id === currentSession.id ? currentSession : s)))
-      setCurrentError(null)
-      setRetryCount(0)
+      // 这里需要实现重置到特定阶段的功能
+      console.warn("重置到特定阶段的功能尚未实现");
     }
-  }, [currentSession, agentOrchestrator])
+  }, [currentSession])
 
   const clearChat = useCallback(() => {
     setCurrentSession(null)

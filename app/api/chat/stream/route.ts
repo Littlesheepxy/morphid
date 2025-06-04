@@ -93,6 +93,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log(`🚀 [流式API] 处理消息:`, {
+      sessionId,
+      messageLength: message.length,
+      currentStage
+    });
+
     // 创建流式响应
     const encoder = new TextEncoder();
     
@@ -106,18 +112,35 @@ export async function POST(req: NextRequest) {
             currentStage
           );
 
+          let responseCount = 0;
           for await (const chunk of responseGenerator) {
+            responseCount++;
+            console.log(`📤 [流式发送] 第${responseCount}个响应:`, {
+              hasReply: !!chunk.immediate_display?.reply,
+              replyLength: chunk.immediate_display?.reply?.length || 0,
+              intent: chunk.system_state?.intent,
+              done: chunk.system_state?.done
+            });
+
+            // 🔧 修复：确保响应格式统一
+            const formattedChunk = {
+              type: 'agent_response',
+              ...chunk
+            };
+
             // 转换为SSE格式
-            const sseData = `data: ${JSON.stringify(chunk)}\n\n`;
+            const sseData = `data: ${JSON.stringify(formattedChunk)}\n\n`;
             controller.enqueue(encoder.encode(sseData));
           }
+
+          console.log(`✅ [流式完成] 总共发送了 ${responseCount} 个响应`);
 
           // 发送结束标记
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
 
         } catch (error) {
-          console.error('Stream processing error:', error);
+          console.error('❌ [流式处理错误]:', error);
           
           // 发送错误信息
           const errorResponse: StreamableAgentResponse = {
@@ -132,7 +155,12 @@ export async function POST(req: NextRequest) {
             }
           };
 
-          const sseData = `data: ${JSON.stringify(errorResponse)}\n\n`;
+          const formattedError = {
+            type: 'agent_response',
+            ...errorResponse
+          };
+
+          const sseData = `data: ${JSON.stringify(formattedError)}\n\n`;
           controller.enqueue(encoder.encode(sseData));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();

@@ -76,6 +76,123 @@ export async function POST(req: NextRequest) {
 
     console.log(`📋 [处理结果] Action: ${result?.action}, NextAgent: ${result?.nextAgent}`);
 
+    // 🆕 处理自定义描述请求
+    if (result?.action === 'request_custom_description') {
+      console.log(`✏️ [自定义描述] 开始流式输出引导词`);
+      
+      // 设置等待状态
+      const metadata = sessionData.metadata as any;
+      metadata.waitingForCustomDescription = result.field;
+      
+      // 创建流式响应输出引导词
+      const encoder = new TextEncoder();
+      
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            // 获取引导词
+            const promptText = result.description_prompt || '请详细描述您的需求...';
+            console.log(`📝 [引导词] 准备流式输出 (长度: ${promptText.length})`);
+            
+            // 开始流式输出
+            const characters = promptText.split('');
+            let accumulatedText = '';
+            
+            for (let i = 0; i < characters.length; i++) {
+              accumulatedText += characters[i];
+              
+              const streamChunk = {
+                type: 'agent_response',
+                immediate_display: {
+                  reply: accumulatedText,
+                  agent_name: 'WelcomeAgent',
+                  timestamp: new Date().toISOString()
+                },
+                system_state: {
+                  intent: 'requesting_description',
+                  done: false,
+                  progress: Math.round((i + 1) / characters.length * 100),
+                  current_stage: '引导中...',
+                  metadata: {
+                    streaming: true,
+                    field: result.field,
+                    character_index: i + 1,
+                    total_characters: characters.length
+                  }
+                }
+              };
+              
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamChunk)}\n\n`));
+              
+              // 控制输出速度 - 中文字符稍快一些
+              const delay = characters[i].match(/[\u4e00-\u9fa5]/) ? 50 : 30;
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            // 发送完成状态
+            const finalChunk = {
+              type: 'agent_response',
+              immediate_display: {
+                reply: accumulatedText,
+                agent_name: 'WelcomeAgent',
+                timestamp: new Date().toISOString()
+              },
+              system_state: {
+                intent: 'awaiting_description',
+                done: false,
+                progress: 100,
+                current_stage: '等待用户描述',
+                metadata: {
+                  streaming: false,
+                  stream_complete: true,
+                  field: result.field,
+                  waiting_for_input: true
+                }
+              }
+            };
+            
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            
+            console.log(`✅ [流式完成] 引导词输出完成`);
+            
+          } catch (error) {
+            console.error('❌ [流式错误] 引导词输出失败:', error);
+            
+            const errorChunk = {
+              type: 'agent_response',
+              immediate_display: {
+                reply: '抱歉，系统出现问题，请直接在下方输入框描述您的需求。',
+                agent_name: 'System',
+                timestamp: new Date().toISOString()
+              },
+              system_state: {
+                intent: 'error',
+                done: false,
+                metadata: { error: error instanceof Error ? error.message : String(error) }
+              }
+            };
+            
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        }
+      });
+
+      return new NextResponse(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }
+      });
+    }
+
     // 如果需要推进到下一阶段
     if (result?.action === 'advance' && result?.nextAgent) {
       // 创建流式响应以启动下一个Agent

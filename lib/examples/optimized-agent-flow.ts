@@ -88,7 +88,7 @@ export async function designerFlowExample() {
  */
 export async function productManagerDetailedExample() {
   const orchestrator = new AgentOrchestrator();
-  let sessionData: SessionData = createMockSessionData('pm_session_001');
+  const sessionData = createMockSessionData('pm_session_001');
   
   console.log('📊 开始产品经理简历详细收集流程...\n');
 

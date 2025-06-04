@@ -94,11 +94,17 @@ export interface SessionStats {
  */
 export interface UserInteractionResult {
   /** 处理动作 */
-  action: 'continue' | 'advance' | 'retry' | 'error';
+  action: 'continue' | 'advance' | 'retry' | 'error' | 'request_custom_description';
   /** 确认的信息 */
   confirmed_info?: any;
   /** 操作摘要 */
   summary?: string;
   /** 下一个Agent（如果需要跳转） */
   nextAgent?: string;
+  /** 自定义描述字段（用于request_custom_description动作） */
+  field?: string;
+  /** 描述引导词（用于request_custom_description动作） */
+  description_prompt?: string;
+  /** 当前收集的信息（用于request_custom_description动作） */
+  current_info?: any;
 } 

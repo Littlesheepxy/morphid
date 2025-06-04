@@ -1,5 +1,5 @@
 {
-  "id": "session-1748945450912-mifj3szje",
+  "id": "session-1749022964942-9jb62knbv",
   "status": "active",
   "userIntent": {
     "type": "formal_resume",
@@ -36,9 +36,9 @@
   "conversationHistory": [],
   "agentFlow": [],
   "metadata": {
-    "createdAt": "2025-06-03T10:10:50.912Z",
-    "updatedAt": "2025-06-03T10:10:50.912Z",
-    "lastActive": "2025-06-03T10:10:50.912Z",
+    "createdAt": "2025-06-04T07:42:44.942Z",
+    "updatedAt": "2025-06-04T07:42:44.942Z",
+    "lastActive": "2025-06-04T07:42:44.942Z",
     "version": "1.0.0",
     "progress": {
       "currentStage": "welcome",

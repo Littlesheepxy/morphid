@@ -58,7 +58,7 @@ export class AgentOrchestrator {
     
     try {
       // 获取或创建会话
-      let session = await this.getOrCreateSession(sessionId, sessionData);
+      const session = await this.getOrCreateSession(sessionId, sessionData);
       
       console.log(`📊 [会话状态] 当前阶段: ${session.metadata.progress.currentStage}, 进度: ${session.metadata.progress.percentage}%`);
       
@@ -159,7 +159,7 @@ export class AgentOrchestrator {
    */
   async resetSessionToStage(sessionId: string, stageName: string): Promise<boolean> {
     try {
-      const sessionData = sessionManager.getSession(sessionId);
+      const sessionData = await sessionManager.getSession(sessionId);
       if (!sessionData) return false;
 
       if (!agentMappings.isValidStage(stageName)) {
@@ -202,8 +202,8 @@ export class AgentOrchestrator {
   /**
    * 获取会话状态
    */
-  getSessionStatus(sessionId: string): any {
-    const sessionData = sessionManager.getSession(sessionId);
+  async getSessionStatus(sessionId: string): Promise<any> {
+    const sessionData = await sessionManager.getSession(sessionId);
     if (!sessionData) return null;
 
     return {
@@ -253,7 +253,7 @@ export class AgentOrchestrator {
     let session = sessionData;
     
     if (!session) {
-      session = sessionManager.getSession(sessionId) || undefined;
+      session = (await sessionManager.getSession(sessionId)) || undefined;
       
       if (!session) {
         console.log(`🆕 [编排器] 未找到会话 ${sessionId}，创建新会话`);
