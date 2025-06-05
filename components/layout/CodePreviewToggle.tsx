@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,10 +28,13 @@ import {
   Edit3,
   Save,
   X,
-  Check
+  Check,
+  Sparkles,
+  Zap,
+  Settings
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/theme-context';
 import WebContainerPreview from './WebContainerPreview';
 
 // 代码文件接口
@@ -60,6 +64,7 @@ interface CodePreviewToggleProps {
 }
 
 type ViewMode = 'code' | 'preview';
+type DeviceType = 'desktop' | 'tablet' | 'mobile';
 
 // 语法高亮函数
 const highlightCode = (code: string, language: string) => {
@@ -430,11 +435,13 @@ export function CodePreviewToggle({
   onDeploy,
   onEditCode
 }: CodePreviewToggleProps) {
+  const { theme } = useTheme();
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [activeFile, setActiveFile] = useState(files[0]?.filename || '');
   const [isEditMode, setIsEditMode] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [deviceType, setDeviceType] = useState<DeviceType>('desktop');
 
   const currentFile = files.find(f => f.filename === activeFile) || files[0];
 
@@ -447,75 +454,186 @@ export function CodePreviewToggle({
     setPreviewUrl(url);
   };
 
+  const getFileIcon = (filename: string, type: string) => {
+    if (type === 'page' || filename.includes('.tsx') || filename.includes('.jsx')) {
+      return <Code2 className="w-4 h-4" />;
+    }
+    if (type === 'styles' || filename.includes('.css')) {
+      return <Sparkles className="w-4 h-4" />;
+    }
+    if (type === 'config') {
+      return <Settings className="w-4 h-4" />;
+    }
+    return <FileText className="w-4 h-4" />;
+  };
+
   if (!files || files.length === 0) {
     return (
-      <Card className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-center text-gray-400">
-          <Code2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>等待代码生成</p>
-        </div>
+      <Card className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+        theme === "light" 
+          ? "bg-white/80 border-emerald-100/60 backdrop-blur-xl" 
+          : "bg-gray-800/80 border-emerald-700/30 backdrop-blur-xl"
+      }`}>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 bg-brand-gradient rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-brand animate-brand-breathe">
+            <Code2 className="w-8 h-8 text-white" />
+          </div>
+          <p className={`text-lg font-medium ${theme === "light" ? "text-gray-600" : "text-gray-300"}`}>
+            等待代码生成中...
+          </p>
+        </motion.div>
       </Card>
     );
   }
 
   return (
     <div className="h-full flex flex-col">
-      {/* 顶部切换工具栏 */}
-      <div className="flex items-center justify-between p-3 border-b bg-white">
-        <div className="flex items-center gap-3">
-          {/* Toggle Button */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
+      {/* 🎨 顶部工具栏 - 品牌设计升级 */}
+      <motion.div 
+        className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
+          theme === "light" 
+            ? "bg-white/90 border-emerald-100/60 backdrop-blur-xl" 
+            : "bg-gray-900/90 border-emerald-700/30 backdrop-blur-xl"
+        }`}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-4">
+          {/* 🎨 模式切换按钮 - 品牌色升级 */}
+          <div className={`flex rounded-2xl p-1 transition-all duration-300 ${
+            theme === "light" ? "bg-emerald-100/80" : "bg-emerald-900/30"
+          }`}>
+            <motion.button
               onClick={() => setViewMode('preview')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium",
+                "flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium",
                 viewMode === 'preview'
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-brand-gradient text-gray-900 shadow-brand font-semibold"
+                  : theme === "light"
+                    ? "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                    : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-800/50"
               )}
+              style={viewMode === 'preview' ? { textShadow: '0 1px 2px rgba(255, 255, 255, 0.9)' } : {}}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <Eye className="w-4 h-4" />
               预览
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={() => setViewMode('code')}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium",
+                "flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium",
                 viewMode === 'code'
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
+                  ? "bg-brand-gradient text-gray-900 shadow-brand font-semibold"
+                  : theme === "light"
+                    ? "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
+                    : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-800/50"
               )}
+              style={viewMode === 'code' ? { textShadow: '0 1px 2px rgba(255, 255, 255, 0.9)' } : {}}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <Code2 className="w-4 h-4" />
               代码
-            </button>
+            </motion.button>
           </div>
 
-          {/* 编辑内容按钮 - 仅在预览模式显示 */}
+          {/* 🎨 设备预览切换 - 仅在预览模式显示 */}
           {viewMode === 'preview' && (
-            <Button
-              variant={isEditMode ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setIsEditMode(!isEditMode)}
-              className="ml-2"
+            <motion.div 
+              className="flex gap-1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
             >
-              <Edit3 className="w-4 h-4 mr-1" />
-              {isEditMode ? '完成编辑' : '编辑内容'}
-            </Button>
+              {[
+                { type: 'desktop', icon: Monitor, label: '桌面' },
+                { type: 'tablet', icon: Tablet, label: '平板' },
+                { type: 'mobile', icon: Smartphone, label: '手机' }
+              ].map(({ type, icon: Icon, label }) => (
+                <motion.button
+                  key={type}
+                  onClick={() => setDeviceType(type as DeviceType)}
+                  className={cn(
+                    "p-2 rounded-xl transition-all duration-200",
+                    deviceType === type
+                      ? theme === "light"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-emerald-800 text-emerald-300"
+                      : theme === "light"
+                        ? "text-gray-600 hover:bg-gray-100"
+                        : "text-gray-400 hover:bg-gray-700"
+                  )}
+                  title={label}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Icon className="w-4 h-4" />
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+
+          {/* 🎨 编辑内容按钮 - 仅在预览模式显示 */}
+          {viewMode === 'preview' && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <Button
+                variant={isEditMode ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setIsEditMode(!isEditMode)}
+                className={`rounded-xl border-2 transition-all duration-300 ${
+                  isEditMode
+                    ? "bg-brand-gradient text-white border-0 shadow-brand"
+                    : theme === "light"
+                      ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                      : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+                }`}
+              >
+                <Edit3 className="w-4 h-4 mr-1" />
+                {isEditMode ? '完成编辑' : '编辑内容'}
+              </Button>
+            </motion.div>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="hover:bg-gray-50">
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" className="hover:bg-gray-50">
-            <Play className="w-4 h-4" />
-          </Button>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className={`rounded-xl border-2 transition-all duration-300 ${
+                theme === "light"
+                  ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                  : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+              }`}
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className={`rounded-xl border-2 transition-all duration-300 ${
+                theme === "light"
+                  ? "border-cyan-200 text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50"
+                  : "border-cyan-700 text-cyan-400 hover:border-cyan-600 hover:bg-cyan-900/20"
+              }`}
+            >
+              <Play className="w-4 h-4" />
+            </Button>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
-      {/* 主内容区域 */}
+      {/* 🎨 主内容区域 */}
       <div className="flex-1 flex overflow-hidden">
         <AnimatePresence mode="wait">
           {viewMode === 'preview' ? (
@@ -523,7 +641,7 @@ export function CodePreviewToggle({
               key="preview-view"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
+              exit={{ opacity: 0, x: -20 }}
               className="w-full"
             >
               <WebContainerPreview
@@ -544,32 +662,207 @@ export function CodePreviewToggle({
               key="code-view"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="w-full flex h-full"
+              exit={{ opacity: 0, x: 20 }}
+              className="w-full flex"
             >
-              {/* 文件树 - VS Code 风格 */}
-              <div className="w-72 bg-vscode-sidebar border-r border-vscode-border flex flex-col">
-                <div className="px-4 py-3 border-b border-vscode-border bg-vscode-panel">
-                  <div className="text-sm font-medium text-vscode-text">资源管理器</div>
-                  <div className="text-xs text-gray-400 mt-1">项目文件</div>
+              {/* 🎨 文件树 - 品牌设计升级 */}
+              <div className={`w-80 border-r transition-all duration-300 ${
+                theme === "light" 
+                  ? "bg-emerald-50/50 border-emerald-100/60" 
+                  : "bg-emerald-950/20 border-emerald-700/30"
+              }`}>
+                <div className="p-4 border-b">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 bg-brand-gradient rounded-lg flex items-center justify-center">
+                      <Folder className="w-3 h-3 text-white" />
+                    </div>
+                    <span className={`font-medium text-sm ${
+                      theme === "light" ? "text-gray-900" : "text-white"
+                    }`}>
+                      项目文件
+                    </span>
+                  </div>
+                  <ScrollArea className="max-h-96">
+                    <div className="space-y-1">
+                      {files.map((file) => (
+                        <motion.button
+                          key={file.filename}
+                          onClick={() => setActiveFile(file.filename)}
+                          className={cn(
+                            "w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200",
+                            activeFile === file.filename
+                              ? theme === "light"
+                                ? "bg-emerald-100 text-emerald-800 shadow-sm"
+                                : "bg-emerald-800/50 text-emerald-200 shadow-sm"
+                              : theme === "light"
+                                ? "text-gray-700 hover:bg-emerald-50"
+                                : "text-gray-300 hover:bg-emerald-900/20"
+                          )}
+                          whileHover={{ x: 2 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className={cn(
+                            "p-1.5 rounded-lg",
+                            activeFile === file.filename
+                              ? "bg-emerald-200 text-emerald-700"
+                              : theme === "light" 
+                                ? "bg-gray-200 text-gray-600" 
+                                : "bg-gray-700 text-gray-400"
+                          )}>
+                            {getFileIcon(file.filename, file.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {file.filename}
+                            </p>
+                            <p className="text-xs opacity-70 truncate">
+                              {file.description || file.type}
+                            </p>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </div>
-                <ScrollArea className="flex-1 vscode-scrollbar">
-                  <FileTree
-                    files={files}
-                    activeFile={activeFile}
-                    onFileSelect={setActiveFile}
-                  />
-                </ScrollArea>
               </div>
 
-              {/* 代码查看器 */}
-              <div className="flex-1">
-                {currentFile && <CodeViewer file={currentFile} />}
+              {/* 🎨 代码编辑器 - 品牌设计升级 */}
+              <div className="flex-1 flex flex-col">
+                {currentFile && (
+                  <>
+                    {/* 文件标题栏 */}
+                    <div className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
+                      theme === "light" 
+                        ? "bg-white/50 border-emerald-100/60" 
+                        : "bg-gray-800/50 border-emerald-700/30"
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-brand-gradient rounded-xl shadow-brand flex items-center">
+                          {getFileIcon(currentFile.filename, currentFile.type)}
+                          <span className="text-white text-xs ml-1">
+                            {currentFile.filename}
+                          </span>
+                        </div>
+                        <div>
+                          <p className={`font-medium ${
+                            theme === "light" ? "text-gray-900" : "text-white"
+                          }`}>
+                            {currentFile.filename}
+                          </p>
+                          <p className={`text-xs ${
+                            theme === "light" ? "text-emerald-600" : "text-emerald-400"
+                          }`}>
+                            {currentFile.description || currentFile.type}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className={`rounded-xl border-2 transition-all duration-300 ${
+                            theme === "light"
+                              ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                              : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+                          }`}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => onEditCode?.(currentFile.filename)}
+                          className={`rounded-xl border-2 transition-all duration-300 ${
+                            theme === "light"
+                              ? "border-cyan-200 text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50"
+                              : "border-cyan-700 text-cyan-400 hover:border-cyan-600 hover:bg-cyan-900/20"
+                          }`}
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* 代码内容 */}
+                    <ScrollArea className="flex-1 brand-scrollbar">
+                      <div className={`p-6 transition-all duration-300 ${
+                        theme === "light" ? "bg-gray-50/50" : "bg-gray-900/50"
+                      }`}>
+                        <pre className={`text-sm font-mono whitespace-pre-wrap rounded-2xl p-6 border transition-all duration-300 ${
+                          theme === "light" 
+                            ? "bg-white border-emerald-100 text-gray-800" 
+                            : "bg-gray-800 border-emerald-700 text-gray-200"
+                        }`}>
+                          <code>{currentFile.content}</code>
+                        </pre>
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* 🎨 底部操作栏 */}
+      <motion.div 
+        className={`flex items-center justify-between p-4 border-t transition-all duration-300 ${
+          theme === "light" 
+            ? "bg-white/90 border-emerald-100/60 backdrop-blur-xl" 
+            : "bg-gray-900/90 border-emerald-700/30 backdrop-blur-xl"
+        }`}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3">
+          <Badge className={`rounded-full ${
+            theme === "light" 
+              ? "bg-emerald-100 text-emerald-700 border-emerald-200" 
+              : "bg-emerald-900/30 text-emerald-400 border-emerald-700"
+          }`}>
+            {files.length} 个文件
+          </Badge>
+          {isStreaming && (
+            <Badge className="rounded-full bg-brand-gradient text-white animate-pulse">
+              <Zap className="w-3 h-3 mr-1" />
+              生成中...
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDownload}
+              className={`rounded-xl border-2 transition-all duration-300 ${
+                theme === "light"
+                  ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                  : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+              }`}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              下载
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button
+              size="sm"
+              onClick={onDeploy}
+              className="rounded-xl text-white font-medium transition-all duration-300 hover:shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
+              }}
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              部署
+            </Button>
+          </motion.div>
+        </div>
+      </motion.div>
     </div>
   );
 }

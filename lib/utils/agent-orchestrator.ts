@@ -6,6 +6,7 @@
 
 import { WelcomeAgent } from '@/lib/agents/welcome-agent';
 import { InfoCollectionAgent } from '@/lib/agents/info-collection-agent';
+import { ConversationalInfoCollectionAgent } from '@/lib/agents/info-collection/conversational-agent';
 import { PromptOutputAgent } from '@/lib/agents/prompt-output-agent';
 import { CodingAgent } from '@/lib/agents/coding-agent';
 import { BaseAgent } from '@/lib/agents/base-agent';
@@ -34,7 +35,7 @@ export class AgentOrchestrator {
    */
   private initializeAgents(): void {
     this.agents.set('welcome', new WelcomeAgent());
-    this.agents.set('info_collection', new InfoCollectionAgent());
+    this.agents.set('info_collection', new ConversationalInfoCollectionAgent());
     this.agents.set('prompt_output', new PromptOutputAgent());
     this.agents.set('coding', new CodingAgent());
     

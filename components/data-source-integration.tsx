@@ -69,23 +69,27 @@ export function DataSourceIntegration({ onDataIntegrated, className = "" }: Data
   }
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      <h3 className={`text-lg font-semibold ${theme === "light" ? "text-gray-900" : "text-white"}`}>选择数据源</h3>
+    <div className={`space-y-6 p-6 ${className}`}>
+      <div className="text-center">
+        <h3 className={`text-2xl font-bold mb-2 ${theme === "light" ? "text-gray-900" : "text-white"}`}>
+          选择数据源
+        </h3>
+        <p className={`text-sm ${theme === "light" ? "text-emerald-600" : "text-emerald-400"}`}>
+          连接你的数据源，让 AI 更好地了解你
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {DATA_SOURCES.map((source) => (
           <Card
             key={source.id}
-            className={`cursor-pointer transition-all duration-300 hover:scale-105 ${
+            variant={connectedSources.includes(source.id) ? "brand" : "brand-outline"}
+            className={`cursor-pointer transition-all duration-300 hover:scale-105 interactive-hover ${
               connectedSources.includes(source.id)
-                ? "ring-2 ring-green-500"
+                ? "ring-2 ring-emerald-500 shadow-brand-lg"
                 : selectedSource === source.id
-                  ? "ring-2 ring-blue-500"
-                  : ""
-            } ${
-              theme === "light"
-                ? "bg-white/80 border-white/30 hover:bg-white/90"
-                : "bg-gray-800/80 border-gray-700/30 hover:bg-gray-800/90"
+                  ? "ring-2 ring-cyan-500 shadow-cyan-glow"
+                  : "hover:shadow-brand"
             }`}
             onClick={() => {
               if (source.id === "resume") {
@@ -98,7 +102,7 @@ export function DataSourceIntegration({ onDataIntegrated, className = "" }: Data
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">{source.icon}</span>
+                  <span className="text-3xl">{source.icon}</span>
                   <div>
                     <CardTitle className={`text-base ${theme === "light" ? "text-gray-900" : "text-white"}`}>
                       {source.name}
@@ -109,22 +113,29 @@ export function DataSourceIntegration({ onDataIntegrated, className = "" }: Data
                   </div>
                 </div>
                 {connectedSources.includes(source.id) ? (
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-6 h-6 text-emerald-500" />
                 ) : source.authRequired ? (
-                  <Link className="w-5 h-5 text-blue-500" />
+                  <Link className="w-6 h-6 text-cyan-500" />
                 ) : (
-                  <Upload className="w-5 h-5 text-gray-400" />
+                  <Upload className="w-6 h-6 text-emerald-400" />
                 )}
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <Badge variant={source.authRequired ? "default" : "secondary"} className="text-xs">
+                <Badge 
+                  variant={source.authRequired ? "default" : "secondary"} 
+                  className={`text-xs ${
+                    source.authRequired 
+                      ? "bg-cyan-100 text-cyan-700 border-cyan-200" 
+                      : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  }`}
+                >
                   {source.authRequired ? "需要授权" : "直接使用"}
                 </Badge>
                 {isConnecting && selectedSource === source.id && (
-                  <div className="flex items-center gap-2 text-sm text-blue-500">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="flex items-center gap-2 text-sm text-emerald-600">
+                    <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                     连接中...
                   </div>
                 )}
@@ -140,21 +151,28 @@ export function DataSourceIntegration({ onDataIntegrated, className = "" }: Data
       {/* 连接状态显示 */}
       {connectedSources.length > 0 && (
         <Card
-          className={`${theme === "light" ? "bg-green-50 border-green-200" : "bg-green-900/20 border-green-700/30"}`}
+          variant="brand"
+          className="animate-brand-fade-up"
         >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Check className="w-5 h-5 text-green-500" />
-              <span className={`font-medium ${theme === "light" ? "text-green-800" : "text-green-300"}`}>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                <Check className="w-5 h-5 text-emerald-600" />
+              </div>
+              <span className={`font-semibold ${theme === "light" ? "text-emerald-800" : "text-emerald-300"}`}>
                 已连接的数据源
               </span>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {connectedSources.map((sourceId) => {
                 const source = DATA_SOURCES.find((s) => s.id === sourceId)
                 return (
-                  <Badge key={sourceId} variant="secondary" className="text-xs">
-                    {source?.icon} {source?.name}
+                  <Badge 
+                    key={sourceId} 
+                    className="text-sm bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200 transition-colors"
+                  >
+                    <span className="mr-2">{source?.icon}</span>
+                    {source?.name}
                   </Badge>
                 )
               })}
@@ -162,6 +180,13 @@ export function DataSourceIntegration({ onDataIntegrated, className = "" }: Data
           </CardContent>
         </Card>
       )}
+
+      {/* 底部提示 */}
+      <div className={`text-center p-4 rounded-lg glass-brand`}>
+        <p className={`text-sm ${theme === "light" ? "text-emerald-600" : "text-emerald-400"}`}>
+          💡 连接数据源后，AI 将基于你的真实信息生成更准确的页面内容
+        </p>
+      </div>
     </div>
   )
 }

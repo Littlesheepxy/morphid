@@ -258,9 +258,9 @@ export function MessageBubble({
         actualIsUser ? "flex-row-reverse" : ""
       }`}
     >
-      {/* 头像 */}
+      {/* 头像 - 简约设计 */}
       <Avatar className="w-8 h-8 shrink-0">
-        <AvatarFallback className={actualIsUser ? "bg-blue-500 text-white" : "bg-gray-100"}>
+        <AvatarFallback className={actualIsUser ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}>
           {actualIsUser ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
         </AvatarFallback>
       </Avatar>
@@ -335,7 +335,7 @@ export function MessageBubble({
             })()}
           </div>
 
-          {/* 选项按钮 */}
+          {/* 选项按钮 - 简约设计 */}
           {!actualIsUser && message.metadata?.options && onSendMessage && (
             <div className="mt-3 flex flex-wrap gap-2">
               {message.metadata.options.map((option: any, index: number) => (
@@ -346,7 +346,7 @@ export function MessageBubble({
                   onClick={() => {
                     onSendMessage(option.label, option);
                   }}
-                  className="text-sm rounded-full border-gray-200 hover:bg-gray-50 transition-colors"
+                  className="text-sm rounded-lg border-gray-200 hover:border-emerald-300 hover:bg-gray-50 text-gray-700 transition-colors"
                 >
                   {option.label}
                 </Button>
@@ -354,13 +354,13 @@ export function MessageBubble({
             </div>
           )}
 
-          {/* 🔧 修复：智能确认表单 */}
+          {/* 🔧 修复：智能确认表单 - 简约设计 */}
           {!actualIsUser && message.metadata?.interaction && (contentComplete || showInteraction) && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="mt-4 p-4 bg-gray-50 rounded-lg border"
+              className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200"
             >
               <h4 className="font-medium text-gray-900 mb-3">
                 {message.metadata.interaction.title}
@@ -399,12 +399,12 @@ export function MessageBubble({
                       
                       {element.type === 'select' && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
                             <Sparkles className="w-3 h-3" />
                             <span>以下是AI为您生成的个性化建议</span>
                           </div>
                           
-                          {/* 按钮选项 */}
+                          {/* 按钮选项 - 简约设计，品牌色仅用于边框 */}
                           <div className="grid grid-cols-2 gap-2">
                             {element.options?.map((option: any, optIndex: number) => {
                               const isSelected = formData[element.id] === option.value;
@@ -420,171 +420,17 @@ export function MessageBubble({
                                   onClick={() => handleInputChange(element.id, option.value)}
                                   className={`
                                     p-3 text-sm text-left border-2 rounded-lg transition-all duration-200
-                                    hover:shadow-md interactive-hover
+                                    hover:shadow-md
                                     ${isSelected 
-                                      ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-blue-100 shadow-lg' 
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                                      ? 'border-emerald-400 bg-emerald-50 text-gray-900 shadow-sm' 
+                                      : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300'
                                     }
                                   `}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span className="font-medium">{option.label}</span>
                                     {isSelected && (
-                                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                    )}
-                                  </div>
-                                  {option.description && (
-                                    <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                                  )}
-                                </motion.button>
-                              );
-                            })}
-                          </div>
-                          
-                          {/* 自定义输入选项 */}
-                          <div className="space-y-2">
-                            <motion.button
-                              type="button"
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: 0.3 }}
-                              onClick={() => {
-                                const customInputId = `${element.id}_custom`;
-                                const currentCustom = formData[customInputId];
-                                if (!currentCustom) {
-                                  // 激活自定义输入
-                                  setFormData(prev => ({ ...prev, [`${element.id}_isCustom`]: true }));
-                                }
-                              }}
-                              className={`
-                                w-full p-3 text-sm text-left border-2 border-dashed rounded-lg transition-all duration-200
-                                ${formData[`${element.id}_isCustom`] 
-                                  ? 'border-purple-300 bg-purple-50 text-purple-700' 
-                                  : 'border-gray-300 text-gray-600 hover:border-purple-300 hover:bg-purple-50/50'
-                                }
-                              `}
-                            >
-                              <div className="flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span>自定义填写（如以上选项都不符合）</span>
-                              </div>
-                            </motion.button>
-                            
-                            {/* 自定义输入框 */}
-                            {formData[`${element.id}_isCustom`] && (
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                transition={{ duration: 0.3 }}
-                                className="overflow-hidden"
-                              >
-                                <input
-                                  type="text"
-                                  value={formData[`${element.id}_custom`] || ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    handleInputChange(`${element.id}_custom`, value);
-                                    // 如果有自定义值，清除选项选择，并设置自定义值为主值
-                                    if (value.trim()) {
-                                      handleInputChange(element.id, value);
-                                    }
-                                  }}
-                                  placeholder={`请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                                  className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-white"
-                                  autoFocus
-                                />
-                                <div className="flex justify-end mt-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setFormData(prev => {
-                                        const newData = { ...prev };
-                                        delete newData[`${element.id}_isCustom`];
-                                        delete newData[`${element.id}_custom`];
-                                        return newData;
-                                      });
-                                    }}
-                                    className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                                  >
-                                    取消自定义
-                                  </button>
-                                </div>
-                              </motion.div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {element.type === 'input' && (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-                            <Sparkles className="w-3 h-3" />
-                            <span>请填写您的具体信息</span>
-                          </div>
-                          
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3 }}
-                          >
-                            <input
-                              type="text"
-                              value={formData[element.id] || ''}
-                              onChange={(e) => handleInputChange(element.id, e.target.value)}
-                              placeholder={element.placeholder || `请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                              className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white hover:border-gray-300"
-                            />
-                          </motion.div>
-                        </div>
-                      )}
-                      
-                      {element.type === 'checkbox' && (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-                            <Sparkles className="w-3 h-3" />
-                            <span>可多选，以下是AI为您生成的个性化建议</span>
-                          </div>
-                          
-                          {/* 按钮选项 */}
-                          <div className="grid grid-cols-2 gap-2">
-                            {element.options?.map((option: any, optIndex: number) => {
-                              const currentValues = formData[element.id] || [];
-                              const isSelected = currentValues.includes(option.value);
-                              return (
-                                <motion.button
-                                  key={optIndex}
-                                  type="button"
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  transition={{ delay: 0.05 * optIndex }}
-                                  whileHover={{ scale: 1.02 }}
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      handleInputChange(element.id, currentValues.filter((v: any) => v !== option.value));
-                                    } else {
-                                      handleInputChange(element.id, [...currentValues, option.value]);
-                                    }
-                                  }}
-                                  className={`
-                                    p-3 text-sm text-left border-2 rounded-lg transition-all duration-200
-                                    hover:shadow-md interactive-hover relative
-                                    ${isSelected 
-                                      ? 'border-green-500 bg-green-50 text-green-700 shadow-green-100 shadow-lg' 
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                                    }
-                                  `}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium">{option.label}</span>
-                                    {isSelected && (
-                                      <div className="flex items-center justify-center w-5 h-5 bg-green-500 rounded-full">
-                                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                        </svg>
-                                      </div>
+                                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                                     )}
                                   </div>
                                   {option.description && (
@@ -608,8 +454,8 @@ export function MessageBubble({
                               className={`
                                 w-full p-3 text-sm text-left border-2 border-dashed rounded-lg transition-all duration-200
                                 ${formData[`${element.id}_isCustom`] 
-                                  ? 'border-purple-300 bg-purple-50 text-purple-700' 
-                                  : 'border-gray-300 text-gray-600 hover:border-purple-300 hover:bg-purple-50/50'
+                                  ? 'border-emerald-300 bg-emerald-50 text-gray-700' 
+                                  : 'border-gray-300 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50'
                                 }
                               `}
                             >
@@ -634,7 +480,7 @@ export function MessageBubble({
                                   value={formData[`${element.id}_customInput`] || ''}
                                   onChange={(e) => handleInputChange(`${element.id}_customInput`, e.target.value)}
                                   placeholder={`请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                                  className="w-full p-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-white"
+                                  className="w-full p-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
                                   autoFocus
                                   onKeyPress={(e) => {
                                     if (e.key === 'Enter') {
@@ -662,7 +508,7 @@ export function MessageBubble({
                                         }
                                       }
                                     }}
-                                    className="px-3 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors"
+                                    className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
                                   >
                                     添加
                                   </button>
@@ -676,7 +522,7 @@ export function MessageBubble({
                                         return newData;
                                       });
                                     }}
-                                    className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
                                   >
                                     取消
                                   </button>
@@ -685,7 +531,7 @@ export function MessageBubble({
                             )}
                             
                             {/* 显示已选择的自定义选项 */}
-                            {formData[element.id] && (
+                            {formData[element.id] && Array.isArray(formData[element.id]) && (
                               <div className="space-y-1">
                                 {(formData[element.id] as string[])
                                   .filter(value => !element.options?.some((opt: any) => opt.value === value))
@@ -694,16 +540,217 @@ export function MessageBubble({
                                       key={`custom-${index}`}
                                       initial={{ opacity: 0, x: -10 }}
                                       animate={{ opacity: 1, x: 0 }}
-                                      className="flex items-center justify-between bg-purple-50 border border-purple-200 rounded px-2 py-1"
+                                      className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"
                                     >
-                                      <span className="text-sm text-purple-700">{customValue}</span>
+                                      <span className="text-sm text-gray-700">{customValue}</span>
                                       <button
                                         type="button"
                                         onClick={() => {
                                           const currentValues = formData[element.id] || [];
                                           handleInputChange(element.id, currentValues.filter((v: any) => v !== customValue));
                                         }}
-                                        className="text-purple-500 hover:text-purple-700 transition-colors"
+                                        className="text-emerald-500 hover:text-emerald-700 transition-colors"
+                                      >
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                        </svg>
+                                      </button>
+                                    </motion.div>
+                                  ))
+                                }
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {element.type === 'input' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
+                            <Sparkles className="w-3 h-3" />
+                            <span>请填写您的具体信息</span>
+                          </div>
+                          
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <input
+                              type="text"
+                              value={formData[element.id] || ''}
+                              onChange={(e) => handleInputChange(element.id, e.target.value)}
+                              placeholder={element.placeholder || `请输入您的${element.label.replace('？', '').replace('您', '')}...`}
+                              className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white hover:border-gray-300"
+                            />
+                          </motion.div>
+                        </div>
+                      )}
+                      
+                      {element.type === 'checkbox' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
+                            <Sparkles className="w-3 h-3" />
+                            <span>可多选，以下是AI为您生成的个性化建议</span>
+                          </div>
+                          
+                          {/* 按钮选项 */}
+                          <div className="grid grid-cols-2 gap-2">
+                            {element.options?.map((option: any, optIndex: number) => {
+                              const currentValues = formData[element.id] || [];
+                              const isSelected = currentValues.includes(option.value);
+                              return (
+                                <motion.button
+                                  key={optIndex}
+                                  type="button"
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ delay: 0.05 * optIndex }}
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      handleInputChange(element.id, currentValues.filter((v: any) => v !== option.value));
+                                    } else {
+                                      handleInputChange(element.id, [...currentValues, option.value]);
+                                    }
+                                  }}
+                                  className={`
+                                    p-3 text-sm text-left border-2 rounded-lg transition-all duration-200
+                                    hover:shadow-md
+                                    ${isSelected 
+                                      ? 'border-emerald-400 bg-emerald-50 text-gray-900 shadow-sm' 
+                                      : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300'
+                                    }
+                                  `}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium">{option.label}</span>
+                                    {isSelected && (
+                                      <div className="flex items-center justify-center w-5 h-5 bg-emerald-500 rounded-full">
+                                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {option.description && (
+                                    <p className="text-xs text-gray-500 mt-1">{option.description}</p>
+                                  )}
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                          
+                          {/* 自定义输入选项 */}
+                          <div className="space-y-2">
+                            <motion.button
+                              type="button"
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.3 }}
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, [`${element.id}_isCustom`]: !prev[`${element.id}_isCustom`] }));
+                              }}
+                              className={`
+                                w-full p-3 text-sm text-left border-2 border-dashed rounded-lg transition-all duration-200
+                                ${formData[`${element.id}_isCustom`] 
+                                  ? 'border-emerald-300 bg-emerald-50 text-gray-700' 
+                                  : 'border-gray-300 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                <span>添加自定义选项</span>
+                              </div>
+                            </motion.button>
+                            
+                            {/* 自定义输入框 */}
+                            {formData[`${element.id}_isCustom`] && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                transition={{ duration: 0.3 }}
+                                className="overflow-hidden space-y-2"
+                              >
+                                <input
+                                  type="text"
+                                  value={formData[`${element.id}_customInput`] || ''}
+                                  onChange={(e) => handleInputChange(`${element.id}_customInput`, e.target.value)}
+                                  placeholder={`请输入您的${element.label.replace('？', '').replace('您', '')}...`}
+                                  className="w-full p-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
+                                  autoFocus
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const value = formData[`${element.id}_customInput`];
+                                      if (value && value.trim()) {
+                                        const currentValues = formData[element.id] || [];
+                                        if (!currentValues.includes(value.trim())) {
+                                          handleInputChange(element.id, [...currentValues, value.trim()]);
+                                          handleInputChange(`${element.id}_customInput`, '');
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
+                                <div className="flex justify-between items-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const value = formData[`${element.id}_customInput`];
+                                      if (value && value.trim()) {
+                                        const currentValues = formData[element.id] || [];
+                                        if (!currentValues.includes(value.trim())) {
+                                          handleInputChange(element.id, [...currentValues, value.trim()]);
+                                          handleInputChange(`${element.id}_customInput`, '');
+                                        }
+                                      }
+                                    }}
+                                    className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                                  >
+                                    添加
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData(prev => {
+                                        const newData = { ...prev };
+                                        delete newData[`${element.id}_isCustom`];
+                                        delete newData[`${element.id}_customInput`];
+                                        return newData;
+                                      });
+                                    }}
+                                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                            
+                            {/* 显示已选择的自定义选项 */}
+                            {formData[element.id] && Array.isArray(formData[element.id]) && (
+                              <div className="space-y-1">
+                                {(formData[element.id] as string[])
+                                  .filter(value => !element.options?.some((opt: any) => opt.value === value))
+                                  .map((customValue: string, index: number) => (
+                                    <motion.div
+                                      key={`custom-${index}`}
+                                      initial={{ opacity: 0, x: -10 }}
+                                      animate={{ opacity: 1, x: 0 }}
+                                      className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"
+                                    >
+                                      <span className="text-sm text-gray-700">{customValue}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const currentValues = formData[element.id] || [];
+                                          handleInputChange(element.id, currentValues.filter((v: any) => v !== customValue));
+                                        }}
+                                        className="text-emerald-500 hover:text-emerald-700 transition-colors"
                                       >
                                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                           <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -729,7 +776,7 @@ export function MessageBubble({
                     <Button
                       onClick={handleInteractionSubmit}
                       disabled={isSubmitting}
-                      className="bg-blue-500 hover:bg-blue-600 text-white transition-all duration-200 hover:scale-105"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 hover:scale-105"
                     >
                       {isSubmitting ? (
                         <SimpleTextLoader text="提交中" className="text-white" />

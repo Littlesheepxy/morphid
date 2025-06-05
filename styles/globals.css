@@ -93,3 +93,66 @@ body {
     color: hsl(var(--foreground));
   }
 }
+
+/* 品牌渐变和特效样式 */
+@layer utilities {
+  /* 品牌渐变背景 - 使用 !important 确保优先级 */
+  .bg-brand-gradient {
+    background: linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%) !important;
+  }
+  
+  .bg-brand-gradient-dark {
+    background: linear-gradient(135deg, #10B981 0%, #06B6D4 100%) !important;
+  }
+  
+  /* 玻璃拟态效果 */
+  .glass-brand {
+    background: rgba(16, 185, 129, 0.1) !important;
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  }
+  
+  .bg-gradient-light {
+    background: linear-gradient(135deg, #ECFDF5 0%, #F0FDFA 50%, #ECFEFF 100%) !important;
+  }
+  
+  .bg-gradient-dark {
+    background: linear-gradient(135deg, #064E3B 0%, #134E4A 50%, #164E63 100%) !important;
+  }
+}
+
+@layer components {
+  /* 按钮波纹效果 */
+  .btn-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-ripple::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+    transition: width 0.6s, height 0.6s, top 0.6s, left 0.6s;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+  }
+  
+  .btn-ripple:hover::before {
+    width: 300px;
+    height: 300px;
+  }
+  
+  /* 交互式悬停效果 */
+  .interactive-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .interactive-hover:hover {
+    transform: translateY(-2px);
+  }
+}

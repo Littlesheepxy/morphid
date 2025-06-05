@@ -43,10 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setTheme(theme === "light" ? "dark" : "light")
   }
 
-  if (!mounted) {
-    return null
-  }
-
+  // 在mounted之前也要渲染children，避免hydration mismatch
   return <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>{children}</ThemeContext.Provider>
 }
 

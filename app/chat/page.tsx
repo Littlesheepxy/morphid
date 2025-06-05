@@ -27,6 +27,7 @@ export default function ChatPage() {
   const [hasStartedChat, setHasStartedChat] = useState(false)
   const [isCodeMode, setIsCodeMode] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<any[]>([])
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // 监听当前会话变化，如果有会话且有消息，则显示对话模式
@@ -60,6 +61,20 @@ export default function ChatPage() {
       }
     }
   }, [currentSession, isCodeMode])
+
+  // 监听键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + B 切换侧边栏
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault()
+        setIsSidebarCollapsed(!isSidebarCollapsed)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isSidebarCollapsed])
 
   // 发送消息
   const handleSendMessage = async () => {
@@ -199,30 +214,37 @@ export default function ChatPage() {
     setGeneratedCode([])
   }
 
+  // 处理侧边栏折叠切换
+  const handleToggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed)
+  }
+
   return (
     <div
-      className={`h-screen flex flex-col transition-colors duration-300 ${
+      className={`h-screen flex transition-all duration-300 ${
         theme === "light" 
-          ? "bg-white" 
-          : "bg-gray-900"
+          ? "bg-page-gradient-light" 
+          : "bg-page-gradient-dark"
       }`}
     >
-      {/* 顶部导航栏 */}
-      <ChatHeader />
+      {/* 🎨 左侧侧边栏 - 全高度布局 */}
+      <ChatSidebar 
+        sessions={sessions}
+        currentSession={currentSession}
+        isCodeMode={isCodeMode}
+        onNewChat={handleNewChat}
+        onSelectSession={selectSession}
+        onGenerateTestCode={generateTestCode}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebar}
+      />
 
-      {/* 主要内容区域 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧侧边栏 */}
-        <ChatSidebar 
-          sessions={sessions}
-          currentSession={currentSession}
-          isCodeMode={isCodeMode}
-          onNewChat={handleNewChat}
-          onSelectSession={selectSession}
-          onGenerateTestCode={generateTestCode}
-        />
+      {/* 🎨 主内容区域 - 包含header和内容 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 🎨 顶部导航栏 - 品牌色 */}
+        <ChatHeader />
 
-        {/* 主内容区域 */}
+        {/* 🎨 主内容区域 */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {isCodeMode ? (
             /* 代码模式 */
@@ -252,7 +274,7 @@ export default function ChatPage() {
               sessionId={currentSession?.id}
             />
           ) : (
-            /* 欢迎模式 */
+            /* 欢迎屏幕 */
             <WelcomeScreen
               inputValue={inputValue}
               setInputValue={setInputValue}
