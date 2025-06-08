@@ -9,7 +9,7 @@ import {
   AgentCapabilities
 } from '@/lib/types/streaming';
 import { SessionData, CollectedResumeData } from '@/lib/types/session';
-import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { OPTIMIZED_INFO_COLLECTION_PROMPT, formatPrompt } from '@/lib/prompts';
 import { 
   CLAUDE_INFO_COLLECTION_TOOLS, 
   TOOL_EXECUTORS,
@@ -113,7 +113,7 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     const currentData = this.getCurrentCollectedData(sessionData);
 
     // 使用agent-templates中的专业prompt
-    const prompt = formatPrompt(AGENT_PROMPTS.OPTIMIZED_INFO_COLLECTION_AGENT, {
+    const prompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, {
       user_role: welcomeData.userRole || '用户',
       use_case: welcomeData.useCase || '创建个人页面',
       urgency: welcomeData.urgency || '正常',

@@ -6,7 +6,7 @@ import {
   PersonalizationProfile
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
-import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { CONVERSATIONAL_INFO_COLLECTION_PROMPT, formatPrompt } from '@/lib/prompts';
 import { toolService } from '@/lib/services/tool-service';
 import { enhancedLinkAnalyzer, LinkAnalysisResult } from '@/lib/services/enhanced-link-analyzer';
 
@@ -211,7 +211,7 @@ export class ConversationalInfoCollectionAgent extends BaseAgent {
     welcomeData: any, 
     sessionData: SessionData
   ): Promise<any> {
-    const prompt = formatPrompt(AGENT_PROMPTS.CONVERSATIONAL_INFO_COLLECTION_AGENT, {
+    const prompt = formatPrompt(CONVERSATIONAL_INFO_COLLECTION_PROMPT, {
       user_input: userInput,
       user_role: welcomeData.userRole,
       use_case: welcomeData.useCase,
@@ -607,9 +607,9 @@ URL: ${url}
     }
 
     if (githubData.languages) {
-      existingData.professional.skills = [
-        ...new Set([...existingData.professional.skills, ...githubData.languages])
-      ];
+      existingData.professional.skills = Array.from(
+        new Set([...existingData.professional.skills, ...githubData.languages])
+      );
     }
   }
 
@@ -668,9 +668,9 @@ URL: ${url}
     }
 
     if (extracted_data.technical_details?.languages) {
-      existingData.professional.skills = [
-        ...new Set([...existingData.professional.skills, ...extracted_data.technical_details.languages])
-      ];
+      existingData.professional.skills = Array.from(
+        new Set([...existingData.professional.skills, ...extracted_data.technical_details.languages])
+      );
     }
   }
 

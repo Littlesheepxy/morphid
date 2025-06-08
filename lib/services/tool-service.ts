@@ -1,6 +1,12 @@
 /**
  * 工具服务 - 提供实际的外部API调用能力
+ * 集成智能链接处理系统
  */
+
+import { githubService } from './github-service';
+import { webService } from './web-service';
+import { documentService } from './document-service';
+import { socialService } from './social-service';
 
 export class ToolService {
   private static instance: ToolService;
@@ -15,55 +21,31 @@ export class ToolService {
   }
 
   /**
-   * GitHub仓库分析
+   * GitHub仓库分析 - 使用新的智能GitHub服务
    */
   async analyzeGitHub(usernameOrUrl: string, includeRepos: boolean = true): Promise<any> {
     try {
-      // 提取用户名
-      const username = this.extractGitHubUsername(usernameOrUrl);
+      console.log(`🐙 [GitHub分析] ${usernameOrUrl} | 包含仓库: ${includeRepos}`);
       
-      // 调用GitHub API（这里可以集成实际的GitHub API）
-      const profileResponse = await fetch(`https://api.github.com/users/${username}`);
-      if (!profileResponse.ok) {
-        throw new Error('GitHub用户不存在');
-      }
+      // 使用新的智能GitHub服务
+      const result = await githubService.analyzeUser(usernameOrUrl, includeRepos);
       
-      const profile = await profileResponse.json();
-      
-      let repositories = [];
-      if (includeRepos) {
-        const reposResponse = await fetch(`https://api.github.com/users/${username}/repos?sort=stars&per_page=10`);
-        if (reposResponse.ok) {
-          repositories = await reposResponse.json();
-        }
-      }
-
+      // 转换为兼容的格式
       return {
-        platform: 'github',
-        username: profile.login,
-        profile: {
-          name: profile.name || profile.login,
-          bio: profile.bio,
-          location: profile.location,
-          followers: profile.followers,
-          following: profile.following,
-          public_repos: profile.public_repos,
-          avatar_url: profile.avatar_url
-        },
-        top_repositories: repositories.map((repo: any) => ({
-          name: repo.name,
-          description: repo.description,
-          language: repo.language,
-          stars: repo.stargazers_count,
-          forks: repo.forks_count,
-          url: repo.html_url,
-          updated_at: repo.updated_at
-        })),
-        languages: this.extractLanguagesFromRepos(repositories),
+        platform: result.platform,
+        username: result.username,
+        profile: result.profile,
+        top_repositories: result.repositories.slice(0, 10),
+        languages: result.languages.summary.map(([lang, data]: [string, any]) => lang),
         contribution_stats: {
-          total_repos: profile.public_repos,
-          followers: profile.followers
-        }
+          total_repos: result.profile.public_repos,
+          followers: result.profile.followers,
+          activity_score: result.activity_metrics.activity_score
+        },
+        // 新增的智能分析数据
+        analysis: result.analysis,
+        extraction_confidence: result.extraction_confidence,
+        metadata: result.metadata
       };
       
     } catch (error) {
@@ -73,67 +55,48 @@ export class ToolService {
   }
 
   /**
-   * 网页内容抓取 - 增强版实现
+   * 网页内容抓取 - 使用新的智能网页服务
    */
   async scrapeWebpage(url: string, targetSections: string[] = ['all']): Promise<any> {
     try {
       console.log(`🌐 [网页抓取] ${url} | 目标区域: ${targetSections.join(', ')}`);
       
-      // 首先尝试获取页面的基本信息
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br'
-        },
-        signal: AbortSignal.timeout(10000) // 10秒超时
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const html = await response.text();
-      const analysisResult = this.analyzeHtmlContent(html, url, targetSections);
+      // 使用新的智能网页服务
+      const result = await webService.scrapeWebpage(url, targetSections);
       
+      // 转换为兼容的格式
       return {
-        url,
-        title: analysisResult.title,
-        type: analysisResult.websiteType,
+        url: result.url,
+        title: result.metadata.title,
+        type: result.website_type,
         content_analysis: {
           is_accessible: true,
-          has_valuable_content: analysisResult.hasContent,
-          content_quality: analysisResult.contentQuality,
-          technical_stack: analysisResult.techStack,
-          social_links: analysisResult.socialLinks
+          has_valuable_content: result.content_analysis.has_valuable_content,
+          content_quality: result.content_analysis.content_quality,
+          technical_stack: result.technical_analysis.tech_stack,
+          social_links: result.social_analysis.social_links
         },
-        extracted_content: analysisResult.extractedContent,
+        extracted_content: result.extracted_content,
         suggestions: {
-          iframe_display: analysisResult.suitableForIframe,
-          reason: analysisResult.iframeReason,
-          iframe_settings: analysisResult.suitableForIframe ? {
-            height: analysisResult.websiteType === 'portfolio' ? '800px' : '600px',
+          iframe_display: result.iframe_analysis.suitable,
+          reason: result.iframe_analysis.reason,
+          iframe_settings: result.iframe_analysis.suitable ? {
+            height: result.website_type === 'portfolio' ? '800px' : '600px',
             responsive: true,
             sandbox: 'allow-same-origin allow-scripts allow-forms',
             security_level: 'medium'
           } : null,
-          alternative_display: !analysisResult.suitableForIframe ? 'card' : 'iframe',
-          content_highlights: analysisResult.highlights
+          alternative_display: !result.iframe_analysis.suitable ? 'card' : 'iframe',
+          content_highlights: result.extracted_content.highlights
         },
-        extraction_confidence: analysisResult.confidence,
-        metadata: {
-          domain: new URL(url).hostname,
-          extracted_at: new Date().toISOString(),
-          content_length: html.length,
-          analysis_sections: targetSections
-        }
+        extraction_confidence: result.extraction_confidence,
+        metadata: result.metadata
       };
       
     } catch (error) {
       console.error('网页抓取失败:', error);
       
-      // 增强的错误处理
+      // 使用智能错误分类
       const errorType = this.classifyWebpageError(error, url);
       
       return {
@@ -575,72 +538,103 @@ export class ToolService {
     }
   }
 
+
+
   /**
-   * 文档解析
+   * LinkedIn信息提取（需要特殊处理，因为LinkedIn有反爬虫机制）
    */
-  async parseDocument(fileData: string, fileType: string): Promise<any> {
+  /**
+   * 智能链接处理 - 新增的核心功能
+   */
+  async processIntelligentLink(url: string, userContext?: any): Promise<any> {
     try {
-      // 这里可以集成文档解析服务，如OCR、PDF解析等
-      // 为了演示，返回模拟数据
+      console.log(`🔗 [智能链接处理] ${url}`);
       
-      return {
-        type: 'resume',
-        file_type: fileType,
-        extracted_data: {
-          personal_info: {
-            name: '从文档提取的姓名',
-            email: 'extracted@email.com',
-            phone: '+1234567890',
-            location: '北京市'
-          },
-          experience: [
-            {
-              title: '高级软件工程师',
-              company: '科技公司',
-              period: '2020-至今',
-              description: '负责前端开发和架构设计，使用React、TypeScript等技术栈'
-            }
-          ],
-          skills: ['JavaScript', 'React', 'TypeScript', 'Node.js', 'Python'],
-          education: [
-            {
-              degree: '计算机科学学士',
-              school: '某大学',
-              year: '2020'
-            }
-          ],
-          projects: [
-            {
-              name: '企业级管理系统',
-              description: '使用React开发的企业管理平台',
-              tech_stack: ['React', 'Ant Design', 'Node.js']
-            }
-          ]
-        },
-        confidence: 0.85,
-        suggestions: {
-          iframe_display: false,
-          reason: '简历内容适合结构化展示，建议解析后格式化显示'
+      // 检测链接类型并选择合适的服务
+      if (url.includes('github.com')) {
+        if (url.split('/').length === 5 && !url.includes('/blob/')) {
+          // GitHub仓库
+          return await githubService.analyzeRepository(url);
+        } else {
+          // GitHub用户
+          return await githubService.analyzeUser(url, true);
         }
-      };
+      } else if (url.includes('linkedin.com/in/')) {
+        // LinkedIn个人资料
+        return await socialService.extractLinkedIn(url);
+      } else if (url.includes('dribbble.com') || url.includes('behance.net')) {
+        // 设计平台
+        return await socialService.analyzeSocialMedia(url, { focus: 'design' });
+      } else {
+        // 通用网页
+        return await webService.scrapeWebpage(url, ['all']);
+      }
       
     } catch (error) {
-      console.error('文档解析失败:', error);
+      console.error('智能链接处理失败:', error);
       return {
-        type: 'document',
-        file_type: fileType,
-        error: '文档解析失败',
+        url,
+        error: '链接处理失败',
+        platform: 'unknown',
+        extraction_confidence: 0,
         suggestions: {
-          iframe_display: false,
-          reason: '无法解析文档内容，建议用户重新上传或提供其他格式'
+          manual_processing: true,
+          reason: '建议手动描述此链接的内容'
         }
       };
     }
   }
 
   /**
-   * LinkedIn信息提取（需要特殊处理，因为LinkedIn有反爬虫机制）
+   * 批量智能链接处理
    */
+  async processBatchLinks(urls: string[], userContext?: any): Promise<any[]> {
+    console.log(`🔗 [批量链接处理] 处理 ${urls.length} 个链接`);
+    
+    const results = [];
+    for (const url of urls) {
+      try {
+        const result = await this.processIntelligentLink(url, userContext);
+        results.push(result);
+      } catch (error) {
+        console.error(`链接处理失败: ${url}`, error);
+        results.push({
+          url,
+          error: '处理失败',
+          extraction_confidence: 0
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * 文档解析 - 使用新的智能文档服务
+   */
+  async parseDocument(fileData: string, fileType: string): Promise<any> {
+    try {
+      console.log(`📄 [文档解析] 类型: ${fileType}`);
+      
+      // 使用新的智能文档服务
+      const result = await documentService.parseDocument(fileData, fileType);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('文档解析失败:', error);
+      return {
+        error: '文档解析失败',
+        file_type: fileType,
+        extraction_confidence: 0,
+        suggestions: {
+          manual_processing: true,
+          reason: '建议手动输入文档内容'
+        }
+      };
+    }
+  }
+
   async extractLinkedIn(profileUrl: string): Promise<any> {
     // LinkedIn API需要特殊授权，这里返回模拟数据
     console.log('LinkedIn提取（模拟）:', profileUrl);

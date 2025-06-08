@@ -360,7 +360,7 @@ export class SocialService {
     });
 
     // 去重技能
-    unifiedProfile.skills = [...new Set(unifiedProfile.skills)];
+    unifiedProfile.skills = Array.from(new Set(unifiedProfile.skills));
 
     return unifiedProfile;
   }

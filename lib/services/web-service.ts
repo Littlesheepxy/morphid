@@ -152,92 +152,7 @@ export class WebService {
     }
   }
 
-  /**
-   * 专门提取社交媒体链接
-   */
-  async extractSocialLinks(url: string, platforms?: string[]): Promise<any> {
-    try {
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; HeysMe/1.0)' },
-        signal: AbortSignal.timeout(8000)
-      });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const html = await response.text();
-      const $ = cheerio.load(html);
-      
-      const socialLinks = this.extractSocialLinks($);
-      
-      // 如果指定了特定平台，进行过滤
-      const filteredLinks = platforms 
-        ? Object.fromEntries(
-            Object.entries(socialLinks).filter(([platform]) => 
-              platforms.includes(platform)
-            )
-          )
-        : socialLinks;
-
-      return {
-        url,
-        social_links: filteredLinks,
-        platforms_found: Object.keys(filteredLinks),
-        total_links: Object.keys(filteredLinks).length,
-        extraction_confidence: Object.keys(filteredLinks).length > 0 ? 0.9 : 0.3,
-        metadata: {
-          extracted_at: new Date().toISOString(),
-          analysis_type: 'social_links_extraction',
-        }
-      };
-
-    } catch (error: any) {
-      return {
-        url,
-        error: error.message,
-        social_links: {},
-        platforms_found: [],
-        extraction_confidence: 0,
-      };
-    }
-  }
-
-  /**
-   * SEO分析
-   */
-  async analyzeSEO(url: string): Promise<any> {
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(10000)
-      });
-
-      const html = await response.text();
-      const $ = cheerio.load(html);
-      const metadata = await this.metascraperInstance({ html, url });
-      
-      const seoAnalysis = this.analyzeSEO($, metadata);
-      
-      return {
-        url,
-        seo_analysis: seoAnalysis,
-        recommendations: this.generateSEORecommendations(seoAnalysis),
-        extraction_confidence: 0.85,
-        metadata: {
-          extracted_at: new Date().toISOString(),
-          analysis_type: 'seo_analysis',
-        }
-      };
-
-    } catch (error: any) {
-      return {
-        url,
-        error: error.message,
-        seo_analysis: { score: 0, factors: [] },
-        extraction_confidence: 0,
-      };
-    }
-  }
 
   // =============== 私有方法 ===============
 
@@ -307,7 +222,7 @@ export class WebService {
       techStack.push('jsDelivr CDN');
     }
     
-    return [...new Set(techStack)]; // 去重
+    return Array.from(new Set(techStack)); // 去重
   }
 
   private extractSocialLinks($: cheerio.CheerioAPI): Record<string, string> {

@@ -6,7 +6,7 @@ import {
   PersonalizationProfile
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
-import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { BASIC_INFO_COLLECTION_PROMPT, formatPrompt } from '@/lib/prompts';
 import {
   MaterialCollectionState,
   extractUserGoal,

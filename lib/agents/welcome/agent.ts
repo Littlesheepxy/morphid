@@ -5,7 +5,7 @@ import {
   UserIntent
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
-import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { WELCOME_AGENT_PROMPT, formatPrompt } from '@/lib/prompts';
 import {
   IntentResponse,
   extractCollectedInfo,
@@ -67,7 +67,7 @@ export class WelcomeAgent extends BaseAgent {
       
       let promptToSend;
       if (isFirstCall) {
-        promptToSend = formatPrompt(AGENT_PROMPTS.WELCOME_AGENT, {
+        promptToSend = formatPrompt(WELCOME_AGENT_PROMPT, {
           user_input: input.user_input,
           collected_info: JSON.stringify(extractCollectedInfo(sessionData)),
           conversation_round: getConversationRound(sessionData)
@@ -335,7 +335,7 @@ export class WelcomeAgent extends BaseAgent {
     const result = await super.callLLM(prompt, {
       schemaType: 'intentResponse',
       maxTokens: options.max_tokens || 1500,
-      system: AGENT_PROMPTS.WELCOME_AGENT,
+              system: WELCOME_AGENT_PROMPT,
       sessionId: sessionId,
       useHistory: true
     });

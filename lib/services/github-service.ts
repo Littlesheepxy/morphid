@@ -26,7 +26,7 @@ export class GitHubService {
         username,
       });
 
-      let repositories = [];
+      let repositories: any[] = [];
       if (includeRepos) {
         // 获取用户仓库（按星数排序）
         const { data: repos } = await this.octokit.rest.repos.listForUser({
@@ -36,7 +36,7 @@ export class GitHubService {
         });
         
         repositories = repos
-          .sort((a, b) => b.stargazers_count - a.stargazers_count)
+          .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
           .slice(0, 10);
       }
 
@@ -96,10 +96,10 @@ export class GitHubService {
         }
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('GitHub用户分析失败:', error);
       
-      if (error.status === 404) {
+      if (error?.status === 404) {
         throw new Error(`GitHub用户 "${this.extractUsername(usernameOrUrl)}" 不存在`);
       }
       
@@ -178,9 +178,9 @@ export class GitHubService {
         }
       };
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('GitHub仓库分析失败:', error);
-      throw new Error(`无法分析仓库: ${error.message}`);
+      throw new Error(`无法分析仓库: ${error?.message || '未知错误'}`);
     }
   }
 
@@ -330,7 +330,7 @@ export class GitHubService {
 
     areas.push(...commonTopics);
 
-    return [...new Set(areas)]; // 去重
+    return Array.from(new Set(areas)); // 去重
   }
 
   // =============== 辅助方法 ===============
@@ -362,11 +362,12 @@ export class GitHubService {
       return {
         total_commits: commits.length,
         recent_commits: commits.filter(commit => {
+          if (!commit.commit.author?.date) return false;
           const commitDate = new Date(commit.commit.author.date);
           const monthsAgo = (Date.now() - commitDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
           return monthsAgo <= 3;
         }).length,
-        last_commit: commits[0]?.commit.author.date,
+        last_commit: commits[0]?.commit.author?.date || null,
       };
     } catch {
       return { total_commits: 0, recent_commits: 0, last_commit: null };

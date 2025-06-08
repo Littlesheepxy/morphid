@@ -6,7 +6,7 @@ import {
   PersonalizationProfile
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
-import { AGENT_PROMPTS, formatPrompt } from '@/lib/prompts/agent-templates';
+import { DESIGN_AGENT_PROMPT, formatPrompt } from '@/lib/prompts';
 import { z } from 'zod';
 import {
   DesignStrategy,
@@ -127,7 +127,7 @@ export class PromptOutputAgent extends BaseAgent {
       console.log("🤖 PromptOutputAgent 调用 AI 生成设计策略...");
       
       // 使用模板生成prompt
-      const prompt = formatPrompt(AGENT_PROMPTS.PROMPT_OUTPUT_AGENT, {
+      const prompt = formatPrompt(DESIGN_AGENT_PROMPT, {
         collected_user_info: JSON.stringify(collectedData, null, 2),
         user_goal: userGoal,
         user_type: userType

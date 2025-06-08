@@ -125,6 +125,11 @@ export async function healthCheck(): Promise<{
 }
 
 // 向后兼容的默认导出（如果需要）
+import { githubService } from './github-service';
+import { webService } from './web-service';
+import { documentService } from './document-service';
+import { socialService } from './social-service';
+
 export default {
   github: githubService,
   web: webService,
