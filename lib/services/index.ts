@@ -11,6 +11,10 @@ export { SocialService, socialService } from './social-service';
 // 工具函数导出
 export * from './utils/web-utils';
 
+// 向后兼容：ToolService作为聚合层（内部使用）
+// 注意：新代码建议直接使用上面的专门服务，而不是通过ToolService
+export { ToolService, toolService } from './tool-service';
+
 // 统一的服务接口
 export interface ServiceInterface {
   name: string;

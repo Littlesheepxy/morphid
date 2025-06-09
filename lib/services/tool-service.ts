@@ -1,6 +1,6 @@
 /**
- * 工具服务 - 提供实际的外部API调用能力
- * 集成智能链接处理系统
+ * 工具服务 - 提供统一的服务聚合和智能路由
+ * 精简版：保留核心聚合功能，移除已被专门服务覆盖的功能
  */
 
 import { githubService } from './github-service';
@@ -21,28 +21,26 @@ export class ToolService {
   }
 
   /**
-   * GitHub仓库分析 - 使用新的智能GitHub服务
+   * GitHub分析 - 聚合接口
    */
   async analyzeGitHub(usernameOrUrl: string, includeRepos: boolean = true): Promise<any> {
     try {
       console.log(`🐙 [GitHub分析] ${usernameOrUrl} | 包含仓库: ${includeRepos}`);
       
-      // 使用新的智能GitHub服务
       const result = await githubService.analyzeUser(usernameOrUrl, includeRepos);
       
-      // 转换为兼容的格式
+      // 保持向后兼容的数据格式
       return {
         platform: result.platform,
         username: result.username,
         profile: result.profile,
         top_repositories: result.repositories.slice(0, 10),
-        languages: result.languages.summary.map(([lang, data]: [string, any]) => lang),
+        languages: result.languages.summary.map(([lang]: [string, any]) => lang),
         contribution_stats: {
           total_repos: result.profile.public_repos,
           followers: result.profile.followers,
           activity_score: result.activity_metrics.activity_score
         },
-        // 新增的智能分析数据
         analysis: result.analysis,
         extraction_confidence: result.extraction_confidence,
         metadata: result.metadata
@@ -55,496 +53,74 @@ export class ToolService {
   }
 
   /**
-   * 网页内容抓取 - 使用新的智能网页服务
+   * 网页抓取 - 聚合接口
    */
   async scrapeWebpage(url: string, targetSections: string[] = ['all']): Promise<any> {
     try {
       console.log(`🌐 [网页抓取] ${url} | 目标区域: ${targetSections.join(', ')}`);
       
-      // 使用新的智能网页服务
       const result = await webService.scrapeWebpage(url, targetSections);
       
-      // 转换为兼容的格式
+      // 保持向后兼容的数据格式
       return {
         url: result.url,
-        title: result.metadata.title,
-        type: result.website_type,
+        title: result.title,
+        type: result.type,
         content_analysis: {
           is_accessible: true,
           has_valuable_content: result.content_analysis.has_valuable_content,
           content_quality: result.content_analysis.content_quality,
-          technical_stack: result.technical_analysis.tech_stack,
-          social_links: result.social_analysis.social_links
+          technical_stack: result.content_analysis.technical_stack,
+          social_links: result.content_analysis.social_links
         },
         extracted_content: result.extracted_content,
-        suggestions: {
-          iframe_display: result.iframe_analysis.suitable,
-          reason: result.iframe_analysis.reason,
-          iframe_settings: result.iframe_analysis.suitable ? {
-            height: result.website_type === 'portfolio' ? '800px' : '600px',
-            responsive: true,
-            sandbox: 'allow-same-origin allow-scripts allow-forms',
-            security_level: 'medium'
-          } : null,
-          alternative_display: !result.iframe_analysis.suitable ? 'card' : 'iframe',
-          content_highlights: result.extracted_content.highlights
-        },
+        suggestions: result.suggestions,
         extraction_confidence: result.extraction_confidence,
         metadata: result.metadata
       };
       
     } catch (error) {
       console.error('网页抓取失败:', error);
-      
-      // 使用智能错误分类
-      const errorType = this.classifyWebpageError(error, url);
-      
-      return {
-        url,
-        error: errorType.message,
-        error_type: errorType.type,
-        content_analysis: {
-          is_accessible: false,
-          access_issue: errorType.type
-        },
-        suggestions: {
-          iframe_display: false,
-          reason: `网页访问失败: ${errorType.message}`,
-          alternative_actions: errorType.suggestions
-        },
-        extraction_confidence: 0,
-        metadata: {
-          domain: this.extractDomain(url),
-          extracted_at: new Date().toISOString(),
-          error_occurred: true
-        }
-      };
+      return this.createWebErrorResponse(url, error);
     }
   }
 
   /**
-   * 分析HTML内容并提取结构化信息
+   * 文档解析 - 聚合接口
    */
-  private analyzeHtmlContent(html: string, url: string, targetSections: string[]) {
-    // 基础元数据提取
-    const title = this.extractTitle(html);
-    const description = this.extractDescription(html);
-    const keywords = this.extractKeywords(html);
-    
-    // 网站类型检测
-    const websiteType = this.detectWebsiteTypeFromContent(html, url);
-    
-    // 技术栈分析
-    const techStack = this.analyzeTechnicalStack(html);
-    
-    // 社交链接提取
-    const socialLinks = this.extractSocialLinks(html);
-    
-    // 内容结构分析
-    const contentStructure = this.analyzeContentStructure(html, targetSections);
-    
-    // 判断是否适合iframe展示
-    const iframeSuitability = this.assessIframeSuitability(html, websiteType, url);
-    
-    return {
-      title: title || '未知页面',
-      description,
-      keywords,
-      websiteType,
-      techStack,
-      socialLinks,
-      extractedContent: contentStructure,
-      hasContent: contentStructure.sections.length > 0,
-      contentQuality: this.assessContentQuality(contentStructure),
-      suitableForIframe: iframeSuitability.suitable,
-      iframeReason: iframeSuitability.reason,
-      highlights: contentStructure.highlights,
-      confidence: this.calculateExtractionConfidence(contentStructure, techStack, socialLinks)
-    };
-  }
-
-  /**
-   * 提取页面标题
-   */
-  private extractTitle(html: string): string {
-    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
-    if (titleMatch) {
-      return titleMatch[1].trim().replace(/&[^;]+;/g, ''); // 简单的HTML实体解码
-    }
-    
-    // 回退：查找h1标签
-    const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/i);
-    if (h1Match) {
-      return h1Match[1].replace(/<[^>]*>/g, '').trim();
-    }
-    
-    return '';
-  }
-
-  /**
-   * 提取页面描述
-   */
-  private extractDescription(html: string): string {
-    const metaDescMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']*?)["']/i);
-    if (metaDescMatch) {
-      return metaDescMatch[1].trim();
-    }
-    
-    // 回退：查找第一个p标签
-    const pMatch = html.match(/<p[^>]*>(.*?)<\/p>/i);
-    if (pMatch) {
-      const cleanText = pMatch[1].replace(/<[^>]*>/g, '').trim();
-      return cleanText.substring(0, 200) + (cleanText.length > 200 ? '...' : '');
-    }
-    
-    return '';
-  }
-
-  /**
-   * 提取页面关键词
-   */
-  private extractKeywords(html: string): string[] {
-    const metaKeywordsMatch = html.match(/<meta[^>]*name=["']keywords["'][^>]*content=["']([^"']*?)["']/i);
-    if (metaKeywordsMatch) {
-      return metaKeywordsMatch[1].split(',').map(k => k.trim()).filter(k => k.length > 0);
-    }
-    
-    // 回退：从标题和描述中提取
-    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
-    const title = titleMatch ? titleMatch[1] : '';
-    
-    const commonKeywords = ['react', 'vue', 'javascript', 'typescript', 'portfolio', 'developer', 'designer'];
-    const foundKeywords: string[] = [];
-    
-    commonKeywords.forEach(keyword => {
-      if (html.toLowerCase().includes(keyword)) {
-        foundKeywords.push(keyword);
-      }
-    });
-    
-    return foundKeywords;
-  }
-
-  /**
-   * 分析网站类型
-   */
-  private detectWebsiteTypeFromContent(html: string, url: string): string {
-    const urlType = this.detectWebsiteType(url);
-    if (urlType !== 'general') return urlType;
-    
-    // 基于内容的类型检测
-    const content = html.toLowerCase();
-    
-    if (content.includes('portfolio') || content.includes('作品集') || 
-        content.includes('gallery') || content.includes('showcase')) {
-      return 'portfolio';
-    }
-    
-    if (content.includes('blog') || content.includes('article') || 
-        content.includes('博客') || content.includes('文章')) {
-      return 'blog';
-    }
-    
-    if (content.includes('resume') || content.includes('cv') || 
-        content.includes('简历') || content.includes('experience')) {
-      return 'resume';
-    }
-    
-    if (content.includes('company') || content.includes('business') || 
-        content.includes('公司') || content.includes('企业')) {
-      return 'company';
-    }
-    
-    return 'personal';
-  }
-
-  /**
-   * 分析技术栈
-   */
-  private analyzeTechnicalStack(html: string): string[] {
-    const techStackArray: string[] = [];
-    const content = html.toLowerCase();
-    
-    // 前端技术
-    const frontendTechs = ['react', 'vue', 'angular', 'javascript', 'typescript', 'html', 'css', 'sass', 'less'];
-    for (const tech of frontendTechs) {
-      if (content.includes(tech) && !techStackArray.includes(tech)) {
-        techStackArray.push(tech);
-      }
-    }
-    
-    // 后端技术
-    const backendTechs = ['node', 'python', 'java', 'php', 'ruby', 'go', 'rust', 'c++'];
-    for (const tech of backendTechs) {
-      if (content.includes(tech) && !techStackArray.includes(tech)) {
-        techStackArray.push(tech);
-      }
-    }
-    
-    // 框架和库
-    const frameworks = ['express', 'fastify', 'django', 'flask', 'spring', 'laravel'];
-    for (const framework of frameworks) {
-      if (content.includes(framework) && !techStackArray.includes(framework)) {
-        techStackArray.push(framework);
-      }
-    }
-    
-    return techStackArray;
-  }
-
-  /**
-   * 提取社交链接
-   */
-  private extractSocialLinks(html: string): Record<string, string> {
-    const socialLinks: Record<string, string> = {};
-    
-    const socialPatterns = {
-      github: /href=["'](https?:\/\/github\.com\/[^"']*?)["']/gi,
-      linkedin: /href=["'](https?:\/\/linkedin\.com\/[^"']*?)["']/gi,
-      twitter: /href=["'](https?:\/\/twitter\.com\/[^"']*?)["']/gi,
-      behance: /href=["'](https?:\/\/behance\.net\/[^"']*?)["']/gi,
-      dribbble: /href=["'](https?:\/\/dribbble\.com\/[^"']*?)["']/gi
-    };
-    
-    Object.entries(socialPatterns).forEach(([platform, pattern]) => {
-      const matches = html.match(pattern);
-      if (matches && matches.length > 0) {
-        // 取第一个匹配的链接
-        const linkMatch = matches[0].match(/https?:\/\/[^"']*/);
-        if (linkMatch) {
-          socialLinks[platform] = linkMatch[0];
-        }
-      }
-    });
-    
-    return socialLinks;
-  }
-
-  /**
-   * 分析内容结构
-   */
-  private analyzeContentStructure(html: string, targetSections: string[]) {
-    const sections: any[] = [];
-    const highlights: string[] = [];
-    
-    // 如果要求所有内容
-    if (targetSections.includes('all')) {
-      targetSections = ['about', 'projects', 'experience', 'skills', 'contact'];
-    }
-    
-    targetSections.forEach(section => {
-      const sectionContent = this.extractSectionContent(html, section);
-      if (sectionContent) {
-        sections.push(sectionContent);
-        if (sectionContent.highlights) {
-          highlights.push(...sectionContent.highlights);
-        }
-      }
-    });
-    
-    return { sections, highlights };
-  }
-
-  /**
-   * 提取特定区域内容
-   */
-  private extractSectionContent(html: string, sectionType: string): any | null {
-    // 简化的内容提取逻辑
-    const sectionPatterns = {
-      about: /(about|关于|介绍)/gi,
-      projects: /(project|portfolio|作品|项目)/gi,
-      experience: /(experience|work|工作|经历)/gi,
-      skills: /(skill|技能|能力)/gi,
-      contact: /(contact|联系|邮箱)/gi
-    };
-    
-    const pattern = sectionPatterns[sectionType as keyof typeof sectionPatterns];
-    if (!pattern) return null;
-    
-    // 查找包含关键词的section或div
-    const sectionRegex = new RegExp(
-      `<(section|div|article)[^>]*>(.*?${pattern.source}.*?)<\/(section|div|article)>`,
-      'gis'
-    );
-    
-    const matches = html.match(sectionRegex);
-    if (matches && matches.length > 0) {
-      const content = matches[0].replace(/<[^>]*>/g, ' ').trim();
-      return {
-        type: sectionType,
-        content: content.substring(0, 500) + (content.length > 500 ? '...' : ''),
-        highlights: this.extractHighlights(content, sectionType)
-      };
-    }
-    
-    return null;
-  }
-
-  /**
-   * 提取亮点信息
-   */
-  private extractHighlights(content: string, sectionType: string): string[] {
-    const highlights: string[] = [];
-    
-    // 基于区域类型提取不同的亮点
-    switch (sectionType) {
-      case 'projects':
-        // 查找项目相关的技术栈
-        const techWords = content.match(/\b(React|Vue|Angular|JavaScript|TypeScript|Python|Java|Node\.js|MongoDB|MySQL|AWS|Docker|Kubernetes)\b/gi);
-        if (techWords) {
-          highlights.push(`技术栈: ${Array.from(new Set(techWords)).join(', ')}`);
-        }
-        break;
-        
-      case 'experience':
-        // 查找职位和公司
-        const jobTitles = content.match(/\b(Engineer|Developer|Designer|Manager|Lead|Senior|Junior|工程师|开发|设计师|经理)\b/gi);
-        if (jobTitles) {
-          highlights.push(`职位经验: ${Array.from(new Set(jobTitles)).slice(0, 3).join(', ')}`);
-        }
-        break;
-        
-      case 'skills':
-        // 查找技能关键词
-        const skills = content.match(/\b(JavaScript|Python|React|Vue|Design|Frontend|Backend|UI|UX|API|Database)\b/gi);
-        if (skills) {
-          highlights.push(`核心技能: ${Array.from(new Set(skills)).slice(0, 5).join(', ')}`);
-        }
-        break;
-    }
-    
-    return highlights;
-  }
-
-  /**
-   * 评估iframe适用性
-   */
-  private assessIframeSuitability(html: string, websiteType: string, url: string): { suitable: boolean; reason: string } {
-    // 安全性检查
-    if (html.includes('x-frame-options') || html.includes('frame-ancestors')) {
-      return { suitable: false, reason: '网站设置了防嵌入限制' };
-    }
-    
-    // 根据网站类型判断
-    const iframeFriendlyTypes = ['portfolio', 'personal', 'blog'];
-    if (iframeFriendlyTypes.includes(websiteType)) {
-      return { suitable: true, reason: `${websiteType}类型网站适合iframe展示，可以提供完整的视觉体验` };
-    }
-    
-    // 检查是否是个人域名
-    const domain = new URL(url).hostname;
-    if (this.isPersonalDomain(domain)) {
-      return { suitable: true, reason: '个人网站适合iframe展示' };
-    }
-    
-    return { suitable: false, reason: '建议提取关键内容进行结构化展示' };
-  }
-
-  private isPersonalDomain(domain: string): boolean {
-    // 个人域名特征
-    const personalIndicators = [
-      /^[a-z]+\.(me|dev|io)$/,  // 短域名
-      /portfolio/,               // 包含portfolio
-      /blog/,                   // 包含blog
-      /^[a-z]+-[a-z]+\./       // 连字符格式
-    ];
-    
-    return personalIndicators.some(pattern => pattern.test(domain));
-  }
-
-  /**
-   * 评估内容质量
-   */
-  private assessContentQuality(contentStructure: any): number {
-    const { sections } = contentStructure;
-    
-    if (sections.length === 0) return 0;
-    if (sections.length >= 3) return 0.9;
-    if (sections.length >= 2) return 0.7;
-    return 0.5;
-  }
-
-  /**
-   * 计算提取置信度
-   */
-  private calculateExtractionConfidence(contentStructure: any, techStack: string[], socialLinks: Record<string, string>): number {
-    let confidence = 0.3; // 基础分
-    
-    // 内容结构评分
-    confidence += Math.min(contentStructure.sections.length * 0.15, 0.4);
-    
-    // 技术栈评分
-    confidence += Math.min(techStack.length * 0.05, 0.2);
-    
-    // 社交链接评分
-    confidence += Math.min(Object.keys(socialLinks).length * 0.05, 0.1);
-    
-    return Math.min(confidence, 1.0);
-  }
-
-  /**
-   * 分类网页错误
-   */
-  private classifyWebpageError(error: any, url: string): { type: string; message: string; suggestions: string[] } {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    if (errorMessage.includes('timeout') || errorMessage.includes('TIMEOUT')) {
-      return {
-        type: 'timeout',
-        message: '网页加载超时',
-        suggestions: ['尝试稍后再次访问', '检查网络连接', '联系网站管理员']
-      };
-    }
-    
-    if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
-      return {
-        type: 'not_found',
-        message: '页面不存在',
-        suggestions: ['检查URL是否正确', '访问网站主页', '寻找替代链接']
-      };
-    }
-    
-    if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-      return {
-        type: 'access_denied',
-        message: '访问被拒绝',
-        suggestions: ['网站可能需要登录', '检查是否有访问权限', '尝试使用不同的访问方式']
-      };
-    }
-    
-    if (errorMessage.includes('CORS') || errorMessage.includes('MIXED_CONTENT')) {
-      return {
-        type: 'security_restriction',
-        message: '浏览器安全限制',
-        suggestions: ['这是正常的安全机制', '建议提供其他材料', '可以尝试截图方式']
-      };
-    }
-    
-    return {
-      type: 'unknown',
-      message: '网络或服务器错误',
-      suggestions: ['检查网络连接', '稍后重试', '提供备用链接或材料']
-    };
-  }
-
-  /**
-   * 提取域名
-   */
-  private extractDomain(url: string): string {
+  async parseDocument(fileData: string, fileType: string): Promise<any> {
     try {
-      return new URL(url).hostname;
-    } catch {
-      return url.split('/')[2] || url;
+      console.log(`📄 [文档解析] 类型: ${fileType}`);
+      return await documentService.parseDocument(fileData, fileType);
+    } catch (error) {
+      console.error('文档解析失败:', error);
+      return {
+        error: '文档解析失败',
+        file_type: fileType,
+        extraction_confidence: 0,
+        suggestions: {
+          manual_processing: true,
+          reason: '建议手动输入文档内容'
+        }
+      };
     }
   }
 
-
-
   /**
-   * LinkedIn信息提取（需要特殊处理，因为LinkedIn有反爬虫机制）
+   * LinkedIn提取 - 聚合接口（模拟实现）
    */
+  async extractLinkedIn(profileUrl: string): Promise<any> {
+    try {
+      console.log(`💼 [LinkedIn提取] ${profileUrl}`);
+      return await socialService.extractLinkedIn(profileUrl);
+    } catch (error) {
+      console.error('LinkedIn提取失败:', error);
+      return this.createMockLinkedInData(profileUrl);
+    }
+  }
+
   /**
-   * 智能链接处理 - 新增的核心功能
+   * 智能链接处理 - 核心路由功能
    */
   async processIntelligentLink(url: string, userContext?: any): Promise<any> {
     try {
@@ -609,68 +185,7 @@ export class ToolService {
     return results;
   }
 
-  /**
-   * 文档解析 - 使用新的智能文档服务
-   */
-  async parseDocument(fileData: string, fileType: string): Promise<any> {
-    try {
-      console.log(`📄 [文档解析] 类型: ${fileType}`);
-      
-      // 使用新的智能文档服务
-      const result = await documentService.parseDocument(fileData, fileType);
-      
-      return result;
-      
-    } catch (error) {
-      console.error('文档解析失败:', error);
-      return {
-        error: '文档解析失败',
-        file_type: fileType,
-        extraction_confidence: 0,
-        suggestions: {
-          manual_processing: true,
-          reason: '建议手动输入文档内容'
-        }
-      };
-    }
-  }
-
-  async extractLinkedIn(profileUrl: string): Promise<any> {
-    // LinkedIn API需要特殊授权，这里返回模拟数据
-    console.log('LinkedIn提取（模拟）:', profileUrl);
-    
-    return {
-      platform: 'linkedin',
-      profile_url: profileUrl,
-      profile: {
-        name: 'LinkedIn用户',
-        title: '软件工程师',
-        company: '科技公司',
-        location: '北京',
-        summary: '专注于前端开发和用户体验设计'
-      },
-      experience: [
-        {
-          title: '高级前端工程师',
-          company: '科技公司',
-          duration: '2020-至今',
-          description: '负责产品前端开发和技术架构'
-        }
-      ],
-      education: [
-        {
-          school: '北京大学',
-          degree: '计算机科学硕士',
-          field: '计算机科学',
-          year: '2020'
-        }
-      ],
-      skills: ['JavaScript', 'React', 'Vue.js', 'TypeScript'],
-      note: 'LinkedIn数据需要用户授权后才能获取详细信息'
-    };
-  }
-
-  // ============== 辅助方法 ==============
+  // ============== 私有辅助方法 ==============
 
   private extractGitHubUsername(usernameOrUrl: string): string {
     if (usernameOrUrl.includes('github.com')) {
@@ -678,24 +193,6 @@ export class ToolService {
       return matches ? matches[1] : usernameOrUrl;
     }
     return usernameOrUrl;
-  }
-
-  private extractLanguagesFromRepos(repositories: any[]): string[] {
-    const languagesArray: string[] = [];
-    for (const repo of repositories) {
-      if (repo.language && !languagesArray.includes(repo.language)) {
-        languagesArray.push(repo.language);
-      }
-    }
-    return languagesArray.slice(0, 10); // 限制数量
-  }
-
-  private detectWebsiteType(url: string): string {
-    if (url.includes('behance.net') || url.includes('dribbble.com')) return 'portfolio';
-    if (url.includes('medium.com') || url.includes('blog')) return 'blog';
-    if (url.includes('linkedin.com')) return 'linkedin';
-    if (url.includes('github.com')) return 'github';
-    return 'general';
   }
 
   private createMockGitHubData(usernameOrUrl: string): any {
@@ -725,10 +222,77 @@ export class ToolService {
       languages: ['JavaScript', 'TypeScript', 'Python'],
       contribution_stats: {
         total_repos: 15,
-        followers: 50
+        followers: 50,
+        activity_score: 75
       },
+      extraction_confidence: 0.3,
       note: '这是模拟数据，实际使用时会调用GitHub API'
     };
+  }
+
+  private createMockLinkedInData(profileUrl: string): any {
+    return {
+      platform: 'linkedin',
+      profile_url: profileUrl,
+      profile: {
+        name: 'LinkedIn用户',
+        title: '软件工程师',
+        company: '科技公司',
+        location: '北京',
+        summary: '专注于前端开发和用户体验设计'
+      },
+      experience: [
+        {
+          title: '高级前端工程师',
+          company: '科技公司',
+          duration: '2020-至今',
+          description: '负责产品前端开发和技术架构'
+        }
+      ],
+      education: [
+        {
+          school: '北京大学',
+          degree: '计算机科学硕士',
+          field: '计算机科学',
+          year: '2020'
+        }
+      ],
+      skills: ['JavaScript', 'React', 'Vue.js', 'TypeScript'],
+      extraction_confidence: 0.3,
+      note: 'LinkedIn数据需要用户授权后才能获取详细信息'
+    };
+  }
+
+  private createWebErrorResponse(url: string, error: any): any {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    return {
+      url,
+      error: errorMessage,
+      content_analysis: {
+        is_accessible: false,
+        access_issue: 'network_error'
+      },
+      suggestions: {
+        iframe_display: false,
+        reason: `网页访问失败: ${errorMessage}`,
+        alternative_actions: ['检查URL是否正确', '尝试稍后再次访问', '提供其他链接或材料']
+      },
+      extraction_confidence: 0,
+      metadata: {
+        domain: this.extractDomain(url),
+        extracted_at: new Date().toISOString(),
+        error_occurred: true
+      }
+    };
+  }
+
+  private extractDomain(url: string): string {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url.split('/')[2] || url;
+    }
   }
 }
 
