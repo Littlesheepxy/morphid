@@ -468,9 +468,29 @@ export function useChatSystemV2() {
               
               // 检查是否需要生成页面
               const systemState = chunk.data?.system_state || chunk.system_state;
-              if (systemState?.metadata?.readyToGenerate) {
+              if (systemState?.metadata?.readyToGenerate || systemState?.metadata?.ready_for_design) {
                 console.log('🎨 [页面生成] 触发页面生成...');
                 generatePage(session);
+              }
+
+              // 处理轮次限制推进
+              if (systemState?.metadata?.force_advance) {
+                console.log('⏰ [轮次限制] 强制推进到下一阶段');
+                // 存储到 metadata 中的自定义属性
+                (session.metadata as any).turnCount = systemState.metadata.final_turn;
+              }
+
+              // 处理LLM决策标识
+              if (systemState?.metadata?.llm_decision) {
+                console.log('🧠 [LLM决策] 基于大模型判断的状态变更');
+                // 可以在这里添加特殊的UI提示
+              }
+
+              // 更新收集进度
+              if (systemState?.metadata?.collection_progress !== undefined) {
+                if (session.metadata?.progress) {
+                  (session.metadata.progress as any).collectionProgress = systemState.metadata.collection_progress;
+                }
               }
 
               // 如果流程完成
@@ -479,6 +499,9 @@ export function useChatSystemV2() {
                 session.status = 'completed';
                 setCurrentSession({ ...session });
                 setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+              } else if (systemState?.intent === 'advance') {
+                console.log('🚀 [阶段推进] 准备进入下一阶段');
+                // 可以在这里添加阶段切换的UI反馈
               }
               
             } catch (parseError) {

@@ -3,7 +3,7 @@
  * 基于官方文档：https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/implement-tool-use
  */
 
-import { toolService } from '@/lib/services/tool-service';
+import { githubService, webService, documentService, socialService } from '@/lib/services';
 
 /**
  * Claude工具定义接口
@@ -198,28 +198,28 @@ export const CLAUDE_INFO_COLLECTION_TOOLS: ClaudeToolDefinition[] = [
  */
 export const TOOL_EXECUTORS = {
   analyze_github: async (params: any) => {
-    return await toolService.analyzeGitHub(
+    return await githubService.analyzeUser(
       params.username_or_url,
       params.include_repos ?? true
     );
   },
 
   scrape_webpage: async (params: any) => {
-    return await toolService.scrapeWebpage(
+    return await webService.scrapeWebpage(
       params.url,
       params.target_sections ?? ['all']
     );
   },
 
   parse_document: async (params: any) => {
-    return await toolService.parseDocument(
+    return await documentService.parseDocument(
       params.file_data,
       params.file_type
     );
   },
 
   extract_linkedin: async (params: any) => {
-    return await toolService.extractLinkedIn(params.profile_url);
+    return await socialService.extractLinkedIn(params.profile_url);
   }
 };
 

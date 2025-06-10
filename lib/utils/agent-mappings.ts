@@ -24,6 +24,7 @@ export class AgentMappingManager {
 
       // 阶段到Agent名称的映射
       stageToAgent: {
+        'start': 'welcome',
         'welcome': 'welcome',
         'info_collection': 'info_collection',
         'page_design': 'prompt_output',
@@ -35,6 +36,7 @@ export class AgentMappingManager {
 
       // 阶段进度百分比
       stageProgress: {
+        'start': 0,
         'welcome': 10,
         'info_collection': 40,
         'page_design': 70,
@@ -54,6 +56,12 @@ export class AgentMappingManager {
    * 获取阶段对应的Agent名称
    */
   getAgentFromStage(stageName: string): string {
+    // 特殊处理：将历史的 "start" 阶段映射到 "welcome"
+    if (stageName === 'start') {
+      console.log(`⚠️  [映射] 发现历史 "start" 阶段，自动映射到 "welcome"`);
+      return 'welcome';
+    }
+    
     return this.config.stageToAgent[stageName] || stageName;
   }
 

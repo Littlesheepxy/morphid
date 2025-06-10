@@ -7,7 +7,7 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
 import { CONVERSATIONAL_INFO_COLLECTION_PROMPT, formatPrompt } from '@/lib/prompts';
-import { toolService } from '@/lib/services/tool-service';
+import { githubService, webService, documentService, socialService } from '@/lib/services';
 import { enhancedLinkAnalyzer, LinkAnalysisResult } from '@/lib/services/enhanced-link-analyzer';
 
 /**
@@ -332,36 +332,26 @@ export class ConversationalInfoCollectionAgent extends BaseAgent {
    * 执行内容提取 - 核心能力之三：内容收集、解析
    */
   private async executeContentExtraction(analysis: LinkAnalysisResult): Promise<any> {
-    const { url, suggested_extraction } = analysis;
+    const { url, platform } = analysis;
     
-    console.log(`🎯 [内容提取] 使用策略: ${suggested_extraction.method}`);
-    
-    switch (suggested_extraction.method) {
-      case 'api':
-        // 使用API调用
-        if (analysis.platform === 'github') {
-          return await toolService.analyzeGitHub(url, true);
-        } else if (analysis.platform === 'linkedin') {
-          return await toolService.extractLinkedIn(url);
-        }
-        break;
-        
-      case 'scrape':
-      case 'scrape_with_iframe_option':
-        // 网页抓取
-        return await toolService.scrapeWebpage(url, suggested_extraction.sections);
-        
-      case 'manual':
-        // 需要手动处理
-        return this.createManualProcessingRecommendation(analysis);
-        
-      default:
-        // 默认抓取
-        return await toolService.scrapeWebpage(url, ['all']);
+    try {
+      if (platform === 'github') {
+        // GitHub分析 - 使用专门的GitHub服务
+        return await githubService.analyzeUser(url, true);
+      } else if (platform === 'linkedin') {
+        // LinkedIn提取 - 使用专门的社交服务
+        return await socialService.extractLinkedIn(url);
+      } else if (analysis.suggested_extraction.method === 'scrape' || analysis.suggested_extraction.method === 'scrape_with_iframe_option') {
+        // 网页抓取 - 使用专门的Web服务
+        return await webService.scrapeWebpage(url, analysis.suggested_extraction.sections);
+      } else {
+        // 默认网页处理 - 使用专门的Web服务
+        return await webService.scrapeWebpage(url, ['all']);
+      }
+    } catch (error) {
+      console.error(`内容提取失败 [${url}]:`, error);
+      throw error;
     }
-    
-    // 如果没有匹配的策略，使用默认抓取
-    return await toolService.scrapeWebpage(url, ['all']);
   }
 
   /**
@@ -495,27 +485,19 @@ URL: ${url}
   // ============== 工具实现 ==============
 
   private async analyzeGithubTool(params: { username_or_url: string; include_repos: boolean }): Promise<any> {
-    const { username_or_url, include_repos } = params;
-    console.log(`🐙 [GitHub分析] ${username_or_url}`);
-    return await toolService.analyzeGitHub(username_or_url, include_repos);
+    return await githubService.analyzeUser(params.username_or_url, params.include_repos);
   }
 
   private async parseDocumentTool(params: { file_data: string; file_type: string }): Promise<any> {
-    const { file_data, file_type } = params;
-    console.log(`📄 [文档解析] ${file_type}格式`);
-    return await toolService.parseDocument(file_data, file_type);
+    return await documentService.parseDocument(params.file_data, params.file_type);
   }
 
   private async scrapeWebpageTool(params: { url: string; target_sections: string[] }): Promise<any> {
-    const { url, target_sections } = params;
-    console.log(`🌐 [网页抓取] ${url}, 目标: ${target_sections.join(', ')}`);
-    return await toolService.scrapeWebpage(url, target_sections);
+    return await webService.scrapeWebpage(params.url, params.target_sections);
   }
 
   private async extractLinkedinTool(params: { profile_url: string }): Promise<any> {
-    const { profile_url } = params;
-    console.log(`💼 [LinkedIn提取] ${profile_url}`);
-    return await toolService.extractLinkedIn(profile_url);
+    return await socialService.extractLinkedIn(params.profile_url);
   }
 
   // ============== 辅助方法 ==============

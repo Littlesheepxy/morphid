@@ -35,6 +35,20 @@ export async function POST(req: NextRequest) {
   try {
     const { sessionId, interactionType, data } = await req.json();
     
+    // 🔧 防重复请求处理 - 忽略无效的系统消息
+    const requestId = `${sessionId}-${Date.now()}`;
+
+    // 🔧 忽略无效的系统消息
+    if (data.type === 'system_loading' && data.sender === 'assistant') {
+      console.log(`⏸️  [系统消息忽略] 忽略系统加载消息: ${data.stage}`);
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: 'System loading message ignored',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     console.log(`📋 [请求参数] SessionId: ${sessionId}, InteractionType: ${interactionType}`);
     console.log(`📄 [交互数据] ${JSON.stringify(data)}`);
 
@@ -193,6 +207,83 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 🔧 修复：continue动作调用AI智能推荐，而不是硬编码选项
+    if (result?.action === 'continue') {
+      console.log(`🔄 [交互API] continue动作，调用AI生成智能推荐`);
+      
+      // 获取更新后的信息
+      const updatedInfo = result.updated_info || {};
+      const missingFields = result.missing_fields || [];
+      const collectionPhase = result.collection_phase || 'basic';
+      
+      console.log(`📊 [当前信息] ${JSON.stringify(updatedInfo)}`);
+      console.log(`📋 [缺少字段] ${missingFields.join('、')}`);
+      console.log(`🔄 [收集阶段] ${collectionPhase}`);
+      
+      // 构造用户输入消息
+      const userMessage = formatInteractionAsUserMessage(data, result);
+      console.log(`📝 [用户消息] ${userMessage}`);
+      
+      // 调用AgentOrchestrator重新处理，让AI生成智能推荐
+      console.log(`🤖 [AI调用] 让AI基于当前信息生成智能推荐选项`);
+      const aiRecommendationGenerator = agentOrchestrator.processUserInputStreaming(
+        sessionId,
+        userMessage,
+        sessionData
+      );
+      
+      // 创建流式响应
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            console.log(`🌊 [流式开始] AI推荐生成流开始`);
+            
+            for await (const chunk of aiRecommendationGenerator) {
+              const sseData = `data: ${JSON.stringify(chunk)}\n\n`;
+              controller.enqueue(encoder.encode(sseData));
+            }
+            
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+            console.log(`✅ [流式完成] AI推荐生成流完成`);
+            
+          } catch (error) {
+            console.error('❌ [AI推荐错误]:', error);
+            
+            const errorResponse = {
+              type: 'agent_response',
+              immediate_display: {
+                reply: '抱歉，生成推荐时出现问题，请刷新页面重试。',
+                agent_name: 'System',
+                timestamp: new Date().toISOString()
+              },
+              system_state: {
+                intent: 'error',
+                done: true,
+                metadata: { error: error instanceof Error ? error.message : String(error) }
+              }
+            };
+            
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorResponse)}\n\n`));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          }
+        }
+      });
+      
+      return new NextResponse(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }
+      });
+    }
+
     // 如果需要推进到下一阶段
     if (result?.action === 'advance' && result?.nextAgent) {
       // 创建流式响应以启动下一个Agent
@@ -266,98 +357,6 @@ export async function POST(req: NextRequest) {
           'Access-Control-Allow-Headers': 'Content-Type',
         }
       });
-    }
-
-    // 🔧 修复：continue动作也需要触发AI响应
-    if (result?.action === 'continue') {
-      console.log(`🔄 [交互API] continue动作，重新调用AI生成响应`);
-      
-      // 🔧 新增：将交互结果转换为用户消息
-      const userMessage = formatInteractionAsUserMessage(data, result);
-      console.log(`🔄 [继续处理] 转换用户消息: ${userMessage}`);
-      
-      // 🔧 新增：重新调用Agent，传入用户消息和对话历史
-      console.log(`🤖 [重新调用Agent] 开始流式响应处理`);
-      
-      // 🎯 UX优化：立即返回处理状态，然后启动流式响应
-      const response = new Response(
-        new ReadableStream({
-          async start(controller) {
-            const encoder = new TextEncoder();
-            
-            // 1. 立即发送初始状态
-            const initialChunk = {
-              type: 'processing',
-              message: '正在为您生成个性化建议...',
-              timestamp: new Date().toISOString()
-            };
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(initialChunk)}\n\n`));
-            
-            try {
-              // 2. 调用Agent生成响应
-              const agentGenerator = agentOrchestrator.processUserInputStreaming(
-                sessionId,
-                userMessage,
-                sessionData
-              );
-
-              // 3. 流式处理Agent响应
-              for await (const chunk of agentGenerator) {
-                console.log(`📤 [流式输出] 发送Agent响应块`);
-                
-                // 🎯 关键优化：检查是否包含建议，优先发送
-                if (chunk.interaction?.elements) {
-                  const suggestionsChunk = {
-                    type: 'suggestions_ready',
-                    interaction: chunk.interaction,
-                    quick_display: true,
-                    timestamp: new Date().toISOString()
-                  };
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(suggestionsChunk)}\n\n`));
-                }
-                
-                // 发送完整响应块
-                const streamChunk = {
-                  type: 'agent_response',
-                  data: chunk,
-                  timestamp: new Date().toISOString()
-                };
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(streamChunk)}\n\n`));
-              }
-              
-              // 4. 发送完成信号
-              const doneChunk = {
-                type: 'done',
-                message: '建议生成完成',
-                timestamp: new Date().toISOString()
-              };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(doneChunk)}\n\n`));
-              controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
-              
-            } catch (error) {
-              console.error('流式响应错误:', error);
-              const errorChunk = {
-                type: 'error',
-                message: '生成建议时出现问题，请重试',
-                timestamp: new Date().toISOString()
-              };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
-            } finally {
-              controller.close();
-            }
-          }
-        }),
-        {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-          }
-        }
-      );
-      
-      return response;
     }
 
     // 其他情况的普通响应

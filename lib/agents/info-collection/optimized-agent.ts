@@ -72,6 +72,19 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     try {
       console.log(`🎯 [优化版收集Agent] 开始处理: "${userInput}"`);
 
+      // 检查轮次限制 - 系统控制
+      const currentTurn = this.getTurnCount(sessionData);
+      const maxTurns = this.getMaxTurns(sessionData);
+      
+      if (currentTurn >= maxTurns) {
+        console.log(`⏰ [轮次限制] 已达到最大轮次 ${maxTurns}，强制推进到下一阶段`);
+        yield this.createForceAdvanceResponse(sessionData);
+        return;
+      }
+
+      // 增加轮次计数
+      this.incrementTurnCount(sessionData);
+
       // 第1步：分析用户输入并准备Claude调用
       yield this.createThinkingResponse('🔍 正在分析您提供的信息...', 20);
       await this.delay(800);
@@ -200,15 +213,14 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     if (textContent.includes('文档')) detectedResources.push('文档');
 
     return {
-      analysis_text: textContent,
+      llm_response: textContent, // 保存LLM的完整响应文本用于状态解析
       detected_resources: detectedResources,
-      tool_calls: toolUses.map((tool: any) => ({
-        name: tool.name,
-        params: tool.input,
-        id: tool.id
+      tool_calls: toolUses.map((use: any) => ({
+        id: use.id,
+        name: use.name,
+        params: use.input
       })),
-      needs_tool_execution: toolUses.length > 0,
-      confidence: 0.9
+      has_tools: toolUses.length > 0
     };
   }
 
@@ -338,16 +350,247 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     const successfulResults = toolResults.filter(r => r.success);
     const failedResults = toolResults.filter(r => !r.success);
 
+    // 检查是否有LLM返回的状态决策
+    if (analysisResult.llm_response) {
+      const status = this.parseCollectionStatus(analysisResult.llm_response);
+      
+      if (status.action === 'READY_TO_ADVANCE') {
+        yield this.createAdvanceResponseFromLLM(status, successfulResults, sessionData);
+        return;
+      } else if (status.action === 'NEED_CLARIFICATION') {
+        yield this.createClarificationResponseFromLLM(status);
+        return;
+      } else if (status.action === 'CONTINUE') {
+        yield this.createContinueResponseFromLLM(status, successfulResults, failedResults);
+        return;
+      }
+    }
+
+    // 回退到原有的系统判断逻辑
     if (successfulResults.length === 0 && toolResults.length > 0) {
-      // 所有工具都失败了
       yield this.createFailureResponse(failedResults, analysisResult);
     } else if (this.shouldAdvanceToNextStage(sessionData)) {
-      // 材料足够，推进到下一阶段
       yield this.createAdvanceResponse(successfulResults, sessionData);
     } else {
-      // 继续收集更多材料
       yield this.createContinueResponse(successfulResults, failedResults, sessionData);
     }
+  }
+
+  /**
+   * 🧠 解析LLM返回的收集状态标识 - 优化版
+   * 基于Claude官方最佳实践，增强状态理解能力
+   */
+  private parseCollectionStatus(llmResponse: string): {
+    action: 'CONTINUE' | 'READY_TO_ADVANCE' | 'NEED_CLARIFICATION' | 'UNKNOWN';
+    summary?: string;
+    nextFocus?: string;
+    clarificationFocus?: string;
+    confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
+    reasoning?: string;
+    missingInfo?: string[];
+    priority?: 'high' | 'medium' | 'low';
+  } {
+    const response = llmResponse || '';
+    
+    console.log(`🧠 [状态解析] 开始解析LLM状态判断...`);
+    console.log(`📄 [LLM响应] ${response.substring(0, 300)}...`);
+    
+    // 🎯 解析READY_TO_ADVANCE状态
+    if (response.includes('COLLECTION_STATUS: READY_TO_ADVANCE')) {
+      const summaryMatch = response.match(/COLLECTION_SUMMARY:\s*(.+?)(?=\n|$)/);
+      const confidenceMatch = response.match(/CONFIDENCE_LEVEL:\s*(HIGH|MEDIUM|LOW)/);
+      const reasoningMatch = response.match(/REASONING:\s*(.+?)(?=\n|$)/);
+      
+      const result = {
+        action: 'READY_TO_ADVANCE' as const,
+        summary: summaryMatch?.[1]?.trim(),
+        confidenceLevel: (confidenceMatch?.[1] as any) || 'MEDIUM',
+        reasoning: reasoningMatch?.[1]?.trim(),
+        priority: 'high' as const
+      };
+      
+      console.log(`🚀 [推进决策] LLM建议进入下一阶段:`, result);
+      return result;
+    }
+    
+    // 🎯 解析NEED_CLARIFICATION状态
+    if (response.includes('COLLECTION_STATUS: NEED_CLARIFICATION')) {
+      const focusMatch = response.match(/CLARIFICATION_FOCUS:\s*(.+?)(?=\n|$)/);
+      const missingMatch = response.match(/MISSING_INFO:\s*(.+?)(?=\n|$)/);
+      const priorityMatch = response.match(/PRIORITY:\s*(high|medium|low)/i);
+      
+      let missingInfo: string[] = [];
+      if (missingMatch) {
+        missingInfo = missingMatch[1].split(',').map(item => item.trim());
+      }
+      
+      const result = {
+        action: 'NEED_CLARIFICATION' as const,
+        clarificationFocus: focusMatch?.[1]?.trim(),
+        missingInfo,
+        priority: (priorityMatch?.[1]?.toLowerCase() as any) || 'medium'
+      };
+      
+      console.log(`❓ [澄清需求] LLM识别需要澄清的信息:`, result);
+      return result;
+    }
+    
+    // 🎯 解析CONTINUE状态
+    if (response.includes('COLLECTION_STATUS: CONTINUE')) {
+      const focusMatch = response.match(/NEXT_FOCUS:\s*(.+?)(?=\n|$)/);
+      const reasoningMatch = response.match(/REASONING:\s*(.+?)(?=\n|$)/);
+      const priorityMatch = response.match(/PRIORITY:\s*(high|medium|low)/i);
+      
+      const result = {
+        action: 'CONTINUE' as const,
+        nextFocus: focusMatch?.[1]?.trim(),
+        reasoning: reasoningMatch?.[1]?.trim(),
+        priority: (priorityMatch?.[1]?.toLowerCase() as any) || 'medium'
+      };
+      
+      console.log(`🔄 [继续收集] LLM建议继续收集信息:`, result);
+      return result;
+    }
+    
+    // 🎯 智能推理：如果没有明确标识，基于内容推断
+    console.log(`🤔 [智能推理] 未发现明确状态标识，开始内容分析...`);
+    
+    // 推理信息是否充足
+    const completionKeywords = ['足够', '完成', '准备好', '可以开始', '进入下一步', '设计', '开始制作'];
+    const continuationKeywords = ['还需要', '更多信息', '补充', '详细说明', '继续提供'];
+    const clarificationKeywords = ['不清楚', '需要确认', '请问', '能否说明', '希望了解'];
+    
+    const hasCompletion = completionKeywords.some(keyword => response.includes(keyword));
+    const hasContinuation = continuationKeywords.some(keyword => response.includes(keyword));
+    const hasClarification = clarificationKeywords.some(keyword => response.includes(keyword));
+    
+    if (hasCompletion && !hasContinuation) {
+      console.log(`✨ [智能推理] 基于关键词推断：准备推进`);
+      return {
+        action: 'READY_TO_ADVANCE',
+        summary: '基于内容分析，信息收集已基本完成',
+        confidenceLevel: 'MEDIUM',
+        reasoning: '智能推理：LLM表达了完成信号'
+      };
+    }
+    
+    if (hasClarification) {
+      console.log(`✨ [智能推理] 基于关键词推断：需要澄清`);
+      return {
+        action: 'NEED_CLARIFICATION',
+        clarificationFocus: '基于内容分析识别的澄清需求',
+        reasoning: '智能推理：LLM提出了问题或澄清需求'
+      };
+    }
+    
+    if (hasContinuation) {
+      console.log(`✨ [智能推理] 基于关键词推断：继续收集`);
+      return {
+        action: 'CONTINUE',
+        nextFocus: '基于内容分析的建议收集方向',
+        reasoning: '智能推理：LLM建议继续收集更多信息'
+      };
+    }
+    
+    console.warn(`⚠️ [状态未知] 无法解析LLM的意图，使用默认CONTINUE策略`);
+    return { 
+      action: 'UNKNOWN',
+      reasoning: '无法明确解析LLM的状态判断'
+    };
+  }
+
+  /**
+   * 基于LLM决策创建推进响应
+   */
+  private createAdvanceResponseFromLLM(
+    status: any, 
+    successfulResults: any[], 
+    sessionData: SessionData
+  ): StreamableAgentResponse {
+    const progress = this.calculateCollectionProgress(sessionData.collectedData);
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: `✅ 信息收集完成！\n\n${status.summary || '已成功收集到足够的信息'}\n\n可信度：${status.confidenceLevel}\n收集完整度：${Math.round(progress * 100)}%\n\n现在开始为您设计页面结构... 🎨`,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'advance',
+        done: true,
+        progress: 90,
+        current_stage: '信息收集完成',
+        metadata: {
+          llm_decision: true,
+          confidence_level: status.confidenceLevel,
+          collection_progress: progress,
+          ready_for_design: true
+        }
+      }
+    });
+  }
+
+  /**
+   * 基于LLM决策创建澄清响应
+   */
+  private createClarificationResponseFromLLM(status: any): StreamableAgentResponse {
+    return this.createResponse({
+      immediate_display: {
+        reply: `🤔 为了更好地帮助您，我需要确认一些信息：\n\n${status.clarificationFocus || '请提供更多详细信息'}\n\n您可以详细说明一下吗？`,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'continue_collection',
+        done: false,
+        progress: 50,
+        current_stage: '需要澄清信息',
+        metadata: {
+          llm_decision: true,
+          clarification_needed: status.clarificationFocus
+        }
+      }
+    });
+  }
+
+  /**
+   * 基于LLM决策创建继续收集响应
+   */
+  private createContinueResponseFromLLM(
+    status: any,
+    successfulResults: any[],
+    failedResults: any[]
+  ): StreamableAgentResponse {
+    const progress = 60; // LLM认为还需要继续，给一个中等进度
+    
+    let message = `📊 ${status.nextFocus ? `接下来我们重点关注：${status.nextFocus}` : '让我们继续收集更多信息'}`;
+    
+    if (successfulResults.length > 0) {
+      message += `\n\n已收集：${this.generateCollectionSummary(successfulResults)}`;
+    }
+    
+    if (failedResults.length > 0) {
+      message += `\n\n⚠️ 部分信息暂时无法获取，您可以提供其他材料或直接告诉我相关信息。`;
+    }
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: message,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'continue_collection',
+        done: false,
+        progress: progress,
+        current_stage: '继续信息收集',
+        metadata: {
+          llm_decision: true,
+          next_focus: status.nextFocus,
+          collection_suggestions: ['继续提供材料', '补充信息', '直接描述']
+        }
+      }
+    });
   }
 
   /**
@@ -543,6 +786,71 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
         done: false,
         progress,
         current_stage: '分析中...'
+      }
+    });
+  }
+
+  // ============== 轮次管理方法 ==============
+
+  /**
+   * 获取当前轮次数
+   */
+  private getTurnCount(sessionData: SessionData): number {
+    const metadata = sessionData.metadata as any;
+    return metadata?.turnCount || 0;
+  }
+
+  /**
+   * 获取最大轮次限制
+   */
+  private getMaxTurns(sessionData: SessionData): number {
+    const welcomeData = this.extractWelcomeData(sessionData);
+    
+    // 根据紧急程度设置不同的轮次限制
+    const maxTurns = {
+      '快速体验': 3,
+      '正常': 6,
+      '详细准备': 8
+    };
+    
+    return maxTurns[welcomeData.urgency as keyof typeof maxTurns] || 6;
+  }
+
+  /**
+   * 增加轮次计数
+   */
+  private incrementTurnCount(sessionData: SessionData): void {
+    if (!sessionData.metadata) {
+      // 如果metadata不存在，使用any类型来绕过类型检查
+      (sessionData as any).metadata = {};
+    }
+    ((sessionData as any).metadata).turnCount = this.getTurnCount(sessionData) + 1;
+  }
+
+  /**
+   * 创建强制推进响应（轮次达到上限）
+   */
+  private createForceAdvanceResponse(sessionData: SessionData): StreamableAgentResponse {
+    const progress = this.calculateCollectionProgress(sessionData.collectedData);
+    const currentTurn = this.getTurnCount(sessionData);
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: `⏰ 我们已经进行了 ${currentTurn} 轮信息收集，现在让我们基于已有信息开始设计您的页面！\n\n收集完整度：${Math.round(progress * 100)}%\n\n如果后续需要补充信息，我们可以在设计过程中随时调整。现在开始创建您的专属页面... 🎨`,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'advance',
+        done: true,
+        progress: Math.max(progress * 100, 75), // 确保至少75%进度
+        current_stage: '轮次限制推进',
+        metadata: {
+          force_advance: true,
+          turn_limit_reached: true,
+          final_turn: currentTurn,
+          collection_progress: progress
+        }
       }
     });
   }

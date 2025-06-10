@@ -1,32 +1,89 @@
 /**
  * 网页抓取服务 - 专门处理网页内容的智能抓取和分析
+ * 注意：这个服务只能在服务端使用
  */
 
-import metascraper from 'metascraper';
-import metascraperAuthor from 'metascraper-author';
-import metascraperDate from 'metascraper-date';
-import metascraperDescription from 'metascraper-description';
-import metascraperImage from 'metascraper-image';
-import metascraperLogo from 'metascraper-logo';
-import metascraperTitle from 'metascraper-title';
-import metascraperUrl from 'metascraper-url';
-import * as cheerio from 'cheerio';
+// @ts-nocheck
+// 运行时检查 - 确保只在服务端使用
+if (typeof window !== 'undefined') {
+  throw new Error('WebService 只能在服务端使用');
+}
+
+// 动态导入避免客户端捆绑问题
+let metascraper: any;
+let metascraperAuthor: any;
+let metascraperDate: any;
+let metascraperDescription: any;
+let metascraperImage: any;
+let metascraperLogo: any;
+let metascraperTitle: any;
+let metascraperUrl: any;
+let cheerio: any;
+
+// 延迟加载依赖
+const loadDependencies = async () => {
+  if (!metascraper) {
+    const [
+      metascraperModule,
+      metascraperAuthorModule,
+      metascraperDateModule,
+      metascraperDescriptionModule,
+      metascraperImageModule,
+      metascraperLogoModule,
+      metascraperTitleModule,
+      metascraperUrlModule,
+      cheerioModule,
+    ] = await Promise.all([
+      import('metascraper'),
+      import('metascraper-author'),
+      import('metascraper-date'),
+      import('metascraper-description'),
+      import('metascraper-image'),
+      import('metascraper-logo'),
+      import('metascraper-title'),
+      import('metascraper-url'),
+      import('cheerio'),
+    ]);
+
+    metascraper = metascraperModule.default;
+    metascraperAuthor = metascraperAuthorModule.default;
+    metascraperDate = metascraperDateModule.default;
+    metascraperDescription = metascraperDescriptionModule.default;
+    metascraperImage = metascraperImageModule.default;
+    metascraperLogo = metascraperLogoModule.default;
+    metascraperTitle = metascraperTitleModule.default;
+    metascraperUrl = metascraperUrlModule.default;
+    cheerio = cheerioModule;
+  }
+};
+
 import { isValidUrl } from './utils/web-utils';
 
 export class WebService {
   private metascraperInstance: any;
+  private isInitialized: boolean = false;
 
   constructor() {
-    // 初始化metascraper实例
-    this.metascraperInstance = metascraper([
-      metascraperAuthor(),
-      metascraperDate(),
-      metascraperDescription(),
-      metascraperImage(),
-      metascraperLogo(),
-      metascraperTitle(),
-      metascraperUrl(),
-    ]);
+    // 延迟初始化
+  }
+
+  private async initialize() {
+    if (!this.isInitialized) {
+      await loadDependencies();
+      
+      // 初始化metascraper实例
+      this.metascraperInstance = metascraper([
+        metascraperAuthor(),
+        metascraperDate(),
+        metascraperDescription(),
+        metascraperImage(),
+        metascraperLogo(),
+        metascraperTitle(),
+        metascraperUrl(),
+      ]);
+      
+      this.isInitialized = true;
+    }
   }
 
   /**
@@ -34,6 +91,9 @@ export class WebService {
    */
   async scrapeWebpage(url: string, targetSections: string[] = ['all']): Promise<any> {
     try {
+      // 确保依赖已加载
+      await this.initialize();
+      
       console.log(`🌐 [网页抓取] ${url} | 目标区域: ${targetSections.join(', ')}`);
 
       // URL验证
@@ -152,8 +212,6 @@ export class WebService {
     }
   }
 
-
-
   // =============== 私有方法 ===============
 
   private detectWebsiteType(url: string, title?: string, html?: string): string {
@@ -177,7 +235,7 @@ export class WebService {
     return 'general';
   }
 
-  private analyzeTechnicalStack($: cheerio.CheerioAPI, html: string): string[] {
+  private analyzeTechnicalStack($: any, html: string): string[] {
     const techStack: string[] = [];
     
     // 检测前端框架
@@ -225,7 +283,7 @@ export class WebService {
     return Array.from(new Set(techStack)); // 去重
   }
 
-  private extractSocialLinks($: cheerio.CheerioAPI): Record<string, string> {
+  private extractSocialLinks($: any): Record<string, string> {
     const socialLinks: Record<string, string> = {};
     
     const socialPatterns = {
@@ -268,7 +326,7 @@ export class WebService {
     return socialLinks;
   }
 
-  private analyzeContentStructure($: cheerio.CheerioAPI, targetSections: string[]): any {
+  private analyzeContentStructure($: any, targetSections: string[]): any {
     const structure = {
       sections: [] as any[],
       highlights: [] as string[],
@@ -313,7 +371,7 @@ export class WebService {
     return structure;
   }
 
-  private extractAboutSection($: cheerio.CheerioAPI): any | null {
+  private extractAboutSection($: any): any | null {
     const selectors = [
       'section[id*="about"]',
       'div[id*="about"]',
@@ -338,7 +396,7 @@ export class WebService {
     return null;
   }
 
-  private extractProjectsSection($: cheerio.CheerioAPI): any | null {
+  private extractProjectsSection($: any): any | null {
     const selectors = [
       'section[id*="project"]',
       'div[id*="project"]',
@@ -375,7 +433,7 @@ export class WebService {
     return null;
   }
 
-  private extractExperienceSection($: cheerio.CheerioAPI): any | null {
+  private extractExperienceSection($: any): any | null {
     // 简化实现，类似于其他section提取方法
     const selectors = [
       'section[id*="experience"]',
@@ -398,7 +456,7 @@ export class WebService {
     return null;
   }
 
-  private extractSkillsSection($: cheerio.CheerioAPI): any | null {
+  private extractSkillsSection($: any): any | null {
     const selectors = [
       'section[id*="skill"]',
       'div[id*="skill"]',
@@ -427,7 +485,7 @@ export class WebService {
     return null;
   }
 
-  private extractContactSection($: cheerio.CheerioAPI): any | null {
+  private extractContactSection($: any): any | null {
     const selectors = [
       'section[id*="contact"]',
       'div[id*="contact"]',
@@ -456,7 +514,7 @@ export class WebService {
     return null;
   }
 
-  private extractSectionTitle(element: cheerio.Cheerio<any>): string {
+  private extractSectionTitle(element: any): string {
     const titleSelectors = ['h1', 'h2', 'h3', 'h4', '.title', '.heading'];
     
     for (const selector of titleSelectors) {
@@ -469,11 +527,11 @@ export class WebService {
     return '未知标题';
   }
 
-  private extractHighlights($: cheerio.CheerioAPI): string[] {
+  private extractHighlights($: any): string[] {
     const highlights: string[] = [];
     
     // 提取重要标题
-    $('h1, h2, h3').each((_, element) => {
+    $('h1, h2, h3').each((_: any, element: any) => {
       const text = $(element).text().trim();
       if (text.length > 5 && text.length < 100) {
         highlights.push(text);
@@ -489,7 +547,7 @@ export class WebService {
     return highlights.slice(0, 10); // 限制数量
   }
 
-  private assessIframeSuitability($: cheerio.CheerioAPI, websiteType: string, url: string): { suitable: boolean; reason: string } {
+  private assessIframeSuitability($: any, websiteType: string, url: string): { suitable: boolean; reason: string } {
     // 检查X-Frame-Options限制
     const hasFrameRestriction = $('meta[http-equiv="X-Frame-Options"]').length > 0;
     if (hasFrameRestriction) {
@@ -516,7 +574,7 @@ export class WebService {
     return { suitable: false, reason: '无法确定iframe兼容性，建议使用卡片展示' };
   }
 
-  private analyzeSEO($: cheerio.CheerioAPI, metadata: any): any {
+  private analyzeSEO($: any, metadata: any): any {
     let score = 0;
     const factors: string[] = [];
     const issues: string[] = [];

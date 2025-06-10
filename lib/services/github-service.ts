@@ -36,7 +36,7 @@ export class GitHubService {
         });
         
         repositories = repos
-          .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
+          .sort((a: any, b: any) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
           .slice(0, 10);
       }
 
@@ -361,7 +361,7 @@ export class GitHubService {
 
       return {
         total_commits: commits.length,
-        recent_commits: commits.filter(commit => {
+        recent_commits: commits.filter((commit: any) => {
           if (!commit.commit.author?.date) return false;
           const commitDate = new Date(commit.commit.author.date);
           const monthsAgo = (Date.now() - commitDate.getTime()) / (1000 * 60 * 60 * 24 * 30);

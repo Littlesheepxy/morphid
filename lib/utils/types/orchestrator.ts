@@ -97,6 +97,12 @@ export interface UserInteractionResult {
   action: 'continue' | 'advance' | 'retry' | 'error' | 'request_custom_description';
   /** 确认的信息 */
   confirmed_info?: any;
+  /** 更新的信息 */
+  updated_info?: any;
+  /** 缺少的字段列表 */
+  missing_fields?: string[];
+  /** 收集阶段：basic-基础信息，details-细节信息 */
+  collection_phase?: 'basic' | 'details';
   /** 操作摘要 */
   summary?: string;
   /** 下一个Agent（如果需要跳转） */

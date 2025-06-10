@@ -148,13 +148,108 @@ export abstract class BaseAgent {
   }
 
   /**
-   * 创建完成响应
+   * 🎯 遵循Claude官方最佳实践的Agent结束判断
+   * 基于stop_reason和响应内容判断Agent是否应该结束
+   */
+  protected shouldAgentContinue(
+    response: any,
+    context?: {
+      maxTurns?: number;
+      currentTurn?: number;
+      forceComplete?: boolean;
+    }
+  ): { shouldContinue: boolean; reason: string; nextAction?: string } {
+    const stopReason = response.metadata?.stopReason || 'end_turn';
+    const currentTurn = context?.currentTurn || 1;
+    const maxTurns = context?.maxTurns || 10;
+    
+    console.log(`🤔 [结束判断] 检查Agent是否应该继续:`, {
+      stopReason,
+      currentTurn,
+      maxTurns,
+      forceComplete: context?.forceComplete
+    });
+
+    // 🔧 强制完成模式
+    if (context?.forceComplete) {
+      return {
+        shouldContinue: false,
+        reason: 'force_complete',
+        nextAction: 'terminate'
+      };
+    }
+
+    // 🔧 达到最大轮次限制
+    if (currentTurn >= maxTurns) {
+      console.warn(`⚠️ [轮次限制] 达到最大对话轮次 ${maxTurns}`);
+      return {
+        shouldContinue: false,
+        reason: 'max_turns_reached',
+        nextAction: 'terminate'
+      };
+    }
+
+    // 🔧 根据Claude的stop_reason进行判断
+    switch (stopReason) {
+      case 'tool_use':
+        // Claude请求使用工具，需要继续对话
+        return {
+          shouldContinue: true,
+          reason: 'tool_use_required',
+          nextAction: 'execute_tools'
+        };
+
+      case 'max_tokens':
+        // Token限制，可能需要继续或者优化prompt
+        console.warn(`⚠️ [Token限制] 响应可能不完整`);
+        return {
+          shouldContinue: true,
+          reason: 'incomplete_due_to_tokens',
+          nextAction: 'continue_with_larger_context'
+        };
+
+      case 'end_turn':
+        // Claude自然结束回答
+        return {
+          shouldContinue: false,
+          reason: 'natural_completion',
+          nextAction: 'finalize'
+        };
+
+      case 'stop_sequence':
+        // 遇到停止序列
+        return {
+          shouldContinue: false,
+          reason: 'stop_sequence_triggered',
+          nextAction: 'finalize'
+        };
+
+      default:
+        // 未知停止原因，保守处理
+        console.warn(`⚠️ [未知停止原因] ${stopReason}`);
+        return {
+          shouldContinue: false,
+          reason: 'unknown_stop_reason',
+          nextAction: 'terminate'
+        };
+    }
+  }
+
+  /**
+   * 🎯 创建Agent完成响应（遵循Claude最佳实践）
    */
   protected createCompletionResponse(
     reply: string,
     nextAgent?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, any>,
+    completionReason?: string
   ): StreamableAgentResponse {
+    console.log(`🏁 [Agent完成] 创建完成响应:`, {
+      nextAgent,
+      completionReason,
+      replyLength: reply.length
+    });
+
     return this.createResponse({
       immediate_display: {
         reply,
@@ -162,13 +257,74 @@ export abstract class BaseAgent {
         timestamp: new Date().toISOString()
       },
       system_state: {
-        intent: 'completed',
+        intent: nextAgent ? 'advance' : 'complete',
         done: true,
-        next_agent: nextAgent,
-        metadata,
-        progress: 100
-      }
+        progress: 100,
+        current_stage: nextAgent ? `准备切换到${nextAgent}` : '任务完成',
+        metadata: {
+          completionReason: completionReason || 'natural_completion',
+          nextAgent,
+          finalResponse: true,
+          ...metadata
+        }
+      },
+      // 🎯 如果有下一个Agent，提供路由信息
+      ...(nextAgent && {
+        routing: {
+          nextAgent,
+          shouldAdvance: true,
+          context: metadata
+        }
+      })
     });
+  }
+
+  /**
+   * 🎯 处理Agent任务完成的标准流程
+   */
+  protected async finalizeAgentTask(
+    sessionData: SessionData,
+    result: any,
+    context?: Record<string, any>
+  ): Promise<StreamableAgentResponse> {
+    console.log(`🎯 [任务完成] ${this.name} 开始任务收尾`);
+
+    // 更新会话元数据
+    this.updateSessionMetadata(sessionData);
+    
+    // 标记任务完成
+    const metadata = sessionData.metadata as any;
+    metadata.lastCompletedAgent = this.name;
+    metadata.completionTimestamp = new Date().toISOString();
+    
+    // 确定下一步行动
+    const nextAgent = this.determineNextAgent(sessionData, result);
+    
+    if (nextAgent?.nextAgent) {
+      console.log(`🔄 [任务切换] 准备切换到下一个Agent: ${nextAgent.nextAgent}`);
+      return this.createCompletionResponse(
+        `✅ ${this.name}任务完成！正在为您准备下一步...`,
+        nextAgent.nextAgent,
+        {
+          handoverData: result,
+          transitionContext: context,
+          routingReasoning: nextAgent.reasoning,
+          confidence: nextAgent.confidence
+        },
+        'advance_to_next_agent'
+      );
+    } else {
+      console.log(`🏆 [完全完成] 所有任务已完成`);
+      return this.createCompletionResponse(
+        `🎉 太棒了！您的请求已经完成处理。`,
+        undefined,
+        {
+          finalResult: result,
+          processingComplete: true
+        },
+        'all_tasks_completed'
+      );
+    }
   }
 
   /**
@@ -457,10 +613,30 @@ export abstract class BaseAgent {
 
       if (useHistory && result.data) {
         const history = this.conversationHistory.get(sessionId)!;
-        const responseContent = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+        
+        let responseContent: string;
+        if (typeof result.data === 'object' && result.data.object) {
+          responseContent = JSON.stringify(result.data.object);
+        } else if (typeof result.data === 'object' && result.data.text) {
+          responseContent = result.data.text;
+        } else {
+          responseContent = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+        }
+        
         history.push({ role: 'assistant', content: responseContent });
         console.log(`💾 [历史保存] AI响应已保存到历史，新历史长度: ${history.length}`);
         console.log(`📄 [响应内容] ${responseContent.substring(0, 200)}...`);
+        
+        const stopReason = result.metadata?.stopReason || 'end_turn';
+        console.log(`🏁 [停止原因] ${stopReason}`);
+        
+        if (stopReason === 'max_tokens') {
+          console.warn(`⚠️ [Token限制] 响应可能被截断，考虑增加max_tokens或分段处理`);
+        } else if (stopReason === 'tool_use') {
+          console.log(`🔧 [工具调用] Claude请求使用工具，需要继续对话`);
+        } else if (stopReason === 'end_turn') {
+          console.log(`✅ [自然结束] Claude完成了回答`);
+        }
       }
 
       console.log(`✅ [调用成功] ${this.name} - AI 响应成功，数据类型: ${typeof result.data}`);

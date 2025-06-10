@@ -4,7 +4,7 @@
  */
 
 import { ToolExecutor, ToolExecutionResult, ToolConfig } from './types';
-import { toolService } from '@/lib/services/tool-service';
+import { githubService, webService, documentService, socialService } from '@/lib/services';
 import { toolRegistry } from './registry';
 
 /**
@@ -17,7 +17,7 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
     try {
       console.log(`🔧 [GitHub分析] 开始执行: ${params.username_or_url}`);
       
-      const result = await toolService.analyzeGitHub(
+      const result = await githubService.analyzeUser(
         params.username_or_url,
         params.include_repos ?? true
       );
@@ -43,7 +43,7 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
     try {
       console.log(`🌐 [网页抓取] 开始执行: ${params.url}`);
       
-      const result = await toolService.scrapeWebpage(
+      const result = await webService.scrapeWebpage(
         params.url,
         params.target_sections ?? ['all']
       );
@@ -60,7 +60,7 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
 
   extract_social_links: async (params: any): Promise<any> => {
     // 未来实现：专门的社交链接提取
-    const result = await toolService.scrapeWebpage(params.url, ['contact']);
+    const result = await webService.scrapeWebpage(params.url, ['contact']);
     return {
       ...result,
       focus: 'social_links_extraction',
@@ -79,7 +79,7 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
     try {
       console.log(`📄 [文档解析] 开始执行: ${params.file_type}`);
       
-      const result = await toolService.parseDocument(
+      const result = await documentService.parseDocument(
         params.file_data,
         params.file_type
       );
@@ -109,7 +109,7 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
     try {
       console.log(`💼 [LinkedIn提取] 开始执行: ${params.profile_url}`);
       
-      const result = await toolService.extractLinkedIn(params.profile_url);
+      const result = await socialService.extractLinkedIn(params.profile_url);
       
       const executionTime = Date.now() - startTime;
       console.log(`✅ [LinkedIn提取] 完成，耗时: ${executionTime}ms`);
@@ -127,13 +127,13 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
     
     if (platform_type === 'behance' || platform_type === 'dribbble') {
       // 设计平台处理
-      return await toolService.scrapeWebpage(platform_url, ['projects', 'about']);
+      return await webService.scrapeWebpage(platform_url, ['projects', 'about']);
     } else if (platform_type === 'medium' || platform_type === 'devto') {
       // 内容平台处理
-      return await toolService.scrapeWebpage(platform_url, ['about', 'skills']);
+      return await webService.scrapeWebpage(platform_url, ['about', 'skills']);
     } else {
       // 通用处理
-      return await toolService.scrapeWebpage(platform_url, ['all']);
+      return await webService.scrapeWebpage(platform_url, ['all']);
     }
   },
 

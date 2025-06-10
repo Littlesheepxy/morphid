@@ -1,5 +1,5 @@
 /**
- * Welcome Agent 工具函数、常量和类型定义
+ * Welcome Agent 工具函数和类型定义 - 简化版（仅大模型推荐）
  */
 
 // =================== 类型定义 ===================
@@ -16,53 +16,36 @@ export interface IntentResponse {
     suggestions: Record<string, {
       prompt_text: string;
       options: string[];
+      reasoning?: string;
     }>;
   };
-  completion_status: 'collecting' | 'optimizing' | 'ready';
+  completion_status: 'collecting' | 'ready';
   direction_suggestions: string[];
   smart_defaults: any;
 }
 
-export interface EnhancedWelcomeResponse {
-  reply: string;
-  analysis: {
-    confirmed_info: {
-      user_goal: string | null;
-      user_type: string | null;
-      style_preference: string | null;
-      urgency: string | null;
-    };
-    uncertain_info: {
-      user_goal_suggestions: string[];
-      user_type_suggestions: string[];
-      style_suggestions: string[];
-      context_questions: string[];
-    };
-  };
-  confidence: 'high' | 'medium' | 'low';
-  next_action: 'confirm_and_collect' | 'direct_proceed';
-  reasoning: string;
-  intent: string;
-  done: boolean;
-}
-
-export interface WelcomeResponse {
-  reply: string;
-  user_goal: string;
-  user_type: string;
-  confidence: 'high' | 'medium' | 'low';
-  intent: string;
-  done: boolean;
-}
-
 // =================== 常量配置 ===================
+
+/**
+ * 信息收集优先级定义
+ */
+export const FIELD_PRIORITIES: Record<string, number> = {
+  user_role: 1,      // 最高优先级
+  use_case: 2,       // 次高优先级  
+  style: 3,          // 第三优先级
+  highlight_focus: 4 // 最低优先级
+};
 
 export const FIELD_DISPLAY_NAMES: Record<string, string> = {
   user_role: '身份背景',
   use_case: '使用目的',
-  style: '风格偏好'
+  style: '风格偏好',
+  highlight_focus: '重点内容'
 };
 
+/**
+ * 自定义描述提示
+ */
 export const CUSTOM_DESCRIPTION_PROMPTS: Record<string, string> = {
   user_role: `好的！请用您自己的话详细描述一下您的身份和背景，比如：
 • 您的职业或专业领域
@@ -97,51 +80,20 @@ export const CUSTOM_DESCRIPTION_PROMPTS: Record<string, string> = {
 请具体描述您想要突出的方面！`
 };
 
-export const ICON_MAPS = {
-  goal: {
-    '求职': '🎯',
-    '作品展示': '🎨',
-    '找合作': '🤝',
-    '纯炫技': '💪',
-    '试试看': '👀',
-    '个人品牌': '✨',
-    '商务展示': '💼'
-  } as Record<string, string>,
-  type: {
-    'AI从业者': '🤖',
-    '设计师': '🎨',
-    '开发者': '💻',
-    '产品经理': '📊',
-    '创意人': '✨',
-    '学生求职者': '🎓',
-    '软件工程师': '⚙️',
-    '前端开发': '🖥️',
-    '后端开发': '🔧',
-    '全栈开发': '🔄'
-  } as Record<string, string>,
-  style: {
-    '极简禅意': '🎋',
-    '科技未来': '🚀',
-    '商务专业': '💼',
-    '创意炫酷': '🎆',
-    '温暖人文': '🌸',
-    '简约现代': '⚪',
-    '技术极客': '⚡'
-  } as Record<string, string>
-};
-
-// =================== 工具函数 ===================
+// =================== 辅助函数 ===================
 
 /**
- * 提取已收集的信息
+ * 从会话数据中提取已收集的信息
  */
 export function extractCollectedInfo(sessionData: any): any {
-  const intentData = sessionData.metadata?.intentData;
+  const metadata = sessionData.metadata || {};
+  const intentData = metadata.intentData || {};
+  
   return {
-    user_role: intentData?.user_role || null,
-    use_case: intentData?.use_case || null,
-    style: intentData?.style || null,
-    highlight_focus: intentData?.highlight_focus || []
+    user_role: intentData.user_role || null,
+    use_case: intentData.use_case || null,
+    style: intentData.style || null,
+    highlight_focus: intentData.highlight_focus || []
   };
 }
 
@@ -156,157 +108,107 @@ export function getConversationRound(sessionData: any): number {
  * 获取字段显示名称
  */
 export function getFieldDisplayName(field: string): string {
-  return FIELD_DISPLAY_NAMES[field] || '信息';
+  return FIELD_DISPLAY_NAMES[field] || field;
 }
 
 /**
- * 获取缺失字段
+ * 获取缺失字段列表（按优先级排序）
  */
 export function getMissingFields(info: any): string[] {
-  const required = ['user_role', 'use_case'];
-  return required.filter(field => !info[field] || info[field] === 'custom');
-}
-
-/**
- * 为指定字段生成建议选项
- */
-export function generateSuggestions(field: string): Record<string, { prompt_text: string; options: string[] }> {
-  const suggestions: Record<string, { prompt_text: string; options: string[] }> = {
-    user_role: {
-      prompt_text: '您的身份是？',
-      options: ['设计师', '开发者', '产品经理', '学生', '创业者', '自由职业者']
-    },
-    use_case: {
-      prompt_text: '您创建页面的主要目的是？',
-      options: ['求职简历', '作品展示', '个人品牌', '业务推广', '学术展示', '创意分享']
-    },
-    style: {
-      prompt_text: '您偏好的风格是？',
-      options: ['简约现代', '专业商务', '创意艺术', '技术极客', '温暖人文', '未来科技']
+  const allFields = Object.keys(FIELD_PRIORITIES);
+  const missingFields = allFields.filter(field => {
+    const value = info[field];
+    if (Array.isArray(value)) {
+      return value.length === 0;
     }
-  };
-  return { [field]: suggestions[field] || { prompt_text: '请选择', options: [] } };
+    return !value || value.trim() === '';
+  });
+  
+  // 按优先级排序
+  return missingFields.sort((a, b) => 
+    FIELD_PRIORITIES[a] - FIELD_PRIORITIES[b]
+  );
 }
 
 /**
- * 检测是否需要自定义描述
+ * 检查是否选择了自定义描述选项
  */
 export function checkForCustomDescription(data: any): { needsDescription: boolean; field?: string } {
-  if (data.user_role === '让我自己描述我的身份') {
-    return { needsDescription: true, field: 'user_role' };
+  for (const [field, value] of Object.entries(data)) {
+    if (typeof value === 'string' && (
+      value.includes('让我自己描述') || 
+      value.includes('我有其他') ||
+      value.includes('自定义')
+    )) {
+      return { needsDescription: true, field };
+    }
   }
-  if (data.use_case === '我有其他目的') {
-    return { needsDescription: true, field: 'use_case' };
-  }
-  if (data.style === '我有其他风格想法') {
-    return { needsDescription: true, field: 'style' };
-  }
-  if (data.highlight_focus === '我有其他想突出的亮点') {
-    return { needsDescription: true, field: 'highlight_focus' };
-  }
-  
-  // 兼容性检查
-  if (data.user_role === 'custom') {
-    return { needsDescription: true, field: 'user_role' };
-  }
-  if (data.use_case === 'custom') {
-    return { needsDescription: true, field: 'use_case' };
-  }
-  if (data.style === 'custom') {
-    return { needsDescription: true, field: 'style' };
-  }
-  
   return { needsDescription: false };
 }
 
 /**
- * 获取自定义描述的引导词
+ * 获取自定义描述提示
  */
 export function getCustomDescriptionPrompt(field: string): string {
-  return CUSTOM_DESCRIPTION_PROMPTS[field] || '请详细描述您的需求...';
+  return CUSTOM_DESCRIPTION_PROMPTS[field] || `请详细描述您的${getFieldDisplayName(field)}：`;
 }
 
 /**
- * 获取图标
- */
-export function getGoalIcon(goal: string): string {
-  return ICON_MAPS.goal[goal] || '📝';
-}
-
-export function getTypeIcon(type: string): string {
-  return ICON_MAPS.type[type] || '📝';
-}
-
-export function getStyleIcon(style: string): string {
-  return ICON_MAPS.style[style] || '🎨';
-}
-
-/**
- * 验证意图识别响应格式
+ * 验证意图响应格式
  */
 export function validateIntentResponse(response: any): IntentResponse {
-  if (!response.identified || !response.follow_up || !response.completion_status) {
-    throw new Error('响应格式不完整：缺少 identified、follow_up 或 completion_status');
+  // 基础验证
+  if (!response || typeof response !== 'object') {
+    throw new Error('Invalid response format');
   }
-
-  return {
+  
+  // 确保必要字段存在
+  const validated: IntentResponse = {
     identified: {
-      user_role: response.identified.user_role || null,
-      use_case: response.identified.use_case || null,
-      style: response.identified.style || null,
-      highlight_focus: response.identified.highlight_focus || []
+      user_role: response.identified?.user_role || null,
+      use_case: response.identified?.use_case || null,
+      style: response.identified?.style || null,
+      highlight_focus: Array.isArray(response.identified?.highlight_focus) 
+        ? response.identified.highlight_focus 
+        : []
     },
     follow_up: {
-      missing_fields: response.follow_up.missing_fields || [],
-      suggestions: response.follow_up.suggestions || {}
+      missing_fields: Array.isArray(response.follow_up?.missing_fields) 
+        ? response.follow_up.missing_fields 
+        : [],
+      suggestions: response.follow_up?.suggestions || {}
     },
-    completion_status: response.completion_status,
-    direction_suggestions: response.direction_suggestions || [],
+    completion_status: response.completion_status === 'ready' ? 'ready' : 'collecting',
+    direction_suggestions: Array.isArray(response.direction_suggestions) 
+      ? response.direction_suggestions 
+      : [],
     smart_defaults: response.smart_defaults || {}
   };
+  
+  return validated;
 }
 
 /**
  * 更新会话数据
  */
 export function updateSessionData(response: IntentResponse, sessionData: any): void {
-  // 确保有必要的数据结构
-  if (!sessionData.collectedData) {
-    sessionData.collectedData = {
-      personal: {},
-      professional: {} as any,
-      experience: [],
-      education: [],
-      projects: [],
-      certifications: []
-    } as any;
-  }
-
-  // 使用类型断言来扩展元数据
-  const metadata = sessionData.metadata as any;
-  if (!metadata) {
-    (sessionData as any).metadata = {
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastActive: new Date().toISOString(),
-      version: '1.0.0',
-      tags: [],
-      notes: '',
-      customFields: {}
-    };
+  if (!sessionData.metadata) {
+    sessionData.metadata = {};
   }
   
-  // 存储意图识别结果
-  const identified = response.identified;
-  (sessionData as any).metadata.intentData = {
-    user_role: identified.user_role,
-    use_case: identified.use_case,
-    style: identified.style,
-    highlight_focus: identified.highlight_focus
-  };
-
-  (sessionData as any).metadata.conversationRound = ((sessionData as any).metadata.conversationRound || 0) + 1;
-  (sessionData as any).metadata.completionStatus = response.completion_status;
+  // 更新意图数据
+  sessionData.metadata.intentData = response.identified;
+  
+  // 更新完成状态
+  sessionData.metadata.completionStatus = response.completion_status;
+  
+  // 增加对话轮次
+  sessionData.metadata.conversationRound = (sessionData.metadata.conversationRound || 0) + 1;
+  
+  // 保存方向建议
+  if (response.direction_suggestions.length > 0) {
+    sessionData.metadata.directionSuggestions = response.direction_suggestions;
+  }
 }
 
 /**

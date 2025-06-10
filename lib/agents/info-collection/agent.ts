@@ -198,25 +198,26 @@ export class InfoCollectionAgent extends BaseAgent {
       const userGoal = extractUserGoal(sessionData);
       const urgency = extractUrgency(sessionData);
       const collectionMode = determineCollectionMode(userGoal, urgency);
-
+      
       if (shouldAdvanceToDesign(newState, collectionMode)) {
         return {
-          action: 'advance',
-          materials: processedMaterials,
-          state: newState,
-          summary: `材料收集完成：${processedMaterials.documents.length}个文档，${processedMaterials.links.length}个链接`
-        };
-      } else {
-        return {
-          action: 'continue',
-          materials: processedMaterials,
-          state: newState,
-          summary: `材料已更新，完整度: ${Math.round(newState.completeness)}%`
+          status: 'completed',
+          data: processedMaterials,
+          message: '材料收集完成，准备进入设计阶段'
         };
       }
+
+      return {
+        status: 'continue',
+        data: processedMaterials,
+        message: '材料已收集，请继续提供更多材料'
+      };
     }
 
-    return data;
+    return {
+      status: 'unknown',
+      message: '未知的交互类型'
+    };
   }
 
   /**
@@ -231,73 +232,78 @@ export class InfoCollectionAgent extends BaseAgent {
     suggestedAction: string;
     naturalResponse: string;
   }> {
-    // 这里可以调用LLM进行意图分析
-    // 简化版本：基于关键词判断
-    const lowerInput = userInput.toLowerCase();
-    
-    if (lowerInput.includes('跳过') || lowerInput.includes('没有') || lowerInput.includes('先不')) {
-      return {
-        intent: 'skip',
-        confidence: 0.9,
-        suggestedAction: 'proceed_with_defaults',
-        naturalResponse: '好的，我理解您暂时没有这些材料。我们可以使用默认数据先创建一个基础版本！'
-      };
-    }
-    
-    if (lowerInput.includes('有') && (lowerInput.includes('链接') || lowerInput.includes('简历'))) {
-      return {
-        intent: 'provide_materials',
-        confidence: 0.8,
-        suggestedAction: 'show_upload_form',
-        naturalResponse: '太好了！请上传您的材料或提供相关链接，这样能让页面更加精准。'
-      };
-    }
-    
-    return {
-      intent: 'continue_collection',
-      confidence: 0.5,
-      suggestedAction: 'clarify_needs',
-      naturalResponse: '让我为您提供更详细的材料收集指南。'
+    console.log(`🧠 [AI增强意图理解] 开始分析用户输入: "${userInput}"`);
+
+    // 🆕 新架构：分离system prompt和用户输入
+    const systemPrompt = `你是材料收集阶段的意图理解专家。分析用户输入，判断他们的真实意图。
+
+## 分析任务：
+1. 判断用户的核心意图（skip/provide_materials/ask_question/continue_collection）
+2. 评估意图的置信度（0-1）
+3. 建议最合适的下一步行动
+4. 生成自然友好的回复
+
+## 输出格式：
+{
+  "intent": "用户意图分类",
+  "confidence": 置信度数值,
+  "suggestedAction": "建议的行动",
+  "naturalResponse": "自然的回复文本"
+}`;
+
+    const userInput_clean = userInput.trim();
+    const context = {
+      collected_info: sessionData.collectedData,
+      user_goal: extractUserGoal(sessionData),
+      user_type: extractUserType(sessionData),
+      urgency: extractUrgency(sessionData)
     };
+
+    const llmResponse = await this.callLLM(userInput_clean, {
+      system: systemPrompt,
+      schemaType: 'intentAnalysis',
+      maxTokens: 800,
+      sessionId: sessionData.id,
+      useHistory: false // 单次分析不需要历史
+    });
+
+    console.log(`🧠 [意图分析结果] ${JSON.stringify(llmResponse)}`);
+    
+    return llmResponse;
   }
 
   /**
-   * AI增强的处理流程
+   * 使用AI增强的处理流程
    */
   async* processWithAIEnhancement(
     input: { user_input: string },
     sessionData: SessionData
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     try {
-      // 智能意图理解
+      console.log(`🤖 [AI增强模式] 开始处理用户输入: "${input.user_input}"`);
+
+      // 步骤1: AI意图理解
+      yield this.createThinkingResponse('正在理解您的意图...', 35);
+      await delay(800);
+
       const intentAnalysis = await this.enhanceUserIntentUnderstanding(input.user_input, sessionData);
       
-      // 流式输出AI理解结果
-      yield this.createResponse({
-        immediate_display: {
-          reply: intentAnalysis.naturalResponse,
-          agent_name: this.name,
-          timestamp: new Date().toISOString()
-        },
-        system_state: {
-          intent: 'understanding',
-          done: false,
-          progress: 20,
-          current_stage: '理解需求中...'
-        }
-      });
-
-      await delay(1500);
-
-      // 根据意图执行相应动作
+      // 步骤2: 基于意图生成响应
       if (intentAnalysis.intent === 'skip') {
-        // 用户选择跳过，直接推进
-        const currentState = assessMaterialCollectionState(sessionData);
-        yield this.createAdvanceResponse(currentState, sessionData);
-      } else {
-        // 显示增强的材料收集表单
-        yield this.createEnhancedMaterialRequest(intentAnalysis, sessionData);
+        // 用户想跳过材料收集
+        yield this.createAdvanceResponse(
+          assessMaterialCollectionState(sessionData), 
+          sessionData
+        );
+        return;
       }
+
+      // 步骤3: 生成个性化的材料收集请求
+      yield this.createThinkingResponse('正在为您定制收集方案...', 45);
+      await delay(1000);
+
+      const materialRequest = this.createEnhancedMaterialRequest(intentAnalysis, sessionData);
+      yield materialRequest;
 
     } catch (error) {
       yield await this.handleError(error as Error, sessionData);
@@ -305,7 +311,7 @@ export class InfoCollectionAgent extends BaseAgent {
   }
 
   /**
-   * 创建增强的材料请求
+   * 创建增强的材料收集请求
    */
   private createEnhancedMaterialRequest(
     intentAnalysis: any, 
@@ -313,27 +319,28 @@ export class InfoCollectionAgent extends BaseAgent {
   ): StreamableAgentResponse {
     const userType = extractUserType(sessionData);
     const userGoal = extractUserGoal(sessionData);
-    const materialGuide = getMaterialGuide(userType);
     const currentState = assessMaterialCollectionState(sessionData);
+    const materialGuide = getMaterialGuide(userType);
 
     return this.createResponse({
       immediate_display: {
-        reply: `${intentAnalysis.naturalResponse}\n\n${generateMaterialRequestMessage(userType, userGoal, 'standard')}`,
+        reply: intentAnalysis.naturalResponse,
         agent_name: this.name,
         timestamp: new Date().toISOString()
       },
       interaction: {
         type: 'form',
-        title: '智能材料收集',
-        description: '基于您的需求，这些材料将最大化提升您的页面效果',
+        title: '材料收集 - AI定制版',
+        description: `基于您的${userType}身份和"${userGoal}"目标，我为您定制了以下收集方案：`,
         elements: buildMaterialCollectionElements(materialGuide, currentState)
       },
       system_state: {
         intent: 'collecting_materials_enhanced',
         done: false,
-        progress: 45,
-        current_stage: '智能材料收集',
+        progress: 50,
+        current_stage: 'AI增强材料收集',
         metadata: {
+          aiEnhanced: true,
           intentAnalysis,
           userType,
           userGoal

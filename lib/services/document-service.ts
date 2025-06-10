@@ -2,17 +2,58 @@
  * 文档处理服务 - 专门处理各类文档的解析和信息提取
  */
 
-import * as pdfParse from 'pdf-parse';
-import * as mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
+// @ts-nocheck
+// 运行时检查 - 确保只在服务端使用
+if (typeof window !== 'undefined') {
+  throw new Error('DocumentService 只能在服务端使用');
+}
+
+// 动态导入避免构建时问题
+let pdfParse: any;
+let mammoth: any;
+let XLSX: any;
+
+// 延迟加载依赖
+const loadDependencies = async () => {
+  if (!pdfParse) {
+    const [
+      pdfParseModule,
+      mammothModule,
+      xlsxModule,
+    ] = await Promise.all([
+      import('pdf-parse'),
+      import('mammoth'),
+      import('xlsx'),
+    ]);
+
+    pdfParse = pdfParseModule.default;
+    mammoth = mammothModule;
+    XLSX = xlsxModule;
+  }
+};
 
 export class DocumentService {
+  private isInitialized: boolean = false;
+
+  constructor() {
+    // 延迟初始化
+  }
+
+  private async initialize() {
+    if (!this.isInitialized) {
+      await loadDependencies();
+      this.isInitialized = true;
+    }
+  }
   
   /**
    * 解析文档
    */
   async parseDocument(fileData: string, fileType: string, options: any = {}): Promise<any> {
     try {
+      // 确保依赖已加载
+      await this.initialize();
+      
       console.log(`📄 [文档解析] 类型: ${fileType}`);
 
       const extractMode = options.extract_mode || 'general';
@@ -42,6 +83,9 @@ export class DocumentService {
    */
   async analyzePDFAdvanced(fileData: string, options: any = {}): Promise<any> {
     try {
+      // 确保依赖已加载
+      await this.initialize();
+      
       // 使用真实PDF解析
       const basicResult = await this.parsePDF(fileData, 'comprehensive');
       
@@ -79,7 +123,7 @@ export class DocumentService {
   private async parsePDF(fileData: string, extractMode: string): Promise<any> {
     try {
       const buffer = Buffer.from(fileData, 'base64');
-      const pdfData = await (pdfParse as any).default(buffer);
+      const pdfData = await pdfParse(buffer);
       
       // 分析PDF文本内容
       const analysisData = this.analyzeTextContent(pdfData.text, extractMode);
@@ -131,7 +175,7 @@ export class DocumentService {
   private async parseDocx(fileData: string, extractMode: string): Promise<any> {
     try {
       const buffer = Buffer.from(fileData, 'base64');
-      const result = await (mammoth as any).extractRawText({buffer});
+      const result = await mammoth.extractRawText({buffer});
       
       // 分析Word文档内容
       const analysisData = this.analyzeTextContent(result.value, extractMode);

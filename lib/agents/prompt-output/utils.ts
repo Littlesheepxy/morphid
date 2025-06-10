@@ -147,51 +147,71 @@ export function extractUserGoal(sessionData: any): string {
 }
 
 /**
- * 提取用户类型
+ * 智能提取用户类型 - 不再局限于预设分类
  */
 export function extractUserType(sessionData: any): string {
-  return sessionData.metadata?.intentData?.user_role || 
-         sessionData.personalization?.identity?.profession || 
-         'default';
+  const userRole = sessionData.metadata?.intentData?.user_role || 
+                  sessionData.personalization?.identity?.profession || 
+                  'unknown';
+  
+  // 返回原始用户描述，而不是映射到预设类型
+  return userRole;
 }
 
 /**
- * 确定页面布局
+ * 智能确定页面布局 - 基于数据分析而非硬编码规则
  */
 export function determineLayout(userGoal: string, userType: string, collectedData: any): LayoutType {
-  // 基于用户类型和目标选择最适合的布局
-  if (userType === '设计师' || userGoal === '作品展示') {
+  // 这里应该用更智能的分析，暂时保留基本逻辑作为fallback
+  // 实际上应该让LLM来决定最佳布局
+  
+  // 基于数据丰富度和用户目标进行智能判断
+  const hasProjects = collectedData?.projects?.length > 0;
+  const hasCreativeWork = collectedData?.creative_work?.length > 0;
+  const hasExtensiveExperience = collectedData?.experience?.length > 2;
+  
+  if (hasCreativeWork || userType.includes('设计') || userType.includes('创意')) {
     return 'portfolio_showcase';
   }
-  if (userType === '开发者' && collectedData?.projects?.length > 0) {
+  if (hasProjects && (userType.includes('开发') || userType.includes('技术'))) {
     return 'project_grid';
   }
-  if (userGoal === '求职') {
+  if (userGoal === '求职' || hasExtensiveExperience) {
     return 'classic_timeline';
   }
-  if (userType === '产品经理' || userType === '创业者') {
+  if (userType.includes('管理') || userType.includes('咨询') || userType.includes('商务')) {
     return 'professional_blocks';
   }
-  if (userType === '学生' || userType === '技术从业者') {
-    return 'modern_card';
-  }
-  return 'consultation_layout';
+  
+  // 默认现代卡片布局
+  return 'modern_card';
 }
 
 /**
- * 确定主题
+ * 智能确定主题 - 基于用户特征而非固定映射
  */
 export function determineTheme(userType: string, personalization?: any): ThemeType {
-  const themeMap: Record<string, ThemeType> = {
-    '开发者': 'tech_blue',
-    '设计师': 'creative_purple',
-    '产品经理': 'business_gray',
-    '学生': 'modern',
-    '创业者': 'vibrant_orange',
-    '咨询师': 'corporate'
-  };
-
-  return themeMap[userType] || 'classic';
+  // 基于关键词智能匹配，而不是硬编码
+  const lowerType = userType.toLowerCase();
+  
+  if (lowerType.includes('开发') || lowerType.includes('技术') || lowerType.includes('程序')) {
+    return 'tech_blue';
+  }
+  if (lowerType.includes('设计') || lowerType.includes('创意') || lowerType.includes('艺术')) {
+    return 'creative_purple';
+  }
+  if (lowerType.includes('商务') || lowerType.includes('管理') || lowerType.includes('咨询')) {
+    return 'business_gray';
+  }
+  if (lowerType.includes('学生') || lowerType.includes('学习')) {
+    return 'modern';
+  }
+  if (lowerType.includes('创业') || lowerType.includes('自由')) {
+    return 'vibrant_orange';
+  }
+  
+  // 默认经典主题
+  return 'classic';
 }
 
 /**
@@ -423,6 +443,10 @@ export function generateSectionContent(sectionType: string, collectedData: any, 
       return generateExperienceContent(collectedData?.experience || []);
     case 'contact':
       return generateContactContent(collectedData?.personal || {});
+    case 'social_links':
+      return generateSocialLinksContent(collectedData?.social || {}, collectedData?.links || []);
+    case 'external_links':
+      return generateExternalLinksContent(collectedData?.external_links || [], userType);
     default:
       return { type: sectionType, placeholder: true };
   }
@@ -490,6 +514,140 @@ export function generateContactContent(personal: any): any {
   };
 }
 
+/**
+ * 生成社交链接内容
+ */
+export function generateSocialLinksContent(social: any, links: any[]): any {
+  return {
+    social_links: social,
+    external_links: links,
+    displayType: 'buttons',
+    fallback_enabled: true
+  };
+}
+
+/**
+ * 生成外部链接内容 - 处理无法提取信息的链接
+ */
+export function generateExternalLinksContent(external_links: any[], userType: string): any {
+  return {
+    links: external_links.map((link: any) => ({
+      url: link.url,
+      title: link.title || extractTitleFromUrl(link.url),
+      platform: detectPlatformFromUrl(link.url),
+      display_mode: determineLinkDisplayMode(link.platform, userType),
+      extraction_failed: link.extraction_failed || false,
+      fallback_config: generateFallbackConfig(link.platform, link.url)
+    })),
+    show_as_buttons: true,
+    responsive_layout: true
+  };
+}
+
+/**
+ * 从URL提取标题
+ */
+function extractTitleFromUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.replace('www.', '');
+    return hostname.charAt(0).toUpperCase() + hostname.slice(1);
+  } catch {
+    return 'External Link';
+  }
+}
+
+/**
+ * 从URL检测平台类型
+ */
+function detectPlatformFromUrl(url: string): string {
+  const platformPatterns: Record<string, RegExp> = {
+    github: /github\.com/i,
+    linkedin: /linkedin\.com/i,
+    behance: /behance\.net/i,
+    dribbble: /dribbble\.com/i,
+    instagram: /instagram\.com/i,
+    twitter: /twitter\.com|x\.com/i,
+    tiktok: /tiktok\.com/i,
+    medium: /medium\.com/i,
+    youtube: /youtube\.com/i,
+    personal: /\.(com|net|org|io)$/i
+  };
+
+  for (const [platform, pattern] of Object.entries(platformPatterns)) {
+    if (pattern.test(url)) {
+      return platform;
+    }
+  }
+  return 'external';
+}
+
+/**
+ * 确定链接显示模式
+ */
+function determineLinkDisplayMode(platform: string, userType: string): 'button' | 'card' | 'iframe' {
+  // 基于平台和用户类型决定最佳显示模式
+  if (platform === 'behance' || platform === 'dribbble') {
+    return userType === '设计师' ? 'iframe' : 'card';
+  }
+  if (platform === 'github') {
+    return userType === '开发者' ? 'card' : 'button';
+  }
+  return 'button';
+}
+
+/**
+ * 生成fallback配置
+ */
+function generateFallbackConfig(platform: string, url: string): any {
+  const configs: Record<string, any> = {
+    github: {
+      button_text: 'View on GitHub',
+      icon: 'github',
+      theme: 'dark',
+      description: 'Check out my code repositories'
+    },
+    linkedin: {
+      button_text: 'Professional Profile',
+      icon: 'linkedin',
+      theme: 'blue',
+      description: 'Connect with me professionally'
+    },
+    behance: {
+      button_text: 'View Portfolio',
+      icon: 'behance',
+      theme: 'blue',
+      description: 'Explore my creative work'
+    },
+    dribbble: {
+      button_text: 'Design Shots',
+      icon: 'dribbble',
+      theme: 'pink',
+      description: 'See my design portfolio'
+    },
+    instagram: {
+      button_text: 'Follow Me',
+      icon: 'instagram',
+      theme: 'gradient',
+      description: 'Follow my creative journey'
+    },
+    twitter: {
+      button_text: 'Follow on X',
+      icon: 'twitter',
+      theme: 'black',
+      description: 'Join the conversation'
+    },
+    default: {
+      button_text: 'Visit Link',
+      icon: 'external-link',
+      theme: 'neutral',
+      description: 'Visit external link'
+    }
+  };
+
+  return configs[platform] || configs.default;
+}
+
 // =================== 辅助函数 ===================
 
 export function getLayoutDescription(layout: LayoutType): string {
@@ -514,52 +672,79 @@ export function getThemeDescription(theme: ThemeType): string {
 }
 
 export function getDesignFocus(userType: string, strategy: DesignStrategy): string {
-  const focusMap: Record<string, string> = {
-    '开发者': '突出技术能力和项目经验，展示代码质量和解决问题的能力',
-    '设计师': '重视视觉效果和创意展示，突出设计作品和美学能力',
-    '产品经理': '强调项目管理和商业思维，展示产品成功案例',
-    '学生': '展示学习能力和潜力，突出实践项目和技能成长',
-    '创业者': '突出创新思维和执行能力，展示商业成就',
-    'default': '平衡展示各方面能力，注重专业性和可信度'
-  };
-
-  return focusMap[userType] || focusMap.default;
+  const lowerType = userType.toLowerCase();
+  
+  // 基于关键词智能匹配设计重点
+  if (lowerType.includes('开发') || lowerType.includes('程序') || lowerType.includes('技术')) {
+    return '突出技术能力和项目经验，展示代码质量和解决问题的能力';
+  }
+  if (lowerType.includes('设计') || lowerType.includes('创意') || lowerType.includes('艺术')) {
+    return '重视视觉效果和创意展示，突出设计作品和美学能力';
+  }
+  if (lowerType.includes('产品') || lowerType.includes('管理')) {
+    return '强调项目管理和商业思维，展示产品成功案例';
+  }
+  if (lowerType.includes('学生') || lowerType.includes('学习')) {
+    return '展示学习能力和潜力，突出实践项目和技能成长';
+  }
+  if (lowerType.includes('创业') || lowerType.includes('自由')) {
+    return '突出创新思维和执行能力，展示商业成就';
+  }
+  
+  // 默认平衡展示
+  return '平衡展示各方面能力，注重专业性和可信度';
 }
 
 function getColorScheme(userType: string): string {
-  const colorMap: Record<string, string> = {
-    '开发者': 'blue-tech',
-    '设计师': 'purple-creative',
-    '产品经理': 'gray-professional',
-    '学生': 'green-fresh',
-    '创业者': 'orange-dynamic'
-  };
-  return colorMap[userType] || 'blue-classic';
+  const lowerType = userType.toLowerCase();
+  
+  if (lowerType.includes('开发') || lowerType.includes('技术')) return 'blue-tech';
+  if (lowerType.includes('设计') || lowerType.includes('创意')) return 'purple-creative';
+  if (lowerType.includes('商务') || lowerType.includes('管理')) return 'gray-professional';
+  if (lowerType.includes('学生') || lowerType.includes('学习')) return 'green-fresh';
+  if (lowerType.includes('创业') || lowerType.includes('自由')) return 'orange-dynamic';
+  
+  return 'blue-classic';
 }
 
 function getTypography(userType: string): string {
-  const fontMap: Record<string, string> = {
-    '开发者': 'mono-modern',
-    '设计师': 'sans-creative',
-    '产品经理': 'sans-professional',
-    '学生': 'sans-friendly',
-    '创业者': 'sans-bold'
-  };
-  return fontMap[userType] || 'sans-classic';
+  const lowerType = userType.toLowerCase();
+  
+  if (lowerType.includes('开发') || lowerType.includes('程序')) return 'mono-modern';
+  if (lowerType.includes('设计') || lowerType.includes('创意')) return 'sans-creative';
+  if (lowerType.includes('商务') || lowerType.includes('管理')) return 'sans-professional';
+  if (lowerType.includes('学生')) return 'sans-friendly';
+  if (lowerType.includes('创业')) return 'sans-bold';
+  
+  return 'sans-classic';
 }
 
 function getSkillsDisplayType(userType: string): string {
-  return userType === '开发者' ? 'progress-bars' : 'tags';
+  return userType.toLowerCase().includes('开发') ? 'progress-bars' : 'tags';
 }
 
 function getDefaultSkills(userType: string): string[] {
-  const skillsMap: Record<string, string[]> = {
-    '开发者': ['JavaScript', 'React', 'Node.js', 'TypeScript', 'Python'],
-    '设计师': ['Figma', 'Photoshop', 'UI/UX设计', '原型设计', '品牌设计'],
-    '产品经理': ['产品规划', '需求分析', '项目管理', '数据分析', '用户研究'],
-    'default': ['沟通能力', '团队合作', '问题解决', '学习能力', '创新思维']
-  };
-  return skillsMap[userType] || skillsMap.default;
+  const lowerType = userType.toLowerCase();
+  
+  // 基于关键词智能匹配默认技能
+  if (lowerType.includes('开发') || lowerType.includes('程序') || lowerType.includes('技术')) {
+    return ['JavaScript', 'React', 'Node.js', 'TypeScript', 'Python'];
+  }
+  if (lowerType.includes('设计') || lowerType.includes('创意') || lowerType.includes('艺术')) {
+    return ['Figma', 'Photoshop', 'UI/UX设计', '原型设计', '品牌设计'];
+  }
+  if (lowerType.includes('产品') || lowerType.includes('管理')) {
+    return ['产品规划', '需求分析', '项目管理', '数据分析', '用户研究'];
+  }
+  if (lowerType.includes('营销') || lowerType.includes('运营')) {
+    return ['数字营销', '内容策划', '用户增长', '数据分析', '品牌建设'];
+  }
+  if (lowerType.includes('数据') || lowerType.includes('分析')) {
+    return ['数据分析', 'SQL', 'Python', '数据可视化', '机器学习'];
+  }
+  
+  // 通用软技能
+  return ['沟通能力', '团队合作', '问题解决', '学习能力', '创新思维'];
 }
 
 function getDefaultProjects(userType: string): any[] {
