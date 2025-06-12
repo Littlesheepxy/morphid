@@ -111,7 +111,40 @@ export const INTENT_RECOGNITION_PROMPT = `你是一个专业的意图识别专�
 4. **置信度评估**：为每个识别结果提供置信度评分
 5. **推理透明**：在extraction_notes中说明推理过程
 
-现在请根据用户输入进行精准的意图识别和信息提取：`;
+现在请根据用户输入进行精准的意图识别和信息提取。
+
+## ⚠️ 重要输出格式要求：
+**必须严格按照以下格式输出，不得有任何偏差：**
+
+1. 必须使用 \`\`\`json 代码块包围JSON内容
+2. JSON必须严格符合上述schema结构  
+3. 不要添加任何额外的文字说明
+4. 确保JSON语法正确，可以被解析
+
+**输出示例模板：**
+\`\`\`json
+{
+  "identified": {
+    "user_role": "具体的身份描述或null",
+    "use_case": "具体的目的描述或null", 
+    "style": "具体的风格描述或null",
+    "highlight_focus": []
+  },
+  "recognition_confidence": {
+    "user_role": 0.0,
+    "use_case": 0.0,
+    "style": 0.0,
+    "highlight_focus": 0.0
+  },
+  "missing_fields": [],
+  "next_collection_priority": "字段名或null",
+  "completion_status": "collecting或ready",
+  "user_input_type": "具体类型",
+  "extraction_notes": "具体说明"
+}
+\`\`\`
+
+请现在开始分析并输出：`;
 
 // ================================
 // 🎨 Prompt 2: 推荐引导专家  
@@ -236,7 +269,40 @@ export const RECOMMENDATION_GUIDE_PROMPT = `你是一个专业的推荐引导专
 4. **逻辑清晰**：推荐有明确的逻辑依据
 5. **价值导向**：每个选项都要体现对用户的价值
 
-现在请基于识别结果生成个性化推荐和引导：`;
+现在请基于识别结果生成个性化推荐和引导。
+
+## ⚠️ 重要输出格式要求：
+**必须严格按照以下格式输出，不得有任何偏差：**
+
+1. 必须使用 \`\`\`json 代码块包围JSON内容
+2. JSON必须严格符合上述schema结构
+3. 不要添加任何额外的文字说明
+4. 确保JSON语法正确，可以被解析
+
+**输出示例模板：**
+\`\`\`json
+{
+  "guide_response": {
+    "prompt_text": "个性化的引导话术",
+    "recommendations": {
+      "options": ["选项1", "选项2", "选项3", "✍️ 自己描述"],
+      "reasoning": "推荐逻辑说明",
+      "personalization_notes": "个性化说明"
+    }
+  },
+  "conversation_context": {
+    "current_field": "当前字段",
+    "progress_percentage": 50,
+    "next_steps": "下一步指引"
+  },
+  "smart_suggestions": {
+    "why_these_options": "推荐理由",
+    "user_benefits": "用户好处"
+  }
+}
+\`\`\`
+
+请现在开始分析并输出：`;
 
 // ================================
 // 📋 配置信息

@@ -27,7 +27,9 @@ import {
 } from '@/lib/types/streaming';
 import { SessionData, ConversationEntry } from '@/lib/types/session';
 import { MessageBubble } from './MessageBubble';
-import { UnifiedLoading, ThinkingLoader } from '@/components/ui/unified-loading';
+import { UnifiedLoading, ThinkingLoader, GeneratingLoader } from '@/components/ui/unified-loading';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { LoadingCarousel, LOADING_SEQUENCES } from '@/components/ui/loading-carousel';
 
 interface ChatInterfaceProps {
   sessionId?: string;
@@ -45,6 +47,14 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [currentLoadingMessage, setCurrentLoadingMessage] = useState<{
+    content: string;
+    type: string;
+    sequence?: string;
+    stage?: string;
+    sender: string;
+    agent: string;
+  } | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -106,8 +116,31 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     }
   };
 
-  const sendMessage = async (message: string) => {
-    if (!sessionId || !message.trim() || isStreaming) return;
+  const sendMessage = async (message: string, options?: any) => {
+    if (!sessionId || (!message.trim() && !options) || isStreaming) return;
+
+    // 🔧 修复：处理带有特殊选项的消息（如loading状态）
+    if (options && (options.type === 'system_loading' || options.type === 'system_loading_carousel' || options.type === 'system_error' || options.type === 'system_success')) {
+      // 这些是临时状态消息，不应该添加到永久聊天记录中
+      // 而应该通过临时状态显示
+      setCurrentLoadingMessage({
+        content: message,
+        type: options.type,
+        sequence: options.sequence,
+        stage: options.stage,
+        sender: options.sender || 'assistant',
+        agent: options.agent || 'system'
+      });
+      
+      // 自动清除loading消息（除非是错误消息）
+      if (options.type === 'system_loading' || options.type === 'system_loading_carousel') {
+        const duration = options.type === 'system_loading_carousel' ? 4000 : 3000;
+        setTimeout(() => {
+          setCurrentLoadingMessage(null);
+        }, duration);
+      }
+      return;
+    }
 
     // 添加用户消息到界面
     const userMessage: ConversationEntry = {
@@ -115,7 +148,7 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
       timestamp: new Date(),
       type: 'user_message',
       content: message,
-      metadata: {}
+      metadata: options || {}
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -264,14 +297,18 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     const isUser = message.type === 'user_message';
     const isLast = messages[messages.length - 1]?.id === message.id;
     
+    // 🔧 修复：保留原始的sender和agent信息
+    const messageData = {
+      sender: message.metadata?.sender || (isUser ? 'user' : 'assistant'),
+      agent: message.metadata?.agent || (isUser ? 'user' : message.agent || 'system'),
+      content: message.content,
+      metadata: message.metadata
+    };
+    
     return (
       <MessageBubble
         key={message.id}
-        message={{
-          sender: isUser ? 'user' : 'agent',
-          content: message.content,
-          metadata: message.metadata
-        }}
+        message={messageData}
         isLast={isLast}
         isGenerating={isLast && isStreaming && !isUser}
         isStreaming={isLast && isStreaming && !isUser}
@@ -330,6 +367,44 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
               response={currentAgentResponse}
               onInteraction={handleUserInteraction}
             />
+          )}
+          
+          {/* 🎯 临时Loading消息 - 轮播和光照扫描UI */}
+          {currentLoadingMessage && (
+            <>
+              {currentLoadingMessage.type === 'system_loading_carousel' ? (
+                <LoadingCarousel
+                  messages={LOADING_SEQUENCES[currentLoadingMessage.sequence as keyof typeof LOADING_SEQUENCES] || LOADING_SEQUENCES.INTERACTION_PROCESSING}
+                  onComplete={() => setCurrentLoadingMessage(null)}
+                />
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="flex items-start gap-4 max-w-4xl mx-auto px-6 py-4"
+                >
+                  {/* AI头像 */}
+                  <Avatar className="w-8 h-8 shrink-0">
+                    <AvatarFallback className="bg-gray-100 text-gray-600">
+                      <Sparkles className="w-4 h-4" />
+                    </AvatarFallback>
+                  </Avatar>
+
+                  {/* Loading消息内容 - 带光照扫描效果 */}
+                  <div className="flex-1">
+                    <div className="inline-block max-w-full text-gray-800">
+                      <div className="whitespace-pre-wrap break-words">
+                        <GeneratingLoader 
+                          text={currentLoadingMessage.content.replace('...', '')}
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </>
           )}
           
           {/* 错误提示 */}

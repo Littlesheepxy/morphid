@@ -1,0 +1,58 @@
+{
+  "id": "test-1749696355848",
+  "status": "active",
+  "userIntent": {
+    "type": "career_guidance",
+    "target_audience": "internal_review",
+    "urgency": "exploring",
+    "primary_goal": "了解需求"
+  },
+  "personalization": {
+    "identity": {
+      "profession": "other",
+      "experience_level": "mid"
+    },
+    "preferences": {
+      "style": "modern",
+      "tone": "professional",
+      "detail_level": "detailed"
+    },
+    "context": {}
+  },
+  "collectedData": {
+    "personal": {},
+    "professional": {
+      "skills": []
+    },
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "achievements": [],
+    "certifications": []
+  },
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2025-06-12T02:46:22.094Z",
+    "updatedAt": "2025-06-12T02:46:22.094Z",
+    "lastActive": "2025-06-12T02:46:22.094Z",
+    "version": "1.0.0",
+    "progress": {
+      "currentStage": "welcome",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 0,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": false,
+      "privacyLevel": "private"
+    }
+  }
+}

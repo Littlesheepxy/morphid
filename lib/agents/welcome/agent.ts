@@ -126,13 +126,36 @@ async function recognizeUserIntent(
     const response = 'text' in result ? result.text : 
                     'object' in result ? JSON.stringify(result.object) : '';
 
-    // 解析JSON响应
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+    // 解析JSON响应 - 增强的容错逻辑
+    let jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+    
+    // 如果没有找到标准JSON块，尝试其他格式
     if (!jsonMatch) {
+      // 尝试匹配没有语言标识的代码块
+      jsonMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+      
+             // 如果还是没有，尝试直接提取JSON对象
+       if (!jsonMatch) {
+         const directJsonMatch = response.match(/\{[\s\S]*\}/);
+         if (directJsonMatch) {
+           jsonMatch = ['', directJsonMatch[0]];
+         }
+       }
+    }
+    
+    if (!jsonMatch) {
+      console.error('无法解析的响应内容:', response);
       throw new Error('意图识别响应格式不正确，未找到JSON块');
     }
 
-    const intentResult = JSON.parse(jsonMatch[1]) as IntentRecognitionResult;
+    let intentResult: IntentRecognitionResult;
+    try {
+      intentResult = JSON.parse(jsonMatch[1]) as IntentRecognitionResult;
+    } catch (parseError) {
+      console.error('JSON解析失败:', parseError);
+      console.error('原始JSON内容:', jsonMatch[1]);
+      throw new Error('意图识别JSON解析失败');
+    }
     
     // 验证结果结构
     if (!intentResult.identified || !intentResult.completion_status) {
@@ -200,13 +223,36 @@ async function generateRecommendationGuide(
     const response = 'text' in result ? result.text : 
                     'object' in result ? JSON.stringify(result.object) : '';
 
-    // 解析JSON响应
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+    // 解析JSON响应 - 增强的容错逻辑
+    let jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+    
+    // 如果没有找到标准JSON块，尝试其他格式
     if (!jsonMatch) {
+      // 尝试匹配没有语言标识的代码块
+      jsonMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+      
+      // 如果还是没有，尝试直接提取JSON对象
+      if (!jsonMatch) {
+        const directJsonMatch = response.match(/\{[\s\S]*\}/);
+        if (directJsonMatch) {
+          jsonMatch = ['', directJsonMatch[0]];
+        }
+      }
+    }
+    
+    if (!jsonMatch) {
+      console.error('无法解析的推荐引导响应内容:', response);
       throw new Error('推荐引导响应格式不正确，未找到JSON块');
     }
 
-    const guideResult = JSON.parse(jsonMatch[1]) as RecommendationGuideResult;
+    let guideResult: RecommendationGuideResult;
+    try {
+      guideResult = JSON.parse(jsonMatch[1]) as RecommendationGuideResult;
+    } catch (parseError) {
+      console.error('推荐引导JSON解析失败:', parseError);
+      console.error('原始JSON内容:', jsonMatch[1]);
+      throw new Error('推荐引导JSON解析失败');
+    }
     
     // 验证结果结构
     if (!guideResult.guide_response || !guideResult.conversation_context) {
@@ -225,7 +271,7 @@ async function generateRecommendationGuide(
     
     return {
       guide_response: {
-        prompt_text: "让我来为您推荐一些选项，请选择最适合的：",
+        prompt_text: "",  // 避免重复显示，让WelcomeAgent处理文本
         recommendations: {
           options: defaultOptions,
           reasoning: `推荐引导出错: ${errorMessage}, 使用默认选项`,
@@ -532,13 +578,15 @@ export class WelcomeAgent extends BaseAgent {
       throw new Error(`AI未能为字段 ${currentField} 生成推荐选项`);
     }
 
-    // 构建AI推荐的回复消息
+    // 构建AI推荐的回复消息 - 完全避免重复
     const progressInfo = this.buildProgressInfo(result.identified);
     let replyMessage = progressInfo ? `${progressInfo}\n\n` : '';
     
-    replyMessage += `🤖 ${fieldSuggestion.prompt_text}`;
+    // 简化消息内容，避免与AI生成的prompt_text重复
+    replyMessage += `🤖 请选择最适合您的选项：`;
     
-    if (fieldSuggestion.reasoning) {
+    // 仅在有明确推荐理由时才显示
+    if (fieldSuggestion.reasoning && !fieldSuggestion.reasoning.includes('推荐引导出错')) {
       replyMessage += `\n\n💭 AI推荐理由：${fieldSuggestion.reasoning}`;
     }
 
@@ -552,12 +600,12 @@ export class WelcomeAgent extends BaseAgent {
       replyMessage,
       {
         type: 'form',
-        title: fieldSuggestion.prompt_text,
+        title: "", // 避免重复显示标题
         description: `选择最符合您的${fieldDisplayName}，或选择自定义选项`,
         elements: [{
           id: currentField,
           type: 'select',
-          label: fieldSuggestion.prompt_text,
+          label: "", // 避免重复显示标签
           options: options,
           required: true
         }],

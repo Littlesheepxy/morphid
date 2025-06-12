@@ -1,0 +1,66 @@
+{
+  "id": "session-1749693148166-bp7iq4hks",
+  "status": "active",
+  "userIntent": {
+    "type": "career_guidance",
+    "target_audience": "internal_review",
+    "urgency": "exploring",
+    "primary_goal": "创建个人页面"
+  },
+  "personalization": {
+    "identity": {
+      "profession": "other",
+      "experience_level": "mid"
+    },
+    "preferences": {
+      "style": "modern",
+      "tone": "professional",
+      "detail_level": "detailed"
+    },
+    "context": {}
+  },
+  "collectedData": {
+    "personal": {},
+    "professional": {
+      "skills": []
+    },
+    "experience": [],
+    "education": [],
+    "projects": [],
+    "achievements": [],
+    "certifications": []
+  },
+  "conversationHistory": [],
+  "agentFlow": [],
+  "metadata": {
+    "createdAt": "2025-06-12T01:52:28.170Z",
+    "updatedAt": "2025-06-12T01:53:05.327Z",
+    "lastActive": "2025-06-12T01:53:05.327Z",
+    "version": "1.0.0",
+    "progress": {
+      "currentStage": "welcome",
+      "completedStages": [],
+      "totalStages": 4,
+      "percentage": 0
+    },
+    "metrics": {
+      "totalTime": 0,
+      "userInteractions": 4,
+      "agentTransitions": 0,
+      "errorsEncountered": 0
+    },
+    "settings": {
+      "autoSave": true,
+      "reminderEnabled": false,
+      "privacyLevel": "private"
+    },
+    "intentData": {
+      "user_role": null,
+      "use_case": null,
+      "style": null,
+      "highlight_focus": []
+    },
+    "conversationRound": 8,
+    "completionStatus": "collecting"
+  }
+}

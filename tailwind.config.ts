@@ -300,12 +300,18 @@ const config: Config = {
 			},
 			'brand-loading-scan': {
 				'0%': {
-					transform: 'translateX(-100%)',
-					background: 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.3) 20%, rgba(6, 182, 212, 0.6) 60%, transparent 100%)'
+					transform: 'translateX(-100%)'
 				},
 				'100%': {
-					transform: 'translateX(100%)',
-					background: 'linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.3) 20%, rgba(6, 182, 212, 0.6) 60%, transparent 100%)'
+					transform: 'translateX(100%)'
+				}
+			},
+			'white-shimmer': {
+				'0%': {
+					transform: 'translateX(-100%)'
+				},
+				'100%': {
+					transform: 'translateX(100%)'
 				}
 			},
 			'brand-ripple': {
@@ -352,6 +358,7 @@ const config: Config = {
 			'brand-slide-out': 'brand-slide-out 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
 			'brand-bounce': 'brand-bounce 1s infinite',
 			'brand-loading-scan': 'brand-loading-scan 2s linear infinite',
+			'white-shimmer': 'white-shimmer 1.5s ease-in-out infinite',
 			'brand-ripple': 'brand-ripple 0.6s linear',
 			'message-slide-in': 'message-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
 			'glass-shimmer': 'glass-shimmer 2s linear infinite',

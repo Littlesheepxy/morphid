@@ -435,6 +435,16 @@ html::-webkit-scrollbar-thumb:hover {
   }
 }
 
+/* 🎨 ChatGPT风格的白光扫描动画 */
+@keyframes white-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 /* 🎨 品牌动画类 */
 .animate-brand-shimmer {
   animation: brand-shimmer 2s infinite;

@@ -74,12 +74,15 @@ export function UnifiedLoading({
     >
       {displayText}
       
-      {/* 文字光照扫描效果 */}
+      {/* ChatGPT风格的白光扫描效果 - 优化版 */}
       <div 
-        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer"
+        className="absolute inset-0"
         style={{
-          width: '30%',
-          height: '100%'
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0) 65%, transparent 100%)',
+          width: '200%',
+          height: '100%',
+          left: '-100%',
+          animation: 'white-shimmer 1.5s ease-in-out infinite'
         }}
       />
     </motion.span>
@@ -114,7 +117,17 @@ export function SimpleTextLoader({
   return (
     <span className={cn('relative inline-block overflow-hidden text-gray-600', className)}>
       {text}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+      {/* ChatGPT风格的白光扫描效果 - 优化版 */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0) 35%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0) 65%, transparent 100%)',
+          width: '200%',
+          height: '100%',
+          left: '-100%',
+          animation: 'white-shimmer 1.5s ease-in-out infinite'
+        }}
+      />
     </span>
   );
 } 

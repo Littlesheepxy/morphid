@@ -56,30 +56,17 @@ export function MessageBubble({
     setIsSubmitting(true);
     
     try {
-      // 🎯 UX优化：立即显示加载状态，并确保显示为系统消息
+      // 🎯 UX优化：显示轮播loading状态
       if (onSendMessage) {
-        onSendMessage('正在分析您的选择，请稍候...', { 
-          type: 'system_loading',
-          stage: 'processing_interaction',
+        onSendMessage('', { 
+          type: 'system_loading_carousel',
+          sequence: 'INTERACTION_PROCESSING',
           sender: 'assistant', // 🔧 明确标识为助手消息
           agent: 'system' // 🔧 添加agent字段确保正确识别
         });
       }
 
-      // 稍微延迟一下，让用户看到第一个状态
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 显示第二个状态
-      if (onSendMessage) {
-        onSendMessage('正在为您生成个性化建议...', { 
-          type: 'system_loading',
-          stage: 'generating_suggestions',
-          sender: 'assistant',
-          agent: 'system'
-        });
-      }
-
-      // 🔧 修复：使用传入的sessionId
+      // 🔧 修复：使用传入的sessionId，只发送实际的用户选择数据
       const response = await fetch('/api/chat/interact', {
         method: 'POST',
         headers: {
@@ -88,7 +75,7 @@ export function MessageBubble({
         body: JSON.stringify({
           sessionId: sessionId || 'default',
           interactionType: 'interaction',
-          data: formData
+          data: formData // 只发送用户的实际选择，不发送loading状态
         })
       });
 
@@ -330,13 +317,37 @@ export function MessageBubble({
                 );
               }
               
+              // 🔧 智能去重处理：避免重复显示相同内容
+              let displayContent = message.content;
+              
+              // 检查是否有重复的句子或段落
+              if (displayContent && typeof displayContent === 'string') {
+                const lines = displayContent.split('\n');
+                const uniqueLines = [];
+                const seenLines = new Set();
+                
+                for (const line of lines) {
+                  const cleanLine = line.trim();
+                  if (cleanLine && !seenLines.has(cleanLine)) {
+                    uniqueLines.push(line);
+                    seenLines.add(cleanLine);
+                  } else if (!cleanLine) {
+                    // 保留空行
+                    uniqueLines.push(line);
+                  }
+                }
+                
+                displayContent = uniqueLines.join('\n');
+              }
+              
               // 正常显示内容
-              return message.content;
+              return displayContent;
             })()}
           </div>
 
-          {/* 选项按钮 - 简约设计 */}
-          {!actualIsUser && message.metadata?.options && onSendMessage && (
+          {/* 选项按钮 - 已禁用，使用新的交互表单系统 */}
+          {/* 🔧 修复：不再使用老的快速选项按钮，避免发送不必要的用户消息 */}
+          {/* {!actualIsUser && message.metadata?.options && onSendMessage && (
             <div className="mt-3 flex flex-wrap gap-2">
               {message.metadata.options.map((option: any, index: number) => (
                 <Button
@@ -352,7 +363,7 @@ export function MessageBubble({
                 </Button>
               ))}
             </div>
-          )}
+          )} */}
 
           {/* 🔧 修复：智能确认表单 - 简约设计 */}
           {!actualIsUser && message.metadata?.interaction && (contentComplete || showInteraction) && (
@@ -362,9 +373,13 @@ export function MessageBubble({
               transition={{ duration: 0.3 }}
               className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200"
             >
-              <h4 className="font-medium text-gray-900 mb-3">
-                {message.metadata.interaction.title}
-              </h4>
+              {/* 只有当交互标题与消息内容不同时才显示标题 */}
+              {message.metadata.interaction.title && 
+               message.metadata.interaction.title !== message.content && (
+                <h4 className="font-medium text-gray-900 mb-3">
+                  {message.metadata.interaction.title}
+                </h4>
+              )}
               
               {/* 如果表单正在准备中 */}
               {!showInteraction && message.metadata?.interaction && (
@@ -392,20 +407,24 @@ export function MessageBubble({
                       transition={{ delay: 0.1 * index }}
                       className="space-y-2"
                     >
-                      <label className="block text-sm font-medium text-gray-700">
-                        {element.label}
-                        {element.required && <span className="text-red-500 ml-1">*</span>}
-                      </label>
+                      {/* 只有当标签与消息内容不同时才显示标签 */}
+                      {element.label && 
+                       !message.content.includes(element.label) && (
+                        <label className="block text-sm font-medium text-gray-700">
+                          {element.label}
+                          {element.required && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                      )}
                       
                       {element.type === 'select' && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
-                            <Sparkles className="w-3 h-3" />
-                            <span>以下是AI为您生成的个性化建议</span>
+                          <div className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50/80 backdrop-blur-sm border border-emerald-200/60 px-2.5 py-1 rounded-full">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>AI个性化建议</span>
                           </div>
                           
-                          {/* 按钮选项 - 简约设计，品牌色仅用于边框 */}
-                          <div className="grid grid-cols-2 gap-2">
+                          {/* 胶囊状毛玻璃按钮 - 更小更简洁 */}
+                          <div className="flex flex-wrap gap-2">
                             {element.options?.map((option: any, optIndex: number) => {
                               const isSelected = formData[element.id] === option.value;
                               return (
@@ -415,27 +434,29 @@ export function MessageBubble({
                                   initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
                                   transition={{ delay: 0.05 * optIndex }}
-                                  whileHover={{ scale: 1.02 }}
+                                  whileHover={{ scale: 1.05, y: -1 }}
                                   whileTap={{ scale: 0.98 }}
                                   onClick={() => handleInputChange(element.id, option.value)}
                                   className={`
-                                    p-3 text-sm text-left border-2 rounded-lg transition-all duration-200
-                                    hover:shadow-md
+                                    px-3 py-1.5 text-xs font-medium rounded-full 
+                                    backdrop-blur-md border transition-all duration-300
+                                    hover:shadow-lg hover:shadow-emerald-200/50
                                     ${isSelected 
-                                      ? 'border-emerald-400 bg-emerald-50 text-gray-900 shadow-sm' 
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300'
+                                      ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-800 shadow-md backdrop-blur-lg' 
+                                      : 'bg-white/60 border-gray-200/60 text-gray-700 hover:bg-emerald-50/80 hover:border-emerald-300/60'
                                     }
                                   `}
                                 >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium">{option.label}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{option.label}</span>
                                     {isSelected && (
-                                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                      <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="w-1.5 h-1.5 bg-emerald-600 rounded-full"
+                                      />
                                     )}
                                   </div>
-                                  {option.description && (
-                                    <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                                  )}
                                 </motion.button>
                               );
                             })}
@@ -448,23 +469,25 @@ export function MessageBubble({
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.3 }}
+                              whileHover={{ scale: 1.02, y: -1 }}
+                              whileTap={{ scale: 0.98 }}
                               onClick={() => {
                                 setFormData(prev => ({ ...prev, [`${element.id}_isCustom`]: !prev[`${element.id}_isCustom`] }));
                               }}
                               className={`
-                                w-full p-3 text-sm text-left border-2 border-dashed rounded-lg transition-all duration-200
+                                inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium 
+                                rounded-full border-dashed backdrop-blur-md border transition-all duration-300
+                                hover:shadow-lg hover:shadow-emerald-200/50
                                 ${formData[`${element.id}_isCustom`] 
-                                  ? 'border-emerald-300 bg-emerald-50 text-gray-700' 
-                                  : 'border-gray-300 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50'
+                                  ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-800 backdrop-blur-lg' 
+                                  : 'border-gray-300/60 bg-white/60 text-gray-600 hover:border-emerald-300/60 hover:bg-emerald-50/80'
                                 }
                               `}
                             >
-                              <div className="flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span>添加自定义选项</span>
-                              </div>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span>自定义</span>
                             </motion.button>
                             
                             {/* 自定义输入框 */}
@@ -566,9 +589,9 @@ export function MessageBubble({
                       
                       {element.type === 'input' && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
-                            <Sparkles className="w-3 h-3" />
-                            <span>请填写您的具体信息</span>
+                          <div className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50/80 backdrop-blur-sm border border-emerald-200/60 px-2.5 py-1 rounded-full">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>请填写信息</span>
                           </div>
                           
                           <motion.div
@@ -581,7 +604,7 @@ export function MessageBubble({
                               value={formData[element.id] || ''}
                               onChange={(e) => handleInputChange(element.id, e.target.value)}
                               placeholder={element.placeholder || `请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                              className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white hover:border-gray-300"
+                              className="w-full px-3 py-2 text-sm border border-gray-200/60 rounded-full focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white/90 backdrop-blur-sm hover:border-gray-300/60"
                             />
                           </motion.div>
                         </div>
@@ -589,13 +612,13 @@ export function MessageBubble({
                       
                       {element.type === 'checkbox' && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-lg">
-                            <Sparkles className="w-3 h-3" />
-                            <span>可多选，以下是AI为您生成的个性化建议</span>
+                          <div className="inline-flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50/80 backdrop-blur-sm border border-emerald-200/60 px-2.5 py-1 rounded-full">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>可多选・AI建议</span>
                           </div>
                           
-                          {/* 按钮选项 */}
-                          <div className="grid grid-cols-2 gap-2">
+                          {/* 胶囊状毛玻璃多选按钮 */}
+                          <div className="flex flex-wrap gap-2">
                             {element.options?.map((option: any, optIndex: number) => {
                               const currentValues = formData[element.id] || [];
                               const isSelected = currentValues.includes(option.value);
@@ -606,7 +629,7 @@ export function MessageBubble({
                                   initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
                                   transition={{ delay: 0.05 * optIndex }}
-                                  whileHover={{ scale: 1.02 }}
+                                  whileHover={{ scale: 1.05, y: -1 }}
                                   whileTap={{ scale: 0.98 }}
                                   onClick={() => {
                                     if (isSelected) {
@@ -616,27 +639,29 @@ export function MessageBubble({
                                     }
                                   }}
                                   className={`
-                                    p-3 text-sm text-left border-2 rounded-lg transition-all duration-200
-                                    hover:shadow-md
+                                    px-3 py-1.5 text-xs font-medium rounded-full 
+                                    backdrop-blur-md border transition-all duration-300
+                                    hover:shadow-lg hover:shadow-emerald-200/50
                                     ${isSelected 
-                                      ? 'border-emerald-400 bg-emerald-50 text-gray-900 shadow-sm' 
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300'
+                                      ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-800 shadow-md backdrop-blur-lg' 
+                                      : 'bg-white/60 border-gray-200/60 text-gray-700 hover:bg-emerald-50/80 hover:border-emerald-300/60'
                                     }
                                   `}
                                 >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium">{option.label}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{option.label}</span>
                                     {isSelected && (
-                                      <div className="flex items-center justify-center w-5 h-5 bg-emerald-500 rounded-full">
-                                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                      <motion.div
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        className="flex items-center justify-center w-3 h-3 bg-emerald-600 rounded-full"
+                                      >
+                                        <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
                                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                         </svg>
-                                      </div>
+                                      </motion.div>
                                     )}
                                   </div>
-                                  {option.description && (
-                                    <p className="text-xs text-gray-500 mt-1">{option.description}</p>
-                                  )}
                                 </motion.button>
                               );
                             })}
@@ -649,23 +674,25 @@ export function MessageBubble({
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.3 }}
+                              whileHover={{ scale: 1.02, y: -1 }}
+                              whileTap={{ scale: 0.98 }}
                               onClick={() => {
                                 setFormData(prev => ({ ...prev, [`${element.id}_isCustom`]: !prev[`${element.id}_isCustom`] }));
                               }}
                               className={`
-                                w-full p-3 text-sm text-left border-2 border-dashed rounded-lg transition-all duration-200
+                                inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium 
+                                rounded-full border-dashed backdrop-blur-md border transition-all duration-300
+                                hover:shadow-lg hover:shadow-emerald-200/50
                                 ${formData[`${element.id}_isCustom`] 
-                                  ? 'border-emerald-300 bg-emerald-50 text-gray-700' 
-                                  : 'border-gray-300 text-gray-600 hover:border-emerald-300 hover:bg-emerald-50/50'
+                                  ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-800 backdrop-blur-lg' 
+                                  : 'border-gray-300/60 bg-white/60 text-gray-600 hover:border-emerald-300/60 hover:bg-emerald-50/80'
                                 }
                               `}
                             >
-                              <div className="flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                <span>添加自定义选项</span>
-                              </div>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span>自定义</span>
                             </motion.button>
                             
                             {/* 自定义输入框 */}
@@ -771,12 +798,13 @@ export function MessageBubble({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.5 }}
-                    className="mt-6 flex gap-3"
+                    className="mt-4 flex gap-2"
                   >
                     <Button
                       onClick={handleInteractionSubmit}
                       disabled={isSubmitting}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-200 hover:scale-105"
+                      size="sm"
+                      className="bg-emerald-500/90 hover:bg-emerald-600 text-white backdrop-blur-md rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-300 hover:scale-105 hover:shadow-lg shadow-emerald-200/50"
                     >
                       {isSubmitting ? (
                         <SimpleTextLoader text="提交中" className="text-white" />
@@ -785,12 +813,13 @@ export function MessageBubble({
                       )}
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => {
                         onSendMessage?.('我需要重新考虑一下');
                       }}
                       disabled={isSubmitting}
-                      className="transition-all duration-200 hover:scale-105"
+                      size="sm"
+                      className="text-gray-600 hover:text-gray-800 hover:bg-gray-100/80 backdrop-blur-sm rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-300 hover:scale-105"
                     >
                       重新考虑
                     </Button>

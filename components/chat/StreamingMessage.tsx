@@ -11,7 +11,7 @@ interface StreamableAgentResponse {
     thinking?: string;
   };
   interaction?: {
-    type: string;
+    type: 'choice' | 'input' | 'form' | 'confirmation';
     elements: any[];
   };
   system_state?: {
