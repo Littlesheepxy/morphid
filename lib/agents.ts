@@ -1,6 +1,6 @@
 import type { Agent, AgentResponse } from "@/types/agent"
 import type { UserInput } from "@/types/userInput"
-import { WelcomeAgent } from './agents/welcome-agent'
+import { ConversationalWelcomeAgent } from './agents/welcome'
 import { SessionData } from '@/lib/types/session'
 
 export const AGENTS: Record<string, Agent> = {
@@ -43,11 +43,11 @@ export const AGENTS: Record<string, Agent> = {
 export class AgentManager {
   private currentAgent: Agent | null = null
   private conversationState: Record<string, any> = {}
-  private welcomeAgent: WelcomeAgent
+  private welcomeAgent: ConversationalWelcomeAgent
   private sessionData: SessionData | null = null
 
   constructor() {
-    this.welcomeAgent = new WelcomeAgent()
+    this.welcomeAgent = new ConversationalWelcomeAgent()
   }
 
   setAgent(agentId: string) {

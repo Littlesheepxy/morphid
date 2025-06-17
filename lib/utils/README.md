@@ -192,3 +192,33 @@ const result = await agentOrchestrator.handleUserInteraction(sessionId, 'interac
 2. **配置外部化**: 将配置移到外部配置文件
 3. **插件机制**: 支持自定义Agent和存储插件
 4. **性能监控**: 添加详细的性能监控指标 
+
+# 工具集合
+
+## 会话管理系统
+
+### 存储架构
+- **数据库**: Supabase PostgreSQL
+- **表结构**: 
+  - `chat_sessions` - 会话主表
+  - `conversation_entries` - 对话记录表
+  - `agent_flows` - 代理流程表
+
+### 使用方法
+```typescript
+import { sessionManager } from '@/lib/utils/session-manager';
+
+// 创建会话
+const sessionId = await sessionManager.createSession();
+
+// 获取会话
+const session = await sessionManager.getSession(sessionId);
+
+// 更新会话
+await sessionManager.updateSession(sessionId, updatedSession);
+```
+
+### 数据安全
+- 使用 Clerk 用户认证
+- 行级安全策略 (RLS)
+- 用户数据隔离 

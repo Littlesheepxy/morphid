@@ -119,7 +119,7 @@ export const queries = {
  * - avatar_url (text, nullable)
  * - projects (text[], default: '{}') - 用户可访问的项目列表
  * - plan (text, default: 'free') - 用户计划
- * - default_model (text, default: 'gpt-4o') - 默认AI模型
+ * - default_model (text, default: 'claude-sonnet-4-20250514') - 默认AI模型
  * - created_at (timestamp)
  * - updated_at (timestamp)
  *

@@ -7,8 +7,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { initialInput } = body;
 
-    // 创建新会话
-    const sessionId = agentOrchestrator.createSession(initialInput);
+    // 创建新会话（现在是异步的）
+    const sessionId = await agentOrchestrator.createSession(initialInput);
 
     console.log(`✅ [会话API] 创建新会话: ${sessionId}`);
 
@@ -47,15 +47,15 @@ export async function GET(req: NextRequest) {
     console.log(`🔍 [会话API] 查询会话: ${sessionId}`);
 
     // 获取会话状态
-    const sessionStatus = agentOrchestrator.getSessionStatus(sessionId);
+    const sessionStatus = await agentOrchestrator.getSessionStatus(sessionId);
 
     if (!sessionStatus) {
       console.log(`❌ [会话API] 会话未找到: ${sessionId}`);
       
       // 如果开启调试模式，返回调试信息
       if (debug) {
-        const sessionData = agentOrchestrator.getSessionData(sessionId);
-        const allSessions = agentOrchestrator.getAllActiveSessions();
+        const sessionData = await agentOrchestrator.getSessionData(sessionId);
+        const allSessions = await agentOrchestrator.getAllActiveSessions();
         
         return NextResponse.json({
           error: 'Session not found',

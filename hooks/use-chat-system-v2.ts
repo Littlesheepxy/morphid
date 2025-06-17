@@ -376,6 +376,8 @@ export function useChatSystemV2() {
 
     let buffer = '';
     let messageReceived = false;
+    let streamingMessageId: string | null = null; // 🆕 跟踪流式消息ID
+    let streamingMessageIndex: number = -1; // 🆕 跟踪流式消息在数组中的位置
     
     try {
       while (true) {
@@ -404,66 +406,89 @@ export function useChatSystemV2() {
                 type: chunk.type || 'unknown',
                 hasImmediate: !!chunk.immediate_display,
                 hasReply: !!chunk.immediate_display?.reply,
-                replyLength: chunk.immediate_display?.reply?.length || 0
+                replyLength: chunk.immediate_display?.reply?.length || 0,
+                isUpdate: chunk.system_state?.metadata?.is_update,
+                messageId: chunk.system_state?.metadata?.message_id,
+                streamType: chunk.system_state?.metadata?.stream_type
               });
               
-              // 🔧 修复：更灵活的响应处理
+              // 🔧 修复：处理流式更新逻辑
               let shouldProcessResponse = false;
               let agentMessage: any = null;
 
-              // 检查多种可能的响应格式
-              if (chunk.type === 'agent_response' && chunk.data?.immediate_display?.reply) {
-                // 格式1: { type: 'agent_response', data: { immediate_display: { reply: '...' } } }
-                shouldProcessResponse = true;
-                agentMessage = {
-                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
-                  agent: chunk.data.immediate_display.agent_name || 'system',
-                  sender: 'assistant',
-                  type: 'agent_response' as const,
-                  content: chunk.data.immediate_display.reply,
-                  timestamp: new Date(),
-                  metadata: { 
-                    systemState: chunk.data.system_state,
-                    interaction: chunk.data.interaction
-                  }
-                };
-              } else if (chunk.immediate_display?.reply) {
-                // 格式2: { immediate_display: { reply: '...' } }
-                shouldProcessResponse = true;
-                agentMessage = {
-                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
-                  agent: chunk.immediate_display.agent_name || 'system',
-                  sender: 'assistant',
-                  type: 'agent_response' as const,
-                  content: chunk.immediate_display.reply,
-                  timestamp: new Date(),
-                  metadata: { 
-                    systemState: chunk.system_state,
-                    interaction: chunk.interaction
-                  }
-                };
-              } else if (typeof chunk === 'string' && chunk.trim()) {
-                // 格式3: 直接字符串响应
-                shouldProcessResponse = true;
-                agentMessage = {
-                  id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
-                  agent: 'system',
-                  sender: 'assistant',
-                  type: 'agent_response' as const,
-                  content: chunk,
-                  timestamp: new Date(),
-                  metadata: {}
-                };
-              }
+              // 检查是否是流式更新消息
+              const isStreamUpdate = chunk.system_state?.metadata?.is_update;
+              const messageId = chunk.system_state?.metadata?.message_id;
+              const streamType = chunk.system_state?.metadata?.stream_type;
 
-              if (shouldProcessResponse && agentMessage) {
-                messageReceived = true;
-                session.conversationHistory.push(agentMessage);
-                session.metadata.updatedAt = new Date();
+              if (chunk.type === 'agent_response' && chunk.immediate_display?.reply) {
+                shouldProcessResponse = true;
                 
-                console.log('💬 [新消息] 添加助手回复:', agentMessage.content.substring(0, 50) + '...');
-                setCurrentSession({ ...session });
-                setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                if (isStreamUpdate && messageId) {
+                  // 🔄 这是一个流式更新，查找并更新现有消息
+                  if (streamingMessageId === messageId && streamingMessageIndex >= 0) {
+                    // 更新现有消息
+                    console.log(`🔄 [流式更新] 更新消息 ${messageId} 在位置 ${streamingMessageIndex}`);
+                    // 找到消息在conversation history中的位置并更新
+                    const messageIndex = session.conversationHistory.findIndex(msg => 
+                      msg.metadata?.stream_message_id === messageId
+                    );
+                    
+                    if (messageIndex >= 0) {
+                      session.conversationHistory[messageIndex] = {
+                        ...session.conversationHistory[messageIndex],
+                        content: chunk.immediate_display.reply,
+                        timestamp: new Date(),
+                        metadata: {
+                          ...session.conversationHistory[messageIndex].metadata,
+                          streaming: streamType !== 'complete'
+                        }
+                      };
+                      
+                      setCurrentSession({ ...session });
+                      setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                    }
+                  } else {
+                    // 首次流式消息，创建新消息
+                    console.log(`🆕 [流式创建] 创建新的流式消息 ${messageId}`);
+                    agentMessage = {
+                      id: `msg-${Date.now()}-agent-${messageId}`,
+                      timestamp: new Date(),
+                      type: 'agent_response' as const,
+                      agent: chunk.immediate_display.agent_name || 'system',
+                      content: chunk.immediate_display.reply,
+                      metadata: { 
+                        streaming: streamType !== 'complete',
+                        stream_message_id: messageId
+                      }
+                    };
+                    
+                    session.conversationHistory.push(agentMessage);
+                    streamingMessageIndex = session.conversationHistory.length - 1;
+                    streamingMessageId = messageId;
+                    setCurrentSession({ ...session });
+                    setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                  }
+                } else {
+                  // 🎯 普通消息，创建新消息
+                  console.log(`📝 [普通消息] 创建新消息`);
+                  agentMessage = {
+                    id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
+                    timestamp: new Date(),
+                    type: 'agent_response' as const,
+                    agent: chunk.immediate_display.agent_name || 'system',
+                    content: chunk.immediate_display.reply,
+                    metadata: { 
+                      interaction: chunk.interaction
+                    }
+                  };
+                  
+                  session.conversationHistory.push(agentMessage);
+                  setCurrentSession({ ...session });
+                  setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                }
+                
+                messageReceived = true;
               }
               
               // 检查是否需要生成页面
@@ -513,11 +538,10 @@ export function useChatSystemV2() {
                 messageReceived = true;
                 const textMessage = {
                   id: `msg-${Date.now()}-text-${Math.random().toString(36).substr(2, 9)}`,
-                  agent: 'system',
-                  sender: 'assistant',
-                  type: 'agent_response' as const,
-                  content: data.trim(),
                   timestamp: new Date(),
+                  type: 'agent_response' as const,
+                  agent: 'system',
+                  content: data.trim(),
                   metadata: { parseError: true }
                 };
                 
@@ -536,11 +560,10 @@ export function useChatSystemV2() {
         console.warn('⚠️ [流式响应] 未收到任何agent响应消息');
         const systemMessage = {
           id: `msg-${Date.now()}-system`,
-          agent: 'system',
-          sender: 'assistant',
-          type: 'system_event' as const,
-          content: '正在处理您的请求，请稍候...',
           timestamp: new Date(),
+          type: 'system_event' as const,
+          agent: 'system',
+          content: '正在处理您的请求，请稍候...',
           metadata: {}
         };
         

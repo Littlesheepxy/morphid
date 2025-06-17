@@ -207,25 +207,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 🔧 修复：continue动作调用AI智能推荐，而不是硬编码选项
+        // 🔧 修复：continue动作触发流式响应，让AI重新生成推荐
     if (result?.action === 'continue') {
-      console.log(`🔄 [交互API] continue动作，调用AI生成智能推荐`);
-      
-      // 获取更新后的信息
-      const updatedInfo = result.updated_info || {};
-      const missingFields = result.missing_fields || [];
-      const collectionPhase = result.collection_phase || 'basic';
-      
-      console.log(`📊 [当前信息] ${JSON.stringify(updatedInfo)}`);
-      console.log(`📋 [缺少字段] ${missingFields.join('、')}`);
-      console.log(`🔄 [收集阶段] ${collectionPhase}`);
+      console.log(`🔄 [交互API] continue动作，触发流式AI推荐`);
+      console.log(`📊 [Agent结果] ${JSON.stringify(result)}`);
       
       // 构造用户输入消息
       const userMessage = formatInteractionAsUserMessage(data, result);
       console.log(`📝 [用户消息] ${userMessage}`);
       
-      // 调用AgentOrchestrator重新处理，让AI生成智能推荐
-      console.log(`🤖 [AI调用] 让AI基于当前信息生成智能推荐选项`);
+      // 调用AgentOrchestrator重新处理，让AI生成流式推荐
+      console.log(`🤖 [AI调用] 让AI基于当前信息生成流式推荐选项`);
       const aiRecommendationGenerator = agentOrchestrator.processUserInputStreaming(
         sessionId,
         userMessage,

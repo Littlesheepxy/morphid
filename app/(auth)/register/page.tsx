@@ -123,7 +123,7 @@ export default function RegisterPage() {
           data: {
             username: formData.username,
             plan: "free",
-            default_model: "gpt-4o",
+            default_model: "claude-sonnet-4-20250514",
           },
         },
       })

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { User, Sparkles } from 'lucide-react';
 import { LoadingText, StreamingText, LoadingDots } from '@/components/ui/loading-text';
 import { UnifiedLoading, ThinkingLoader, GeneratingLoader, SimpleTextLoader } from '@/components/ui/unified-loading';
+import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 
 interface MessageBubbleProps {
   message: any;
@@ -340,8 +341,8 @@ export function MessageBubble({
                 displayContent = uniqueLines.join('\n');
               }
               
-              // 正常显示内容
-              return displayContent;
+              // 正常显示内容 - 使用Markdown渲染器
+              return <MarkdownRenderer content={displayContent} />;
             })()}
           </div>
 

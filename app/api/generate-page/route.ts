@@ -22,7 +22,7 @@ const heysMePageSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const { designStrategy, collectedData, model_id = "gpt-4o" } = await request.json()
+    const { designStrategy, collectedData, model_id = "claude-sonnet-4-20250514" } = await request.json()
 
     const modelConfig = getModelById(model_id)
     if (!modelConfig) {

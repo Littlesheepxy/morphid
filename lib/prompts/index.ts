@@ -5,7 +5,9 @@
 
 // Welcome Module
 export { 
-  WELCOME_AGENT_PROMPT,
+  WELCOME_SYSTEM_PROMPT,
+  FIRST_ROUND_PROMPT_TEMPLATE,
+  CONTINUATION_PROMPT_TEMPLATE,
   WELCOME_AGENT_CONFIG 
 } from './welcome';
 
@@ -58,8 +60,8 @@ export const PROMPTS_MODULE_INFO = {
   modules: [
     {
       name: 'welcome',
-      description: '智能意图识别和动态选项生成',
-      prompt: 'WELCOME_AGENT_PROMPT'
+      description: '对话式信息收集（内置在Agent中）',
+      prompt: '内置在ConversationalWelcomeAgent中'
     },
     {
       name: 'info-collection', 

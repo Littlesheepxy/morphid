@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
             email: data.user.email!,
             username: data.user.user_metadata?.username || data.user.email?.split("@")[0],
             plan: "free",
-            default_model: "gpt-4o",
+            default_model: "claude-sonnet-4-20250514",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })

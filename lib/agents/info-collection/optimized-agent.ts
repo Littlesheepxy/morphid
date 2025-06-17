@@ -72,6 +72,17 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     try {
       console.log(`🎯 [优化版收集Agent] 开始处理: "${userInput}"`);
 
+      // 🆕 检查是否为"试一试"用户，优先使用示例数据
+      const welcomeData = this.extractWelcomeData(sessionData);
+      const welcomeSummary = (sessionData.metadata as any)?.welcomeSummary;
+      
+      if (welcomeSummary?.user_intent?.commitment_level === '试一试' && 
+          welcomeSummary?.sample_suggestions?.should_use_samples) {
+        console.log(`🎲 [试一试模式] 检测到体验用户，准备使用示例数据`);
+        yield* this.handleTrialUserWithSamples(welcomeSummary, sessionData);
+        return;
+      }
+
       // 检查轮次限制 - 系统控制
       const currentTurn = this.getTurnCount(sessionData);
       const maxTurns = this.getMaxTurns(sessionData);
@@ -124,20 +135,42 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
   private async analyzeInputWithClaude(userInput: string, sessionData: SessionData): Promise<any> {
     const welcomeData = this.extractWelcomeData(sessionData);
     const currentData = this.getCurrentCollectedData(sessionData);
+    const welcomeSummary = welcomeData.welcomeSummary;
 
-    // 使用agent-templates中的专业prompt
-    const prompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, {
+    // 🆕 构建与新prompt格式匹配的变量
+    const promptVariables = {
+      // 基础信息汇总 (welcomeSummary.summary)
       user_role: welcomeData.userRole || '用户',
       use_case: welcomeData.useCase || '创建个人页面',
-      urgency: welcomeData.urgency || '正常',
+      style: welcomeData.style || '简约',
+      highlight_focus: Array.isArray(welcomeData.highlight_focus) 
+        ? welcomeData.highlight_focus.join('、') 
+        : (welcomeData.highlight_focus || '个人展示'),
+      
+      // 用户意图分析 (welcomeSummary.user_intent)
+      commitment_level: welcomeSummary?.user_intent?.commitment_level || '认真制作',
+      reasoning: welcomeSummary?.user_intent?.reasoning || '基于用户表达分析',
+      
+      // 处理建议 (welcomeSummary.sample_suggestions)
+      should_use_samples: welcomeSummary?.sample_suggestions?.should_use_samples || false,
+      sample_reason: welcomeSummary?.sample_suggestions?.reason || '正常处理流程',
+      
+      // 技术信息
       collection_priority: JSON.stringify(this.getCollectionPriority(welcomeData.userRole)),
       current_collected_data: JSON.stringify(currentData),
       available_tools: Array.from(this.tools.map(t => t.name)).join(', '),
+      context_for_next_agent: welcomeSummary?.context_for_next_agent || '继续信息收集',
+      
+      // 用户输入
       user_input: userInput
-    });
+    };
+
+    // 使用专业prompt
+    const prompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, promptVariables);
 
     console.log(`📤 [Claude调用] 使用专业prompt，长度: ${prompt.length}`);
-    console.log(`📋 [用户画像] ${welcomeData.userRole} | ${welcomeData.useCase} | ${welcomeData.urgency}`);
+    console.log(`📋 [用户画像] ${welcomeData.userRole} | ${welcomeData.useCase} | ${promptVariables.commitment_level}`);
+    console.log(`🎯 [用户意图] ${promptVariables.commitment_level} | 示例数据: ${promptVariables.should_use_samples}`);
 
     try {
       // 调用Claude API并启用工具调用
@@ -767,7 +800,66 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
 
   private extractWelcomeData(sessionData: SessionData): any {
     const metadata = sessionData.metadata as any;
-    return metadata?.intentData || {};
+    
+    // 🆕 优先读取新的welcomeSummary数据
+    const welcomeSummary = metadata?.welcomeSummary;
+    if (welcomeSummary?.summary) {
+      console.log(`📋 [数据读取] 从welcomeSummary读取用户数据:`, welcomeSummary.summary);
+      
+      // 字段映射：新格式 → 旧格式兼容
+      return {
+        userRole: welcomeSummary.summary.user_role,
+        useCase: welcomeSummary.summary.use_case,
+        style: welcomeSummary.summary.style,
+        urgency: this.mapUseCaseToUrgency(welcomeSummary.summary.use_case),
+        highlight_focus: welcomeSummary.summary.highlight_focus,
+        // 保留完整的welcomeSummary供其他地方使用
+        welcomeSummary: welcomeSummary
+      };
+    }
+    
+    // 🔄 降级：尝试读取旧的intentData格式
+    const intentData = metadata?.intentData;
+    if (intentData) {
+      console.log(`📋 [数据读取] 从intentData读取用户数据（降级模式）:`, intentData);
+      return intentData;
+    }
+    
+    // 🔄 降级：尝试读取collectedInfo
+    const collectedInfo = metadata?.collectedInfo;
+    if (collectedInfo) {
+      console.log(`📋 [数据读取] 从collectedInfo读取用户数据（最终降级）:`, collectedInfo);
+      return {
+        userRole: collectedInfo.user_role || '用户',
+        useCase: collectedInfo.use_case || '创建个人页面',
+        style: collectedInfo.style || '简约',
+        urgency: '正常'
+      };
+    }
+    
+    console.warn(`⚠️ [数据读取] 未找到Welcome Agent数据，使用默认值`);
+    return {
+      userRole: '新用户',
+      useCase: '创建个人页面', 
+      style: '简约',
+      urgency: '正常'
+    };
+  }
+
+  /**
+   * 🔄 将使用目的映射为紧急程度（兼容性处理）
+   */
+  private mapUseCaseToUrgency(useCase: string): string {
+    const urgencyMap: Record<string, string> = {
+      '快速体验': '快速体验',
+      '试试看': '快速体验',
+      '求职展示': '详细准备',
+      '作品集': '详细准备',
+      '个人品牌': '正常',
+      '创建个人页面': '正常'
+    };
+    
+    return urgencyMap[useCase] || '正常';
   }
 
   private getCurrentCollectedData(sessionData: SessionData): any {
@@ -857,5 +949,201 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
 
   protected delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ============== 试一试用户处理方法 ==============
+
+  /**
+   * 🎲 处理"试一试"用户 - 使用示例数据快速体验
+   */
+  private async* handleTrialUserWithSamples(
+    welcomeSummary: any,
+    sessionData: SessionData
+  ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
+    console.log(`🎲 [示例数据模式] 为用户生成适合的示例数据...`);
+    
+    yield this.createThinkingResponse('🎯 为您准备合适的示例数据...', 30);
+    await this.delay(1200);
+    
+    // 根据用户身份生成对应的示例数据
+    const sampleData = this.generateSampleDataByRole(welcomeSummary.summary.user_role);
+    
+    yield this.createThinkingResponse('✨ 示例数据准备完成，正在创建演示页面...', 70);
+    await this.delay(800);
+    
+    // 将示例数据填充到会话中
+    this.fillSessionWithSampleData(sessionData, sampleData);
+    
+    // 直接推进到下一阶段
+    yield this.createTrialAdvanceResponse(sampleData, welcomeSummary, sessionData);
+  }
+
+  /**
+   * 🎯 根据用户身份生成示例数据
+   */
+  private generateSampleDataByRole(userRole: string): any {
+    const sampleTemplates = {
+      '前端开发者': {
+        personal: {
+          name: 'Alex Chen',
+          title: '前端开发工程师',
+          bio: '专注于React和Vue.js开发，热爱创建优雅的用户界面'
+        },
+        professional: {
+          skills: ['React', 'Vue.js', 'TypeScript', 'Node.js', 'Tailwind CSS'],
+          github: {
+            username: 'alexchen-dev',
+            top_repositories: ['awesome-react-components', 'vue-dashboard-kit', 'typescript-utils'],
+            total_stars: 1247
+          }
+        },
+        projects: [
+          {
+            name: 'React Dashboard',
+            description: '现代化管理面板，支持暗色模式和响应式设计',
+            tech_stack: ['React', 'TypeScript', 'Tailwind CSS'],
+            demo_url: 'https://demo.example.com'
+          },
+          {
+            name: 'Vue组件库',
+            description: '轻量级Vue3组件库，已发布到npm',
+            tech_stack: ['Vue3', 'TypeScript', 'Vite']
+          }
+        ]
+      },
+      '设计师': {
+        personal: {
+          name: 'Sarah Liu',
+          title: 'UI/UX设计师',
+          bio: '专注于用户体验设计，善于将复杂的需求转化为简洁优雅的界面'
+        },
+        professional: {
+          skills: ['Figma', 'Sketch', 'Adobe Creative Suite', '用户研究', '交互设计'],
+          portfolio: {
+            behance_url: 'https://behance.net/sarahdesign',
+            dribbble_url: 'https://dribbble.com/sarahdesign'
+          }
+        },
+        projects: [
+          {
+            name: '移动银行App重设计',
+            description: '简化用户流程，提升转化率30%',
+            category: 'Mobile App Design'
+          },
+          {
+            name: '企业官网设计系统',
+            description: '建立统一的设计语言和组件库',
+            category: 'Web Design'
+          }
+        ]
+      },
+      '产品经理': {
+        personal: {
+          name: 'David Wang',
+          title: '高级产品经理',
+          bio: '5年产品经验，擅长B2B SaaS产品设计和数据驱动的产品决策'
+        },
+        professional: {
+          skills: ['产品策略', '用户研究', '数据分析', 'Scrum', 'Figma'],
+          linkedin: {
+            profile: {
+              name: 'David Wang',
+              title: '高级产品经理 @ TechCorp'
+            }
+          }
+        },
+        experience: [
+          {
+            company: 'TechCorp',
+            position: '高级产品经理',
+            duration: '2022-至今',
+            achievements: ['产品用户增长200%', '成功推出3个核心功能']
+          }
+        ]
+      },
+      'AI工程师': {
+        personal: {
+          name: 'Emily Zhang',
+          title: 'AI工程师',
+          bio: '专注于机器学习和深度学习应用，在计算机视觉领域有丰富经验'
+        },
+        professional: {
+          skills: ['Python', 'TensorFlow', 'PyTorch', 'Computer Vision', 'NLP'],
+          github: {
+            username: 'emily-ai',
+            top_repositories: ['cv-toolkit', 'nlp-models', 'ml-pipeline']
+          }
+        },
+        projects: [
+          {
+            name: '智能图像识别系统',
+            description: '基于深度学习的实时图像分类和目标检测',
+            tech_stack: ['Python', 'TensorFlow', 'OpenCV']
+          }
+        ]
+      }
+    };
+
+         // 匹配用户身份，如果没有完全匹配则使用默认模板
+     return (sampleTemplates as any)[userRole] || sampleTemplates['前端开发者'];
+  }
+
+  /**
+   * 📋 将示例数据填充到会话中
+   */
+  private fillSessionWithSampleData(sessionData: SessionData, sampleData: any): void {
+    if (!sessionData.collectedData) {
+      sessionData.collectedData = {
+        personal: {},
+        professional: { skills: [] },
+        experience: [],
+        education: [],
+        projects: [],
+        achievements: [],
+        certifications: []
+      };
+    }
+
+    // 填充示例数据
+    Object.assign(sessionData.collectedData, sampleData);
+    
+    // 标记为示例数据
+    const metadata = sessionData.metadata as any;
+    metadata.isTrialMode = true;
+    metadata.sampleDataSource = '系统生成';
+    metadata.collectionProgress = 0.85; // 示例数据给较高完成度
+  }
+
+  /**
+   * 🚀 创建试一试用户的推进响应
+   */
+  private createTrialAdvanceResponse(
+    sampleData: any,
+    welcomeSummary: any,
+    sessionData: SessionData
+  ): StreamableAgentResponse {
+    const userName = sampleData.personal?.name || '示例用户';
+    const userTitle = sampleData.personal?.title || '专业人士';
+    
+    return this.createResponse({
+      immediate_display: {
+        reply: `🎉 太棒了！我已经为您准备了一份示例页面：\n\n👤 **${userName}** - ${userTitle}\n${sampleData.personal?.bio || '专业简介示例'}\n\n🛠️ **技能展示**：${sampleData.professional?.skills?.slice(0, 3).join('、') || '专业技能'}等\n\n📋 **项目案例**：${sampleData.projects?.length || 2}个精选项目\n\n✨ 这个示例展示了根据您的身份（${welcomeSummary.summary.user_role}）定制的页面效果。\n\n现在开始为您生成实际的页面代码... 🎨`,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'advance',
+        done: true,
+        progress: 85,
+        current_stage: '示例数据体验完成',
+        metadata: {
+          trial_mode: true,
+          sample_data_used: true,
+          user_role: welcomeSummary.summary.user_role,
+          ready_for_design: true,
+          collection_method: 'sample_data'
+        }
+      }
+    });
   }
 } 

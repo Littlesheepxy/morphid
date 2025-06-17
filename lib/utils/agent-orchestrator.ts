@@ -4,7 +4,7 @@
  * 负责协调多个Agent的工作流程，使用模块化设计提高可维护性
  */
 
-import { WelcomeAgent } from '@/lib/agents/welcome-agent';
+import { ConversationalWelcomeAgent } from '@/lib/agents/welcome';
 import { OptimizedInfoCollectionAgent } from '@/lib/agents/info-collection';
 import { PromptOutputAgent } from '@/lib/agents/prompt-output-agent';
 import { CodingAgent } from '@/lib/agents/coding-agent';
@@ -33,7 +33,7 @@ export class AgentOrchestrator {
    * 初始化所有Agents
    */
   private initializeAgents(): void {
-    this.agents.set('welcome', new WelcomeAgent());
+    this.agents.set('welcome', new ConversationalWelcomeAgent());
     this.agents.set('info_collection', new OptimizedInfoCollectionAgent());
     this.agents.set('prompt_output', new PromptOutputAgent());
     this.agents.set('coding', new CodingAgent());
@@ -195,8 +195,8 @@ export class AgentOrchestrator {
   /**
    * 创建新会话
    */
-  createSession(initialInput?: any): string {
-    return sessionManager.createSession(initialInput);
+  async createSession(initialInput?: any): Promise<string> {
+    return await sessionManager.createSession(initialInput);
   }
 
   /**
@@ -219,8 +219,8 @@ export class AgentOrchestrator {
   /**
    * 获取所有活跃会话
    */
-  getAllActiveSessions(): SessionData[] {
-    return sessionManager.getAllActiveSessions();
+  async getAllActiveSessions(): Promise<SessionData[]> {
+    return await sessionManager.getAllActiveSessions();
   }
 
   /**

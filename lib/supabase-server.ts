@@ -69,7 +69,7 @@ export async function getCurrentUser() {
         email: "", // 将在 syncUserWithClerk 中更新
         projects: ["HeysMe"], // 默认给予 HeysMe 访问权限
         plan: "free",
-        default_model: "gpt-4o",
+        default_model: "claude-sonnet-4-20250514",
       })
       .select()
       .single()

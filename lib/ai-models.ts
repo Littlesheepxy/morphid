@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai"
 import { anthropic } from "@ai-sdk/anthropic"
-import { generateText, generateObject } from "ai"
+import { generateText, generateObject, streamText } from "ai"
 import type { ModelProvider } from "@/types/models"
 
 // 验证 API keys 是否配置
@@ -208,5 +208,66 @@ export async function generateWithBestAvailableModel(
     return await generateWithGPT4o(input, options)
   } else {
     throw new Error("No API keys configured. Please set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+  }
+}
+
+export async function* generateStreamWithModel(
+  provider: ModelProvider,
+  modelId: string,
+  input: string | Array<{ role: 'system' | 'user' | 'assistant', content: string }>,
+  options?: {
+    system?: string
+    maxTokens?: number
+  },
+): AsyncGenerator<string, void, unknown> {
+  try {
+    console.log(`\n🌊 [Stream] 开始流式生成 - Provider: ${provider}, Model: ${modelId}`);
+    const model = getModelClient(provider, modelId)
+
+    // 🆕 处理输入类型
+    const isMessagesMode = Array.isArray(input);
+    
+    console.log(`📊 [流式输入分析]`, {
+      mode: isMessagesMode ? 'messages' : 'prompt',
+      inputLength: isMessagesMode ? input.length : (input as string).length,
+      maxTokens: options?.maxTokens
+    });
+    
+    console.log(`🌊 [流式文本] 使用 streamText`);
+    // 使用流式文本生成
+    const result = await streamText({
+      model,
+      prompt: isMessagesMode ? undefined : input as string,
+      messages: isMessagesMode ? input as any : undefined,
+      system: isMessagesMode ? undefined : options?.system,
+      maxTokens: options?.maxTokens,
+    })
+
+    console.log(`✅ [流式开始] 文本流式生成开始 (Provider: ${provider})`);
+    
+    for await (const textPart of result.textStream) {
+      yield textPart;
+    }
+    
+    console.log(`✅ [流式完成] 文本流式生成完成 (Provider: ${provider})`);
+
+  } catch (error) {
+    console.error(`❌ [流式失败] ${provider} model ${modelId} 错误:`, {
+      error: error instanceof Error ? error.message : error,
+      inputType: Array.isArray(input) ? 'messages' : 'prompt'
+    })
+
+    // 如果是 Claude 模型失败，尝试回退到 OpenAI
+    if (provider === "claude" && process.env.OPENAI_API_KEY) {
+      console.log(`🔄 [流式回退] Claude 失败，尝试回退到 GPT-4o...`)
+      try {
+        yield* generateStreamWithModel("openai", "gpt-4o", input, options)
+        return
+      } catch (fallbackError) {
+        console.error(`❌ [流式回退失败] OpenAI 回退也失败:`, fallbackError)
+      }
+    }
+
+    throw error
   }
 }

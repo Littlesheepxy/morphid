@@ -1,5 +1,5 @@
 /**
- * 会话管理器
+ * 会话管理器 - Supabase版本
  * 
  * 负责会话的生命周期管理，包括创建、更新、删除和查询会话
  */
@@ -18,13 +18,25 @@ import { agentMappings } from './agent-mappings';
 export class SessionManager {
   private sessions: Map<string, SessionData> = new Map();
   private readonly EXPIRED_THRESHOLD = 24 * 60 * 60 * 1000; // 24小时
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {
-    this.initializeSessions();
+    // 异步初始化，避免阻塞构造函数
+    this.initializationPromise = this.initializeSessions();
   }
 
   /**
-   * 初始化会话数据（从存储恢复）
+   * 确保会话管理器已初始化
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      this.initializationPromise = null;
+    }
+  }
+
+  /**
+   * 初始化会话数据（从Supabase恢复）
    */
   private async initializeSessions(): Promise<void> {
     try {
@@ -32,7 +44,7 @@ export class SessionManager {
       this.sessions = loadedSessions;
       
       if (this.sessions.size > 0) {
-        console.log(`✅ [会话管理器] 初始化完成，恢复了 ${this.sessions.size} 个会话`);
+        console.log(`✅ [会话管理器] 初始化完成，从Supabase恢复了 ${this.sessions.size} 个会话`);
       }
     } catch (error) {
       console.warn('⚠️ [会话管理器] 初始化失败:', error);
@@ -44,12 +56,14 @@ export class SessionManager {
    * @param initialData 初始化数据
    * @returns 会话ID
    */
-  createSession(initialData?: Partial<SessionData>): string {
+  async createSession(initialData?: Partial<SessionData>): Promise<string> {
+    await this.ensureInitialized();
+    
     const sessionId = this.generateSessionId();
     const session = this.createSessionData(sessionId, initialData);
     
     this.sessions.set(sessionId, session);
-    this.saveSessionsToStorage();
+    await this.saveSessionsToStorage();
     
     console.log(`✅ [会话管理器] 创建新会话: ${sessionId}`);
     return sessionId;
@@ -61,6 +75,8 @@ export class SessionManager {
    * @returns 会话数据，不存在则返回null
    */
   async getSession(sessionId: string): Promise<SessionData | null> {
+    await this.ensureInitialized();
+    
     let session = this.sessions.get(sessionId);
     
     // 如果内存中没有找到，尝试重新加载
@@ -94,12 +110,14 @@ export class SessionManager {
    * @param sessionId 会话ID
    * @param session 会话数据
    */
-  updateSession(sessionId: string, session: SessionData): void {
+  async updateSession(sessionId: string, session: SessionData): Promise<void> {
+    await this.ensureInitialized();
+    
     session.metadata.lastActive = new Date();
     session.metadata.updatedAt = new Date();
     
     this.sessions.set(sessionId, session);
-    this.saveSessionsToStorage();
+    await this.saveSessionsToStorage();
   }
 
   /**
@@ -108,11 +126,12 @@ export class SessionManager {
    * @returns 是否删除成功
    */
   async deleteSession(sessionId: string): Promise<boolean> {
+    await this.ensureInitialized();
+    
     const deleted = this.sessions.delete(sessionId);
     
     if (deleted) {
       await sessionStorage.deleteSession(sessionId);
-      this.saveSessionsToStorage();
       console.log(`🗑️  [会话管理器] 删除会话: ${sessionId}`);
     }
     
@@ -123,7 +142,9 @@ export class SessionManager {
    * 获取所有活跃会话
    * @returns 活跃会话列表
    */
-  getAllActiveSessions(): SessionData[] {
+  async getAllActiveSessions(): Promise<SessionData[]> {
+    await this.ensureInitialized();
+    
     const now = new Date();
     const activeSessions: SessionData[] = [];
     
@@ -141,7 +162,9 @@ export class SessionManager {
    * 获取会话统计信息
    * @returns 统计信息
    */
-  getSessionStats(): SessionStats {
+  async getSessionStats(): Promise<SessionStats> {
+    await this.ensureInitialized();
+    
     const now = new Date();
     let activeSessions = 0;
     let expiredSessions = 0;
@@ -167,6 +190,8 @@ export class SessionManager {
    * @returns 清理的会话数量
    */
   async cleanupExpiredSessions(): Promise<number> {
+    await this.ensureInitialized();
+    
     const now = new Date();
     let cleanedCount = 0;
     const sessionEntries = Array.from(this.sessions.entries());
@@ -178,7 +203,7 @@ export class SessionManager {
       }
     }
 
-    // 清理存储中的过期文件
+    // 清理Supabase中的过期会话
     const storageCleanedCount = await sessionStorage.cleanupExpiredSessions(this.EXPIRED_THRESHOLD);
     cleanedCount += storageCleanedCount;
 
@@ -323,7 +348,18 @@ export class SessionManager {
   }
 
   /**
-   * 强制同步到存储
+   * 保存会话到存储
+   */
+  private async saveSessionsToStorage(): Promise<void> {
+    try {
+      await sessionStorage.saveAllSessions(this.sessions);
+    } catch (error) {
+      console.warn('⚠️ [会话管理器] 保存会话失败:', error);
+    }
+  }
+
+  /**
+   * 同步到存储
    */
   async syncToStorage(): Promise<void> {
     await this.saveSessionsToStorage();
@@ -424,17 +460,6 @@ export class SessionManager {
       achievements: [],
       certifications: []
     };
-  }
-
-  /**
-   * 保存会话到存储
-   */
-  private async saveSessionsToStorage(): Promise<void> {
-    try {
-      await sessionStorage.saveAllSessions(this.sessions);
-    } catch (error) {
-      console.warn('⚠️ [会话管理器] 保存会话失败:', error);
-    }
   }
 
   /**
