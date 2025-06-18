@@ -16,7 +16,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import ChatInterface from "@/components/chat-interface"
+import ChatInterface from "@/components/interfaces/chat-interface"
 import { useChatSystemV2 } from "@/hooks/use-chat-system-v2"
 import { supabase } from "@/lib/supabase"
 import { ChatSession } from "@/types/chat"

@@ -16,9 +16,17 @@
 
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import PageRenderer from "@/components/page-renderer"
+import PageRenderer from "@/components/rendering/page-renderer"
 import { createServerClient } from "@/lib/supabase-server"
 import type { FlowPage } from "@/types/HeysMe"
+
+// 扩展FlowPage类型以包含用户关联数据
+type FlowPageWithUser = FlowPage & {
+  users?: {
+    username: string
+    email: string
+  }
+}
 
 interface PageProps {
   params: {
@@ -27,7 +35,7 @@ interface PageProps {
 }
 
 // 获取页面数据
-async function getPageBySlug(slug: string): Promise<FlowPage | null> {
+async function getPageBySlug(slug: string): Promise<FlowPageWithUser | null> {
   const supabase = createServerClient()
 
   const { data, error } = await supabase

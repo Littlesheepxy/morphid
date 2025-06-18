@@ -58,7 +58,7 @@ import {
   Activity,
 } from "lucide-react"
 import { useTheme } from "@/contexts/theme-context"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/navigation/theme-toggle"
 import { supabase } from "@/lib/supabase"
 
 // 项目数据类型定义

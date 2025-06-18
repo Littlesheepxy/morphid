@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/navigation/theme-toggle"
 import { useTheme } from "@/contexts/theme-context"
 import { Sparkles, Zap, Users, Shield } from "lucide-react"
 

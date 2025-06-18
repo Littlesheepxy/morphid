@@ -31,7 +31,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { Sparkles, Mail, Lock, User, Github, Chrome, Eye, EyeOff, AlertCircle, CheckCircle, Shield } from "lucide-react"
 import { useTheme } from "@/contexts/theme-context"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/navigation/theme-toggle"
 import { supabase } from "@/lib/supabase"
 
 export default function RegisterPage() {

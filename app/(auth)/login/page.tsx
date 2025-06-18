@@ -15,7 +15,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Sparkles } from "lucide-react"
 import { useTheme } from "@/contexts/theme-context"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { ThemeToggle } from "@/components/navigation/theme-toggle"
 import { SignIn } from "@clerk/nextjs"
 
 export default function LoginPage() {

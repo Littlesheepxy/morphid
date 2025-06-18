@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Download, ExternalLink, Send, CheckCircle } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 import { MessageBubble } from './MessageBubble';
-import { CodePreviewToggle } from '@/components/layout/CodePreviewToggle';
+import { CodePreviewToggle } from '@/components/editor/CodePreviewToggle';
 
 interface CodeModeViewProps {
   currentSession: any;

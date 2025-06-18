@@ -40,8 +40,8 @@ import {
   Palette,
 } from "lucide-react"
 import { useTheme } from "@/contexts/theme-context"
-import { DataSourceIntegration } from "@/components/data-source-integration"
-import { ModelSelector } from "@/components/model-selector"
+import { DataSourceIntegration } from "@/components/integration/data-source-integration"
+import { ModelSelector } from "@/components/navigation/model-selector"
 import { MarkdownRenderer } from "@/components/ui/markdown-renderer"
 import type { ChatMessage, ChatSession, ChatOption } from "@/types/chat"
 import type { FlowPage } from "@/types/HeysMe"
