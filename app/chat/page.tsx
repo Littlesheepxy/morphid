@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { useChatSystemV2 } from "@/hooks/use-chat-system-v2"
 import { useTheme } from "@/contexts/theme-context"
 import { generateMockResumeCode } from "@/lib/utils/mockCodeGenerator"
+import { useAuthCheck, usePendingAuthAction } from "@/hooks/use-auth-check"
+import { AuthPromptDialog } from "@/components/dialogs"
 
 // 导入新的组件
 import { ChatHeader } from "@/components/chat/ChatHeader"
@@ -14,6 +16,13 @@ import { CodeModeView } from "@/components/chat/CodeModeView"
 
 export default function ChatPage() {
   const { theme } = useTheme()
+  
+  // 认证状态
+  const { isAuthenticated, isLoading: authLoading, userId } = useAuthCheck()
+  const { executePendingAction } = usePendingAuthAction()
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [pendingMessage, setPendingMessage] = useState<string>('')
+  
   const {
     sessions = [],
     currentSession,
@@ -62,6 +71,27 @@ export default function ChatPage() {
     }
   }, [currentSession, isCodeMode])
 
+  // 处理登录成功后的继续操作
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
+      // 检查是否有待执行的操作
+      const executed = executePendingAction(() => {
+        // 登录成功后继续发送消息
+        if (pendingMessage) {
+          setTimeout(() => {
+            sendMessage(pendingMessage)
+            setPendingMessage('')
+            setHasStartedChat(true)
+          }, 500)
+        }
+      })
+      
+      if (executed) {
+        console.log('✅ 登录成功，继续执行聊天操作')
+      }
+    }
+  }, [isAuthenticated, authLoading, pendingMessage, executePendingAction, sendMessage])
+
   // 监听键盘快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,6 +109,14 @@ export default function ChatPage() {
   // 发送消息
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return
+
+    // 检查认证状态
+    if (!authLoading && !isAuthenticated) {
+      // 未登录，显示登录提示
+      setPendingMessage(inputValue)
+      setShowAuthDialog(true)
+      return
+    }
 
     if (!hasStartedChat) {
       setHasStartedChat(true)
@@ -284,6 +322,19 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* 未登录提醒对话框 */}
+      <AuthPromptDialog
+        isOpen={showAuthDialog}
+        onClose={() => setShowAuthDialog(false)}
+        title="需要登录才能开始对话"
+        message="请先登录您的账户来使用AI助手和创建个人页面"
+        action="开始对话"
+        onLoginSuccess={() => {
+          // 登录成功回调会在useEffect中处理
+          setShowAuthDialog(false);
+        }}
+      />
     </div>
   )
 }

@@ -136,26 +136,26 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-12"
+            className="mb-8"
           >
             {/* Logo保持品牌色 */}
             <motion.div 
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg"
+              className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-6 shadow-md"
               style={{
                 background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
               }}
             >
-              <Sparkles className="w-8 h-8 text-white" />
+              <Sparkles className="w-6 h-6 text-white" />
             </motion.div>
             
-            <h1 className={`text-5xl font-bold mb-6 ${
+            <h1 className={`text-3xl font-bold mb-4 ${
               theme === "light" ? "text-gray-900" : "text-white"
             }`}>
               HeysMe AI
             </h1>
             
             {/* 打字机效果文本 */}
-            <div className={`text-xl min-h-20 flex items-center justify-center ${
+            <div className={`text-lg min-h-16 flex items-center justify-center ${
               theme === "light" ? "text-gray-600" : "text-gray-300"
             }`}>
               <div className="text-center leading-relaxed px-4">
@@ -190,7 +190,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
             className="w-full"
           >
             {/* 🎨 快捷发送按钮 - 移到输入框上方，一行显示 */}
-            <div className="mb-6 flex flex-wrap justify-center gap-3">
+            <div className="mb-4 flex flex-wrap justify-center gap-2">
               {[
                 "我想制作求职简历，目标是互联网公司",
                 "创建设计师作品集，展示给潜在客户",
@@ -220,7 +220,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
             </div>
 
             <div className="relative">
-              <div className={`flex items-center gap-4 p-6 rounded-2xl transition-all duration-300 border-2 ${
+              <div className={`flex items-center gap-3 p-4 rounded-xl transition-all duration-300 border ${
                 theme === "light" 
                   ? "bg-white border-emerald-200/80 shadow-sm hover:border-emerald-300/80 hover:shadow-md" 
                   : "bg-gray-800 border-emerald-700/50 shadow-sm hover:border-emerald-600/50 hover:shadow-md"
@@ -228,7 +228,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`p-3 h-12 rounded-xl transition-all duration-300 ${
+                  className={`p-2 h-10 rounded-lg transition-all duration-300 ${
                     theme === "light"
                       ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                       : "text-gray-400 hover:bg-gray-700 hover:text-gray-300"
@@ -243,7 +243,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="告诉我你想要什么样的简历..."
-                    className={`border-0 p-4 text-lg h-12 w-full transition-all duration-300 pr-16 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                    className={`border-0 p-3 text-base h-10 w-full transition-all duration-300 pr-12 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${
                       theme === "light"
                         ? "bg-transparent placeholder:text-gray-400 text-gray-900"
                         : "bg-transparent placeholder:text-gray-500 text-white"
@@ -256,7 +256,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                     onClick={onSendMessage}
                     disabled={!inputValue.trim() || isGenerating}
                     size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 p-0 rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 w-8 h-8 p-0 rounded-lg hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
                     style={{
                       background: !inputValue.trim() || isGenerating 
                         ? '#9CA3AF' 

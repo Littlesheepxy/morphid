@@ -19,6 +19,7 @@ export class SessionManager {
   private sessions: Map<string, SessionData> = new Map();
   private readonly EXPIRED_THRESHOLD = 24 * 60 * 60 * 1000; // 24小时
   private initializationPromise: Promise<void> | null = null;
+  private temporarySessions: Map<string, SessionData> = new Map(); // 临时会话（未登录用户）
 
   constructor() {
     // 异步初始化，避免阻塞构造函数
@@ -62,10 +63,17 @@ export class SessionManager {
     const sessionId = this.generateSessionId();
     const session = this.createSessionData(sessionId, initialData);
     
-    this.sessions.set(sessionId, session);
-    await this.saveSessionsToStorage();
+    // 检查用户认证状态，决定是否创建临时会话
+    try {
+      await this.saveSessionsToStorage(); // 尝试保存，测试认证状态
+      this.sessions.set(sessionId, session);
+      console.log(`✅ [会话管理器] 创建新会话: ${sessionId}`);
+    } catch (error) {
+      // 保存失败（可能是未登录），创建临时会话
+      this.temporarySessions.set(sessionId, session);
+      console.log(`✅ [会话管理器] 创建临时会话: ${sessionId}`);
+    }
     
-    console.log(`✅ [会话管理器] 创建新会话: ${sessionId}`);
     return sessionId;
   }
 
@@ -79,8 +87,15 @@ export class SessionManager {
     
     let session = this.sessions.get(sessionId);
     
-    // 如果内存中没有找到，尝试重新加载
+    // 如果内存中没有找到，检查临时会话
     if (!session) {
+      session = this.temporarySessions.get(sessionId);
+      
+      if (session) {
+        console.log(`✅ [会话管理器] 从临时存储找到会话 ${sessionId}`);
+        return session;
+      }
+      
       console.log(`🔍 [会话管理器] 内存中未找到会话 ${sessionId}，尝试重新加载`);
       await this.initializeSessions();
       session = this.sessions.get(sessionId);
@@ -116,8 +131,14 @@ export class SessionManager {
     session.metadata.lastActive = new Date();
     session.metadata.updatedAt = new Date();
     
-    this.sessions.set(sessionId, session);
-    await this.saveSessionsToStorage();
+    // 检查是否为临时会话
+    if (this.temporarySessions.has(sessionId)) {
+      this.temporarySessions.set(sessionId, session);
+      console.log(`🔄 [会话管理器] 更新临时会话: ${sessionId}`);
+    } else {
+      this.sessions.set(sessionId, session);
+      await this.saveSessionsToStorage();
+    }
   }
 
   /**

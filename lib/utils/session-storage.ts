@@ -6,7 +6,7 @@
 
 import { SessionData } from '@/lib/types/session';
 import { createServerClient } from '@/lib/supabase-server';
-import { auth } from '@clerk/nextjs/server';
+import { checkAuthStatus } from './auth-helper';
 
 /**
  * Supabase会话存储管理器
@@ -24,8 +24,8 @@ export class SessionStorageManager {
     const sessions = new Map<string, SessionData>();
     
     try {
-      const { userId } = await auth();
-      if (!userId) {
+      const { userId, isAuthenticated } = await checkAuthStatus();
+      if (!isAuthenticated) {
         console.warn('⚠️ [存储] 用户未登录，无法加载会话');
         return sessions;
       }
@@ -65,8 +65,8 @@ export class SessionStorageManager {
    */
   async saveAllSessions(sessions: Map<string, SessionData>): Promise<void> {
     try {
-      const { userId } = await auth();
-      if (!userId) {
+      const { userId, isAuthenticated } = await checkAuthStatus();
+      if (!isAuthenticated) {
         console.warn('⚠️ [存储] 用户未登录，无法保存会话');
         return;
       }
@@ -74,7 +74,7 @@ export class SessionStorageManager {
       const sessionEntries = Array.from(sessions.entries());
       
       for (const [sessionId, sessionData] of sessionEntries) {
-        await this.saveSession(sessionData, userId);
+        await this.saveSession(sessionData, userId || undefined);
       }
       
       console.log(`✅ [存储-Supabase] 保存了 ${sessions.size} 个会话`);
@@ -91,8 +91,8 @@ export class SessionStorageManager {
   async saveSession(sessionData: SessionData, userId?: string): Promise<void> {
     try {
       if (!userId) {
-        const { userId: currentUserId } = await auth();
-        if (!currentUserId) {
+        const { userId: currentUserId, isAuthenticated } = await checkAuthStatus();
+        if (!isAuthenticated || !currentUserId) {
           throw new Error('用户未登录');
         }
         userId = currentUserId;
@@ -195,8 +195,8 @@ export class SessionStorageManager {
    */
   async cleanupExpiredSessions(expiredThreshold: number = 24 * 60 * 60 * 1000): Promise<number> {
     try {
-      const { userId } = await auth();
-      if (!userId) {
+      const { userId, isAuthenticated } = await checkAuthStatus();
+      if (!isAuthenticated) {
         return 0;
       }
 
@@ -236,8 +236,8 @@ export class SessionStorageManager {
     activeSessions?: number;
   }> {
     try {
-      const { userId } = await auth();
-      if (!userId) {
+      const { userId, isAuthenticated } = await checkAuthStatus();
+      if (!isAuthenticated) {
         return {
           environment: 'supabase',
           storageLocation: 'Supabase Database',

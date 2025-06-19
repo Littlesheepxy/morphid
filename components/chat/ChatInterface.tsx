@@ -30,6 +30,8 @@ import { MessageBubble } from './MessageBubble';
 import { UnifiedLoading, ThinkingLoader, GeneratingLoader } from '@/components/ui/unified-loading';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LoadingCarousel, LOADING_SEQUENCES } from '@/components/ui/loading-carousel';
+import { AuthPromptDialog } from '@/components/dialogs';
+import { useAuthCheck, usePendingAuthAction } from '@/hooks/use-auth-check';
 
 interface ChatInterfaceProps {
   sessionId?: string;
@@ -38,6 +40,13 @@ interface ChatInterfaceProps {
 }
 
 export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, className = '' }: ChatInterfaceProps) {
+  // 认证状态
+  const { isAuthenticated, isLoading: authLoading, userId } = useAuthCheck();
+  const { executePendingAction } = usePendingAuthAction();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string>('');
+  
+  // 原有状态
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId || null);
   const [messages, setMessages] = useState<ConversationEntry[]>([]);
   const [currentAgentResponse, setCurrentAgentResponse] = useState<Partial<StreamableAgentResponse> | null>(null);
@@ -58,11 +67,32 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const processingMessagesRef = useRef<Set<string>>(new Set());
 
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentAgentResponse]);
+
+  // 处理登录成功后的继续对话
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
+      // 检查是否有待执行的操作
+      const executed = executePendingAction(() => {
+        // 登录成功后继续之前的对话
+        if (pendingMessage) {
+          setTimeout(() => {
+            sendMessage(pendingMessage);
+            setPendingMessage('');
+          }, 500);
+        }
+      });
+      
+      if (executed) {
+        console.log('✅ 登录成功，继续执行待执行的对话操作');
+      }
+    }
+  }, [isAuthenticated, authLoading, pendingMessage, executePendingAction]);
 
   // 初始化会话
   useEffect(() => {
@@ -90,10 +120,8 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
       const data = await response.json();
       setSessionId(data.sessionId);
       
-      // 自动开始第一个欢迎消息
-      setTimeout(() => {
-        sendMessage('Hello');
-      }, 500);
+      // 🔧 修复：避免自动发送消息，等待用户主动开始对话
+      // 移除自动发送的Hello消息，防止重复会话创建
 
     } catch (error) {
       console.error('Session creation error:', error);
@@ -117,7 +145,30 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   };
 
   const sendMessage = async (message: string, options?: any) => {
+    // 检查认证状态
+    if (!authLoading && !isAuthenticated) {
+      // 未登录，显示登录提示
+      setPendingMessage(message);
+      setShowAuthDialog(true);
+      return;
+    }
+    
     if (!sessionId || (!message.trim() && !options) || isStreaming) return;
+    
+    // 防重复提交：检查是否已有相同消息正在处理
+    const messageKey = `${sessionId}-${message}-${JSON.stringify(options)}`;
+    
+    if (processingMessagesRef.current.has(messageKey)) {
+      console.log('⏸️ [防重复] 忽略重复提交的消息:', message);
+      return;
+    }
+    
+    processingMessagesRef.current.add(messageKey);
+    
+    // 清理函数，确保处理完成后移除标记
+    const cleanup = () => {
+      processingMessagesRef.current.delete(messageKey);
+    };
 
     // 🔧 修复：处理带有特殊选项的消息（如loading状态）
     if (options && (options.type === 'system_loading' || options.type === 'system_loading_carousel' || options.type === 'system_error' || options.type === 'system_success')) {
@@ -200,11 +251,12 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             
-            if (data === '[DONE]') {
-              setIsStreaming(false);
-              loadSessionStatus(); // 重新加载会话状态
-              break;
-            }
+                    if (data === '[DONE]') {
+          setIsStreaming(false);
+          cleanup(); // 清理防重复标记
+          loadSessionStatus(); // 重新加载会话状态
+          break;
+        }
 
             try {
               const parsedData = JSON.parse(data);
@@ -220,6 +272,7 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
       console.error('Send message error:', error);
       setError('发送消息失败，请重试');
       setIsStreaming(false);
+      cleanup(); // 清理防重复标记
     }
   };
 
@@ -330,31 +383,32 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   }
 
   return (
-    <Card className={`h-full flex flex-col ${className}`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
-            智能简历助手
-          </div>
-          
-          {sessionStatus && (
-            <div className="flex items-center gap-2 text-sm">
-              <Activity className="w-4 h-4" />
-              <span className="text-gray-600">{sessionStatus.currentStage}</span>
-              <span className="text-blue-600 font-medium">{sessionStatus.overallProgress}%</span>
+    <>
+      <Card className={`h-full flex flex-col ${className}`}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              智能简历助手
             </div>
+            
+            {sessionStatus && (
+              <div className="flex items-center gap-2 text-sm">
+                <Activity className="w-4 h-4" />
+                <span className="text-gray-600">{sessionStatus.currentStage}</span>
+                <span className="text-blue-600 font-medium">{sessionStatus.overallProgress}%</span>
+              </div>
+            )}
+          </CardTitle>
+          
+          {/* 进度条 */}
+          {sessionStatus && (
+            <ProgressBar 
+              progress={sessionStatus.overallProgress} 
+              stage={sessionStatus.currentStage}
+            />
           )}
-        </CardTitle>
-        
-        {/* 进度条 */}
-        {sessionStatus && (
-          <ProgressBar 
-            progress={sessionStatus.overallProgress} 
-            stage={sessionStatus.currentStage}
-          />
-        )}
-      </CardHeader>
+        </CardHeader>
 
       <CardContent className="flex-1 flex flex-col overflow-hidden">
         {/* 消息列表 */}
@@ -457,5 +511,19 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
         </form>
       </CardContent>
     </Card>
+
+    {/* 未登录提醒对话框 */}
+    <AuthPromptDialog
+      isOpen={showAuthDialog}
+      onClose={() => setShowAuthDialog(false)}
+      title="需要登录才能继续"
+      message="请先登录您的账户来继续使用智能对话功能"
+      action="发送消息"
+      onLoginSuccess={() => {
+        // 登录成功回调会在useEffect中处理
+        setShowAuthDialog(false);
+      }}
+    />
+  </>
   );
 }

@@ -24,12 +24,30 @@ export const WELCOME_SYSTEM_PROMPT = `你是一个专业的个人页面信息收
 2. 用户明确表示"跳过"、"够了"、"先这样"等
 3. 用户信息已经足够生成基础页面
 
+## 📋 输出格式要求
+你必须返回严格的JSON格式，不能有任何额外的文本。格式如下：
+{
+  "reply": "你的友好回复",
+  "collected_info": {
+    "user_role": "用户身份（如果收集到）",
+    "use_case": "使用目的（如果收集到）",
+    "style": "风格偏好（如果收集到）",
+    "highlight_focus": ["重点内容数组（如果收集到）"]
+  },
+  "completion_status": "collecting或ready",
+  "next_question": "下一个问题（可选）"
+}
+
+重要：只返回JSON，不要任何额外文本或解释。
+
 `;
 
 // 第一轮User Prompt模板
 export const FIRST_ROUND_PROMPT_TEMPLATE = `用户想要创建个人页面，他们说："{userInput}"
 
-请基于用户的输入开始信息收集对话。如果用户输入已经包含了一些信息，请先确认和总结，然后询问缺失的信息。`;
+请基于用户的输入开始信息收集对话。如果用户输入已经包含了一些信息，请先确认和总结，然后询问缺失的信息。
+
+请严格按照JSON格式返回，不要有任何额外的文本。`;
 
 // 后续轮次Prompt模板
 export const CONTINUATION_PROMPT_TEMPLATE = `
@@ -41,7 +59,9 @@ export const CONTINUATION_PROMPT_TEMPLATE = `
 
 用户新回复："{userInput}"
 
-请继续对话，收集缺失信息或判断是否可以结束收集。`;
+请继续对话，收集缺失信息或判断是否可以结束收集。
+
+请严格按照JSON格式返回，不要有任何额外的文本。`;
 
 // 🆕 信息汇总Prompt - 用于收集结束时整理所有信息
 export const WELCOME_SUMMARY_PROMPT = `你是信息汇总专家，负责从对话历史中提取用户的核心信息并判断用户意图。
