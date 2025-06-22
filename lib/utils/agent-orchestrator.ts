@@ -407,7 +407,8 @@ export class AgentOrchestrator {
       
       // 特殊处理 Welcome Agent
       if (currentAgent === 'welcome') {
-        const completionStatus = response.system_state?.metadata?.completionStatus;
+        const completionStatus = response.system_state?.metadata?.completion_status || 
+                                response.system_state?.metadata?.completionStatus;
         console.log(`🔍 [编排器] Welcome Agent检查 completion_status: ${completionStatus}`);
         
         if (completionStatus !== 'ready') {

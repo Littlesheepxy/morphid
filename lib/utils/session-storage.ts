@@ -17,6 +17,19 @@ export class SessionStorageManager {
   private supabase = createServerClient();
 
   /**
+   * 确保值是Date对象，如果不是则转换为Date
+   */
+  private ensureDate(value: any): Date {
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return new Date(value);
+    }
+    return new Date(); // 默认返回当前时间
+  }
+
+  /**
    * 从Supabase加载所有会话数据
    * @returns 会话数据Map
    */
@@ -90,10 +103,17 @@ export class SessionStorageManager {
    */
   async saveSession(sessionData: SessionData, userId?: string): Promise<void> {
     try {
+      // 🔧 环境变量检查，如果Supabase未配置则跳过
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        console.log('⚠️ [存储] Supabase未配置，跳过保存');
+        return;
+      }
+
       if (!userId) {
         const { userId: currentUserId, isAuthenticated } = await checkAuthStatus();
         if (!isAuthenticated || !currentUserId) {
-          throw new Error('用户未登录');
+          console.log('⚠️ [存储] 用户未登录，跳过保存');
+          return; // 改为return而不是throw，避免阻塞
         }
         userId = currentUserId;
       }
@@ -109,9 +129,9 @@ export class SessionStorageManager {
           personalization: sessionData.personalization,
           collected_data: sessionData.collectedData,
           metadata: sessionData.metadata,
-          created_at: sessionData.metadata.createdAt.toISOString(),
-          updated_at: sessionData.metadata.updatedAt.toISOString(),
-          last_active: sessionData.metadata.lastActive.toISOString(),
+          created_at: this.ensureDate(sessionData.metadata.createdAt).toISOString(),
+          updated_at: this.ensureDate(sessionData.metadata.updatedAt).toISOString(),
+          last_active: this.ensureDate(sessionData.metadata.lastActive).toISOString(),
         });
 
       if (sessionError) {
@@ -123,7 +143,7 @@ export class SessionStorageManager {
         const conversationEntries = sessionData.conversationHistory.map(entry => ({
           id: entry.id,
           session_id: sessionData.id,
-          timestamp: entry.timestamp.toISOString(),
+          timestamp: this.ensureDate(entry.timestamp).toISOString(),
           type: entry.type,
           agent: entry.agent,
           content: entry.content,
@@ -148,8 +168,8 @@ export class SessionStorageManager {
           stage: flow.agent, // 使用 agent 作为 stage
           status: flow.status,
           data: flow.input || {},
-          start_time: flow.startTime.toISOString(),
-          end_time: flow.endTime ? flow.endTime.toISOString() : null,
+          start_time: this.ensureDate(flow.startTime).toISOString(),
+          end_time: flow.endTime ? this.ensureDate(flow.endTime).toISOString() : null,
         }));
 
         const { error: flowError } = await this.supabase
@@ -163,6 +183,13 @@ export class SessionStorageManager {
 
     } catch (error) {
       console.warn(`⚠️ [存储] 保存会话失败 ${sessionData.id}:`, error);
+      
+      // 🔧 网络错误时不抛出异常，避免阻塞系统运行
+      if (error instanceof Error && error.message.includes('fetch failed')) {
+        console.warn('⚠️ [存储] 网络连接失败，会话仅保存在内存中');
+        return;
+      }
+      
       throw error;
     }
   }

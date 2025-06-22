@@ -42,19 +42,19 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
           
           // 段落样式
           p: ({ children }) => (
-            <p className="mb-4 text-gray-700 dark:text-gray-300 leading-relaxed font-normal">
+            <p className="mb-4 text-gray-900 dark:text-gray-100 leading-relaxed font-normal">
               {children}
             </p>
           ),
           
           // 列表样式
           ul: ({ children }) => (
-            <ul className="mb-4 ml-6 space-y-1 text-gray-700 dark:text-gray-300">
+            <ul className="mb-4 ml-6 space-y-1 text-gray-900 dark:text-gray-100">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-4 ml-6 space-y-1 text-gray-700 dark:text-gray-300 list-decimal">
+            <ol className="mb-4 ml-6 space-y-1 text-gray-900 dark:text-gray-100 list-decimal">
               {children}
             </ol>
           ),
@@ -167,11 +167,11 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         .markdown-content {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
           line-height: 1.6;
-          color: rgb(55, 65, 81);
+          color: rgb(17, 24, 39);
         }
         
         .dark .markdown-content {
-          color: rgb(209, 213, 219);
+          color: rgb(243, 244, 246);
         }
         
         .markdown-content h1,

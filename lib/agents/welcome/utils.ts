@@ -5,8 +5,7 @@
 import { 
   WELCOME_SYSTEM_PROMPT,
   FIRST_ROUND_PROMPT_TEMPLATE,
-  CONTINUATION_PROMPT_TEMPLATE,
-  WELCOME_SUMMARY_PROMPT
+  CONTINUATION_PROMPT_TEMPLATE
 } from '@/lib/prompts/welcome';
 
 /**
@@ -116,35 +115,211 @@ export function tryParseStreamingResponse(partialResponse: string): {
 }
 
 /**
- * 解析AI响应
+ * 流式内容分离结果
+ */
+export interface StreamContentSeparation {
+  visibleContent: string;
+  hiddenControl: WelcomeAIResponse | null;
+  isComplete: boolean;
+}
+
+/**
+ * 分离可见内容和隐藏控制信息
+ */
+export function separateVisibleAndHiddenContent(content: string): StreamContentSeparation {
+  // 🔧 修复：支持多种隐藏控制块格式
+  const hiddenControlRegexes = [
+    // 格式1: ```HIDDEN_CONTROL ... ```
+    /```HIDDEN_CONTROL\s*([\s\S]*?)\s*```/,
+    // 格式2: HIDDEN_CONTROL (没有代码块标记)
+    /HIDDEN_CONTROL\s*([\s\S]*?)(?=\n\n|$)/,
+    // 格式3: 更宽松的匹配
+    /HIDDEN_CONTROL[\s\n]*\{([\s\S]*?)\}(?:\s*$|\n|```)/
+  ];
+  
+  for (const regex of hiddenControlRegexes) {
+    const match = content.match(regex);
+    if (match) {
+      console.log(`🔍 [隐藏控制] 使用正则 ${regex.source} 匹配到内容`);
+      
+      // 找到隐藏控制信息，移除它
+      const visibleContent = content.replace(regex, '').trim();
+      
+      try {
+        // 尝试解析JSON - 处理可能缺少花括号的情况
+        let jsonStr = match[1]?.trim() || match[0];
+        
+        // 如果没有花括号，尝试添加
+        if (!jsonStr.startsWith('{')) {
+          // 查找第一个 { 和最后一个 }
+          const openBrace = content.indexOf('{', content.indexOf('HIDDEN_CONTROL'));
+          const closeBrace = content.lastIndexOf('}');
+          if (openBrace !== -1 && closeBrace !== -1 && closeBrace > openBrace) {
+            jsonStr = content.substring(openBrace, closeBrace + 1);
+          }
+        }
+        
+        console.log(`📄 [JSON解析] 尝试解析: ${jsonStr.substring(0, 100)}...`);
+        
+        const hiddenJson = JSON.parse(jsonStr);
+        const hiddenControl: WelcomeAIResponse = {
+          reply: visibleContent,
+          collected_info: hiddenJson.collected_info || {},
+          completion_status: hiddenJson.completion_status || 'collecting',
+          next_question: hiddenJson.next_question
+        };
+        
+        console.log(`✅ [隐藏控制解析成功] completion_status: ${hiddenControl.completion_status}`);
+        
+        return {
+          visibleContent,
+          hiddenControl,
+          isComplete: true
+        };
+      } catch (error) {
+        console.warn('⚠️ [隐藏控制信息解析失败]:', error);
+        console.warn('📄 [原始匹配内容]:', match[0]);
+        // 解析失败，但至少要移除隐藏内容
+        return {
+          visibleContent,
+          hiddenControl: null,
+          isComplete: false
+        };
+      }
+    }
+  }
+  
+  // 没有找到隐藏控制信息，可能还在流式输出中
+  return {
+    visibleContent: content,
+    hiddenControl: null,
+    isComplete: false
+  };
+}
+
+/**
+ * 流式内容处理器 - 实时分离可见和隐藏内容
+ */
+export class StreamContentProcessor {
+  private accumulatedContent = '';
+  private lastVisibleContent = '';
+  
+  /**
+   * 处理新的流式内容块
+   */
+  processChunk(chunk: string): {
+    newVisibleContent: string;
+    hiddenControl: WelcomeAIResponse | null;
+    isComplete: boolean;
+  } {
+    this.accumulatedContent += chunk;
+    
+    const separation = separateVisibleAndHiddenContent(this.accumulatedContent);
+    
+    // 计算新增的可见内容
+    const newVisibleContent = separation.visibleContent.slice(this.lastVisibleContent.length);
+    this.lastVisibleContent = separation.visibleContent;
+    
+    return {
+      newVisibleContent,
+      hiddenControl: separation.hiddenControl,
+      isComplete: separation.isComplete
+    };
+  }
+  
+  /**
+   * 重置处理器
+   */
+  reset(): void {
+    this.accumulatedContent = '';
+    this.lastVisibleContent = '';
+  }
+  
+  /**
+   * 获取当前可见内容
+   */
+  getCurrentVisibleContent(): string {
+    return this.lastVisibleContent;
+  }
+}
+
+/**
+ * 解析AI响应 - 更新为支持新格式
  */
 export function parseAIResponse(response: string): WelcomeAIResponse {
+  console.log(`🔍 [解析AI响应] 原始响应长度: ${response.length}`);
+  
+  // 🆕 首先尝试新的内容分离格式
+  const separation = separateVisibleAndHiddenContent(response);
+  if (separation.hiddenControl) {
+    console.log(`✅ [新格式解析成功] 可见内容长度: ${separation.visibleContent.length}`);
+    return separation.hiddenControl;
+  }
+  
+  // 🔧 兼容旧的JSON格式（向后兼容）
   try {
-    // 尝试解析JSON
-    const parsed = JSON.parse(response);
-    
-    // 验证必要字段
-    if (!parsed.reply || !parsed.completion_status) {
-      throw new Error('AI响应格式不完整');
+    // 先尝试查找JSON格式的回复
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[0];
+      console.log(`📄 [发现JSON] 长度: ${jsonStr.length}`);
+      
+      const parsed = JSON.parse(jsonStr);
+      
+      // 验证必要字段
+      if (parsed.reply && parsed.completion_status) {
+        console.log(`✅ [JSON解析成功] 回复长度: ${parsed.reply.length}`);
+        return {
+          reply: parsed.reply,
+          collected_info: parsed.collected_info || {},
+          completion_status: parsed.completion_status,
+          next_question: parsed.next_question
+        };
+      }
     }
-
-    return {
-      reply: parsed.reply,
-      collected_info: parsed.collected_info || {},
-      completion_status: parsed.completion_status,
-      next_question: parsed.next_question
-    };
+    
+    // 如果没有找到JSON，尝试直接解析整个响应
+    const parsed = JSON.parse(response);
+    if (parsed.reply && parsed.completion_status) {
+      console.log(`✅ [直接JSON解析成功] 回复长度: ${parsed.reply.length}`);
+      return {
+        reply: parsed.reply,
+        collected_info: parsed.collected_info || {},
+        completion_status: parsed.completion_status,
+        next_question: parsed.next_question
+      };
+    }
+    
+    throw new Error('AI响应格式不完整');
     
   } catch (error) {
-    console.error('❌ [AI响应解析失败]:', error);
+    console.warn('⚠️ [AI响应解析失败，使用文本模式]:', error);
     
-    // 降级处理：从文本中提取回复
+    // 🔧 修复：智能文本解析 - 使用可见内容作为回复
+    const visibleContent = separation.visibleContent || response.trim();
+    
+    console.log(`📝 [文本模式解析] 最终回复长度: ${visibleContent.length}`);
+    
     return {
-      reply: response || '抱歉，我需要重新理解您的需求。请再说一遍您想要创建什么样的个人页面？',
-      collected_info: {},
+      reply: visibleContent,
+      collected_info: extractInfoFromText(visibleContent),
       completion_status: 'collecting'
     };
   }
+}
+
+/**
+ * 从文本中提取收集到的信息
+ */
+function extractInfoFromText(text: string): CollectedInfo {
+  const info: CollectedInfo = {};
+  
+  // 简单的关键词匹配提取信息
+  if (text.includes('社交媒体') || text.includes('粉丝')) {
+    info.use_case = '分享给社交媒体粉丝';
+  }
+  
+  return info;
 }
 
 /**
@@ -210,50 +385,4 @@ export function generateCollectionSummary(collectedInfo: CollectedInfo): string 
  */
 export function getSystemPrompt(): string {
   return WELCOME_SYSTEM_PROMPT;
-}
-
-/**
- * 获取汇总Prompt
- */
-export function getSummaryPrompt(conversationHistory: any[]): string {
-  const historyText = buildConversationHistoryText(conversationHistory);
-  return WELCOME_SUMMARY_PROMPT.replace('{conversationHistory}', historyText);
-}
-
-/**
- * 解析汇总结果 - 简化版
- */
-export function parseSummaryResponse(response: string): WelcomeSummaryResult {
-  try {
-    const parsed = JSON.parse(response);
-    
-    // 验证必要字段
-    if (!parsed.summary || !parsed.user_intent) {
-      throw new Error('汇总响应格式不完整');
-    }
-
-    return parsed as WelcomeSummaryResult;
-    
-  } catch (error) {
-    console.error('❌ [汇总响应解析失败]:', error);
-    
-    // 降级处理 - 返回默认的"试一试"模式
-    return {
-      summary: {
-        user_role: '新用户',
-        use_case: '个人展示',
-        style: '简约风格',
-        highlight_focus: ['个人信息', '技能展示']
-      },
-      user_intent: {
-        commitment_level: '试一试',
-        reasoning: '响应解析失败，默认为体验模式'
-      },
-      context_for_next_agent: '用户信息收集不完整，建议使用示例数据进行快速体验',
-      sample_suggestions: {
-        should_use_samples: true,
-        reason: '为新用户提供友好的体验模式'
-      }
-    };
-  }
 } 

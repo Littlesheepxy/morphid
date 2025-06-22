@@ -420,16 +420,17 @@ export function useChatSystemV2() {
               const isStreamUpdate = chunk.system_state?.metadata?.is_update;
               const messageId = chunk.system_state?.metadata?.message_id;
               const streamType = chunk.system_state?.metadata?.stream_type;
+              const isFinal = chunk.system_state?.metadata?.is_final;
 
               if (chunk.type === 'agent_response' && chunk.immediate_display?.reply) {
                 shouldProcessResponse = true;
                 
-                if (isStreamUpdate && messageId) {
-                  // 🔄 这是一个流式更新，查找并更新现有消息
+                // 🔧 修复：优先检查是否是流式更新，避免重复创建消息
+                if (messageId && (isStreamUpdate || streamType)) {
                   if (streamingMessageId === messageId && streamingMessageIndex >= 0) {
-                    // 更新现有消息
-                    console.log(`🔄 [流式更新] 更新消息 ${messageId} 在位置 ${streamingMessageIndex}`);
-                    // 找到消息在conversation history中的位置并更新
+                    // 🔄 更新现有流式消息
+                    console.log(`🔄 [流式更新] 更新消息 ${messageId} 在位置 ${streamingMessageIndex}, 类型: ${streamType}`);
+                    
                     const messageIndex = session.conversationHistory.findIndex(msg => 
                       msg.metadata?.stream_message_id === messageId
                     );
@@ -438,10 +439,11 @@ export function useChatSystemV2() {
                       session.conversationHistory[messageIndex] = {
                         ...session.conversationHistory[messageIndex],
                         content: chunk.immediate_display.reply,
-                        timestamp: new Date(),
+                        timestamp: new Date(), 
                         metadata: {
                           ...session.conversationHistory[messageIndex].metadata,
-                          streaming: streamType !== 'complete'
+                          streaming: streamType !== 'complete' && !isFinal,
+                          stream_type: streamType
                         }
                       };
                       
@@ -449,8 +451,8 @@ export function useChatSystemV2() {
                       setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                     }
                   } else {
-                    // 首次流式消息，创建新消息
-                    console.log(`🆕 [流式创建] 创建新的流式消息 ${messageId}`);
+                    // 🆕 首次流式消息，创建新消息
+                    console.log(`🆕 [流式创建] 创建新的流式消息 ${messageId}, 类型: ${streamType}`);
                     agentMessage = {
                       id: `msg-${Date.now()}-agent-${messageId}`,
                       timestamp: new Date(),
@@ -458,8 +460,9 @@ export function useChatSystemV2() {
                       agent: chunk.immediate_display.agent_name || 'system',
                       content: chunk.immediate_display.reply,
                       metadata: { 
-                        streaming: streamType !== 'complete',
-                        stream_message_id: messageId
+                        streaming: streamType !== 'complete' && !isFinal,
+                        stream_message_id: messageId,
+                        stream_type: streamType
                       }
                     };
                     
@@ -469,9 +472,15 @@ export function useChatSystemV2() {
                     setCurrentSession({ ...session });
                     setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                   }
+                  // 🔧 关键修复：如果是完成状态，清理流式状态
+                  if (streamType === 'complete' || isFinal) {
+                    console.log(`✅ [流式完成] 消息 ${messageId} 流式处理完成`);
+                    streamingMessageId = null;
+                    streamingMessageIndex = -1;
+                  }
                 } else {
-                  // 🎯 普通消息，创建新消息
-                  console.log(`📝 [普通消息] 创建新消息`);
+                  // 🔧 修复：只有当不是流式消息时才创建普通消息
+                  console.log(`📝 [普通消息] 创建新消息（非流式）`);
                   agentMessage = {
                     id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
                     timestamp: new Date(),

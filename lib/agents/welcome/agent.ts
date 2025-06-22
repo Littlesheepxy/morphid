@@ -14,8 +14,7 @@ import {
   calculateCollectionProgress,
   buildConversationHistoryText,
   generateCollectionSummary,
-  getSummaryPrompt,
-  parseSummaryResponse
+  StreamContentProcessor
 } from './utils';
 
 /**
@@ -66,105 +65,78 @@ export class ConversationalWelcomeAgent extends BaseAgent {
 
       console.log(`🎯 [大模型调用] 发送流式对话请求`);
       
-      // 🆕 流式调用大模型，使用Claude官方API的流式模式
-      let accumulatedResponse = '';
+      // 🆕 修复流式响应处理逻辑 - 使用内容分离处理器
+      const contentProcessor = new StreamContentProcessor();
       let finalAiResponse: WelcomeAIResponse | null = null;
       let isFirstChunk = true;
       let messageId = `welcome-${Date.now()}`;
+      let chunkCount = 0;
+      
+      console.log(`🌊 [流式处理] 开始接收AI响应流`);
       
       for await (const chunk of this.callAIModelStreaming(userPrompt)) {
-        accumulatedResponse += chunk;
+        chunkCount++;
         
-        if (isFirstChunk) {
-          // 🎯 第一个块：创建新消息气泡并开始流式输出
+        // 🆕 使用内容分离处理器处理每个chunk
+        const processResult = contentProcessor.processChunk(chunk);
+        
+        // 如果有新的可见内容，发送给前端
+        if (processResult.newVisibleContent) {
+          console.log(`📤 [流式可见内容] 第${chunkCount}个块，新增内容长度: ${processResult.newVisibleContent.length}`);
+          
           yield this.createResponse({
             immediate_display: {
-              reply: chunk,
+              reply: contentProcessor.getCurrentVisibleContent(), // 发送完整的当前可见内容
               agent_name: this.name,
               timestamp: new Date().toISOString()
             },
             system_state: {
               intent: 'collecting',
               done: false,
-              progress: 10,
-              current_stage: '信息收集中...',
+              progress: Math.min(90, 10 + Math.floor(contentProcessor.getCurrentVisibleContent().length / 50)),
+              current_stage: '正在对话...',
               metadata: {
                 streaming: true,
                 message_id: messageId,
-                stream_type: 'start'
+                stream_type: isFirstChunk ? 'start' : 'delta',
+                is_update: !isFirstChunk
               }
             }
           });
+          
           isFirstChunk = false;
-        } else {
-          // 🔄 后续块：更新现有消息气泡
-          yield this.createResponse({
-            immediate_display: {
-              reply: accumulatedResponse,
-              agent_name: this.name,
-              timestamp: new Date().toISOString()
-            },
-            system_state: {
-              intent: 'collecting',
-              done: false,
-              progress: Math.min(90, 10 + (accumulatedResponse.length / 10)),
-              current_stage: '信息收集中...',
-              metadata: {
-                streaming: true,
-                message_id: messageId,
-                stream_type: 'delta', // 🔑 关键：标记为增量更新
-                is_update: true // 🔑 告诉前端这是更新，不是新消息
-              }
-            }
-          });
+        }
+        
+        // 如果检测到完整的隐藏控制信息，处理完成逻辑
+        if (processResult.isComplete && processResult.hiddenControl) {
+          console.log(`🎉 [隐藏控制信息] 检测到完整的控制信息`);
+          finalAiResponse = processResult.hiddenControl;
+          break;
         }
       }
       
       // 🏁 流式完成：解析最终响应并发送完成状态
       console.log(`🔍 [流式完成] 解析最终AI响应`);
-      finalAiResponse = parseAIResponse(accumulatedResponse);
-      
-      // 发送流式完成的最终状态
-      yield this.createResponse({
-        immediate_display: {
-          reply: finalAiResponse.reply,
-          agent_name: this.name,
-          timestamp: new Date().toISOString()
-        },
-        system_state: {
-          intent: 'collecting',
-          done: false,
-          progress: calculateCollectionProgress(finalAiResponse.collected_info),
-          current_stage: '信息收集中',
-          metadata: {
-            streaming: false,
-            message_id: messageId,
-            stream_type: 'complete',
-            is_update: true,
-            completion_status: finalAiResponse.completion_status,
-            collected_info: finalAiResponse.collected_info
-          }
-        }
-      });
+      console.log(`📝 [累积响应] 长度: ${contentProcessor.getCurrentVisibleContent().length}, 内容前100字: ${contentProcessor.getCurrentVisibleContent().substring(0, 100)}`);
       
       // 更新对话历史
       conversationHistory.push(
         { role: 'user', content: input.user_input },
-        { role: 'assistant', content: finalAiResponse.reply }
+        { role: 'assistant', content: finalAiResponse?.reply || '' }
       );
       
       // 更新会话数据
       metadata.welcomeHistory = conversationHistory;
-      metadata.collectedInfo = { ...currentInfo, ...finalAiResponse.collected_info };
+      metadata.collectedInfo = { ...currentInfo, ...finalAiResponse?.collected_info || {} };
       
       console.log(`💾 [信息更新] 当前收集状态:`, metadata.collectedInfo);
 
-      // 根据完成状态决定最终响应
-      if (finalAiResponse.completion_status === 'ready') {
+      // 🔧 修复：根据完成状态发送最终响应，避免重复
+      if (finalAiResponse?.completion_status === 'ready') {
         console.log(`🎉 [收集完成] 信息收集完整，开始汇总处理`);
         
-        // 🆕 调用汇总功能
-        const summaryResult = await this.generateSummary(conversationHistory);
+        // 🆕 使用系统汇总，不再调用AI
+        const summaryResult = this.generateSystemSummary(metadata.collectedInfo);
         
         // 保存汇总结果到会话数据，供下一个Agent使用
         metadata.welcomeSummary = summaryResult;
@@ -172,7 +144,30 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         yield this.createAdvanceResponse(finalAiResponse, summaryResult, sessionData);
       } else {
         console.log(`🔄 [继续收集] 继续对话收集信息`);
-        yield this.createContinueResponse(finalAiResponse, sessionData);
+        
+        // 🔧 直接发送最终的继续收集响应，不再重复发送中间状态
+        yield this.createResponse({
+          immediate_display: {
+            reply: finalAiResponse?.reply || '',
+            agent_name: this.name,
+            timestamp: new Date().toISOString()
+          },
+          system_state: {
+            intent: 'collecting',
+            done: false,
+            progress: calculateCollectionProgress(metadata.collectedInfo),
+            current_stage: '信息收集中',
+            metadata: {
+              streaming: false,
+              message_id: messageId,
+              stream_type: 'complete',
+              is_final: true, // 🔑 标记为最终响应
+              completion_status: finalAiResponse?.completion_status,
+              collected_info: metadata.collectedInfo,
+              next_question: finalAiResponse?.next_question
+            }
+          }
+        });
       }
 
     } catch (error) {
@@ -229,62 +224,6 @@ export class ConversationalWelcomeAgent extends BaseAgent {
   }
 
   /**
-   * 创建继续收集的响应
-   */
-  private createContinueResponse(aiResponse: WelcomeAIResponse, sessionData: SessionData): StreamableAgentResponse {
-    return this.createResponse({
-      immediate_display: {
-        reply: aiResponse.reply,
-        agent_name: this.name,
-        timestamp: new Date().toISOString()
-      },
-      system_state: {
-        intent: 'collecting',
-        done: false,
-        progress: calculateCollectionProgress(aiResponse.collected_info),
-        current_stage: '信息收集中',
-        metadata: {
-          completion_status: 'collecting',
-          collected_info: aiResponse.collected_info,
-          next_question: aiResponse.next_question
-        }
-      }
-    });
-  }
-
-  /**
-   * 生成信息汇总
-   */
-  private async generateSummary(conversationHistory: any[]): Promise<WelcomeSummaryResult> {
-    try {
-      console.log(`📊 [汇总处理] 开始生成信息汇总...`);
-      
-      const summaryPrompt = getSummaryPrompt(conversationHistory);
-      
-      const result = await generateWithModel(
-        'claude',
-        'claude-sonnet-4-20250514',
-        [
-          { role: 'user', content: summaryPrompt }
-        ],
-        { maxTokens: 1000 }
-      );
-
-      const resultText = 'text' in result ? result.text : JSON.stringify(result);
-      const summaryResult = parseSummaryResponse(resultText);
-      
-      console.log(`✅ [汇总完成] 生成成功:`, summaryResult.summary);
-      return summaryResult;
-      
-    } catch (error) {
-      console.error('❌ [汇总失败]:', error);
-      
-      // 降级处理 - 返回基础汇总
-      return parseSummaryResponse('{}');
-    }
-  }
-
-  /**
    * 创建推进到下一阶段的响应
    */
   private createAdvanceResponse(
@@ -302,22 +241,63 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         timestamp: new Date().toISOString()
       },
       system_state: {
-        intent: 'advance_to_next',
+        intent: 'advance',
         done: true,
         progress: 100,
         current_stage: '信息收集完成',
         metadata: {
           completion_status: 'ready',
           collected_info: collectedInfo,
-          // 🆕 添加汇总结果（保持与process中一致的字段名）
-          welcomeSummary: summaryResult,
+          welcomeSummary: this.generateSystemSummary(collectedInfo),
           action: 'advance',
           next_step: 'info_collection',
-          // 🆕 传递给下一个Agent的上下文
-          next_agent_context: summaryResult.context_for_next_agent
+          next_agent_context: this.generateContextForNextAgent(collectedInfo)
         }
       }
     });
+  }
+
+  /**
+   * 🆕 系统生成汇总结果（替代AI汇总）
+   */
+  private generateSystemSummary(collectedInfo: CollectedInfo): WelcomeSummaryResult {
+    const completionProgress = calculateCollectionProgress(collectedInfo);
+    const hasDetailedInfo = completionProgress >= 75;
+    
+    const commitmentLevel = hasDetailedInfo ? '认真制作' : '试一试';
+    
+    return {
+      summary: {
+        user_role: collectedInfo.user_role || '新用户',
+        use_case: collectedInfo.use_case || '个人展示',
+        style: collectedInfo.style || '简约风格',
+        highlight_focus: collectedInfo.highlight_focus || ['个人信息', '技能展示']
+      },
+      user_intent: {
+        commitment_level: commitmentLevel,
+        reasoning: `基于收集信息完整度${completionProgress}%进行判断`
+      },
+      context_for_next_agent: this.generateContextForNextAgent(collectedInfo),
+      sample_suggestions: {
+        should_use_samples: commitmentLevel === '试一试',
+        reason: commitmentLevel === '试一试' 
+          ? '信息收集不够完整，建议使用示例数据快速体验' 
+          : '用户提供了详细信息，可以进行个性化定制'
+      }
+    };
+  }
+
+  /**
+   * 🆕 为下一个Agent生成上下文
+   */
+  private generateContextForNextAgent(collectedInfo: CollectedInfo): string {
+    const completionProgress = calculateCollectionProgress(collectedInfo);
+    
+    if (completionProgress >= 75) {
+      return `用户信息收集完整，可以基于以下信息进行个性化定制：${JSON.stringify(collectedInfo)}`;
+    } else {
+      return `用户信息收集不完整（${completionProgress}%），建议使用示例数据进行快速体验`;
+    }
   }
 
   /**

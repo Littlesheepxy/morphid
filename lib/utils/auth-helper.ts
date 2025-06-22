@@ -5,6 +5,22 @@
 import { auth } from '@clerk/nextjs/server';
 import { currentUser } from '@clerk/nextjs/server';
 
+/**
+ * 检查是否在请求上下文中
+ */
+function isInRequestContext(): boolean {
+  try {
+    // 🔧 更准确的上下文检测：尝试访问Next.js的headers函数
+    // 如果不在请求上下文中，这会抛出错误
+    const { headers } = require('next/headers');
+    headers(); // 尝试调用，如果成功说明在请求上下文中
+    return true;
+  } catch (error) {
+    // 如果调用失败，说明不在请求上下文中
+    return false;
+  }
+}
+
 export interface AuthResult {
   userId: string | null;
   isAuthenticated: boolean;
@@ -16,6 +32,16 @@ export interface AuthResult {
  * 兼容App Router和Pages Router环境
  */
 export async function checkAuthStatus(): Promise<AuthResult> {
+  // 🔧 临时解决方案：在非请求上下文中直接返回未认证状态
+  // 这样可以避免Clerk认证函数在错误环境中调用导致的错误
+  if (!isInRequestContext()) {
+    console.log('⚠️ [认证助手] 非请求上下文，跳过认证检查');
+    return { 
+      userId: null, 
+      isAuthenticated: false 
+    };
+  }
+
   try {
     // 优先尝试使用 auth() - App Router
     const { userId } = await auth();

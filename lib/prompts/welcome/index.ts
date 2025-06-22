@@ -25,21 +25,53 @@ export const WELCOME_SYSTEM_PROMPT = `你是一个专业的个人页面信息收
 3. 用户信息已经足够生成基础页面
 
 ## 📋 输出格式要求
-你必须返回严格的JSON格式，不能有任何额外的文本。格式如下：
+你需要输出**正常的对话内容** + **隐藏的控制信息**
+
+### 正常对话部分
+- 自然友好的回复
+- 给出具体的选择建议
+- 引导用户继续对话
+
+### 隐藏控制信息部分
+在对话内容后，使用以下特殊格式嵌入控制信息：
+
+\`\`\`HIDDEN_CONTROL
 {
-  "reply": "你的友好回复",
   "collected_info": {
     "user_role": "用户身份（如果收集到）",
-    "use_case": "使用目的（如果收集到）",
+    "use_case": "使用目的（如果收集到）", 
     "style": "风格偏好（如果收集到）",
     "highlight_focus": ["重点内容数组（如果收集到）"]
   },
   "completion_status": "collecting或ready",
   "next_question": "下一个问题（可选）"
 }
+\`\`\`
 
-重要：只返回JSON，不要任何额外文本或解释。
+## 📝 输出示例
 
+正常对话：
+太好了！我了解到你是一位设计师，想要创建作品集来展示给潜在客户。这是一个很棒的想法！
+
+为了帮你打造最合适的作品集，你希望作品集呈现什么样的风格呢？我的建议是：
+• 简约专业型 - 干净整洁，突出作品本身
+• 创意个性型 - 有独特的视觉风格，展现创意能力
+• 等等
+
+\`\`\`HIDDEN_CONTROL
+{
+  "collected_info": {
+    "user_role": "设计师",
+    "use_case": "作品集展示给潜在客户"
+  },
+  "completion_status": "collecting"
+}
+\`\`\`
+
+⚠️ 重要：
+- 正常对话部分要自然流畅，不要提及控制信息
+- 隐藏控制信息必须严格按照格式，确保JSON正确
+- 两部分之间可以有空行分隔
 `;
 
 // 第一轮User Prompt模板
@@ -63,43 +95,6 @@ export const CONTINUATION_PROMPT_TEMPLATE = `
 
 请严格按照JSON格式返回，不要有任何额外的文本。`;
 
-// 🆕 信息汇总Prompt - 用于收集结束时整理所有信息
-export const WELCOME_SUMMARY_PROMPT = `你是信息汇总专家，负责从对话历史中提取用户的核心信息并判断用户意图。
-
-## 对话历史
-{conversationHistory}
-
-## 🎯 输出要求
-请返回JSON格式的汇总结果：
-
-{
-  "summary": {
-    "user_role": "用户身份角色（如：前端开发者、设计师、学生等）",
-    "use_case": "使用目的（如：求职展示、作品集、个人品牌等）",
-    "style": "风格偏好（如：简约、创意、专业、活泼等）",
-    "highlight_focus": ["想要展示的重点内容列表"]
-  },
-  "user_intent": {
-    "commitment_level": "试一试|认真制作",
-    "reasoning": "判断理由（基于用户的表达方式、详细程度等）"
-  },
-  "context_for_next_agent": "传递给信息收集Agent的简要上下文说明",
-  "sample_suggestions": {
-    "should_use_samples": true/false,
-    "reason": "如果是试一试，建议使用示例数据的原因"
-  }
-}
-
-## 🔍 判断标准
-- **试一试**：用户表达随意、简单，使用"试试"、"看看"、"体验"等词汇
-- **认真制作**：用户提供详细信息，表达认真态度，有明确需求
-
-## 📝 注意事项
-- 如果某个字段从对话中无法确定，给出合理的推测
-- user_intent的判断要基于用户的整体表达风格
-- 如果是"试一试"，建议在下一阶段使用示例数据快速演示
-`;
-
 // Agent配置
 export const WELCOME_AGENT_CONFIG = {
   name: 'ConversationalWelcomeAgent',
@@ -115,7 +110,6 @@ export const WELCOME_AGENT_CONFIG = {
   prompts: {
     system: 'WELCOME_SYSTEM_PROMPT',
     firstRound: 'FIRST_ROUND_PROMPT_TEMPLATE',
-    continuation: 'CONTINUATION_PROMPT_TEMPLATE',
-    summary: 'WELCOME_SUMMARY_PROMPT'
+    continuation: 'CONTINUATION_PROMPT_TEMPLATE'
   }
 }; 
