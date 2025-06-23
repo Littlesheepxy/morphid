@@ -24,7 +24,19 @@ const isProtectedRoute = createRouteMatcher([
   "/api/deploy(.*)"
 ])
 
+// 定义公开路由（不需要认证）
+const isPublicRoute = createRouteMatcher([
+  "/api/webhooks(.*)", // Clerk webhooks
+  "/api/debug(.*)",    // 调试接口
+  "/api/env-check(.*)" // 环境检查
+])
+
 export default clerkMiddleware(async (auth, req) => {
+  // 🔧 公开路由直接放行，不需要认证检查
+  if (isPublicRoute(req)) {
+    return NextResponse.next()
+  }
+
   const authData = await auth()
   
   // 重定向旧的登录路由到新的 Clerk 登录页面

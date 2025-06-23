@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { SimpleTextLoader } from './unified-loading';
 
@@ -133,7 +133,7 @@ export function LoadingDots({ className = '' }: { className?: string }) {
   );
 }
 
-// 流式文本组件保持原有逻辑
+// 流式文本组件 - 优化版本，避免重复动画
 interface StreamingTextProps {
   text: string;
   speed?: number;
@@ -149,24 +149,74 @@ export function StreamingText({
 }: StreamingTextProps) {
   const [displayedText, setDisplayedText] = useState('');
   const [isComplete, setIsComplete] = useState(false);
+  const [currentText, setCurrentText] = useState('');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const indexRef = useRef(0);
 
+  // 🔧 优化：避免重复启动动画
   useEffect(() => {
-    if (!text) return;
+    if (!text || text === currentText) {
+      return; // 文本没有变化，不重新启动动画
+    }
 
-    let index = 0;
-    const timer = setInterval(() => {
-      if (index < text.length) {
-        setDisplayedText(text.substring(0, index + 1));
-        index++;
+    console.log('🌊 [StreamingText] 文本变化，更新显示:', {
+      oldText: currentText?.substring(0, 30) + '...',
+      newText: text?.substring(0, 30) + '...',
+      textLength: text.length
+    });
+
+    // 清理之前的定时器
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
+    setCurrentText(text);
+    setIsComplete(false);
+
+    // 🔧 优化：如果新文本包含当前显示的文本，从当前位置继续
+    const shouldContinue = text.startsWith(displayedText) && displayedText.length > 0;
+    
+    if (shouldContinue) {
+      indexRef.current = displayedText.length;
+      console.log('🔄 [StreamingText] 继续从位置', indexRef.current, '开始显示');
+    } else {
+      indexRef.current = 0;
+      setDisplayedText('');
+      console.log('🆕 [StreamingText] 重新开始显示');
+    }
+
+    // 启动动画
+    timerRef.current = setInterval(() => {
+      if (indexRef.current < text.length) {
+        setDisplayedText(text.substring(0, indexRef.current + 1));
+        indexRef.current++;
       } else {
-        clearInterval(timer);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
         setIsComplete(true);
+        console.log('🌊 [StreamingText] 显示完成');
         onComplete?.();
       }
     }, speed);
 
-    return () => clearInterval(timer);
-  }, [text, speed, onComplete]);
+    // 清理函数
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [text, speed]); // 移除 onComplete 依赖，避免重复触发
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <span className={cn('relative', className)}>

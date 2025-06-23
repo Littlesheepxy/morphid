@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,8 @@ interface MessageBubbleProps {
   isStreaming?: boolean;  // 新增：是否正在流式输出
 }
 
-export function MessageBubble({ 
+// 🔧 优化：移除React.memo，使用useMemo优化渲染
+export const MessageBubble = function MessageBubble({ 
   message, 
   isLast, 
   isGenerating, 
@@ -29,7 +30,7 @@ export function MessageBubble({
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInteraction, setShowInteraction] = useState(false);
-  const [contentComplete, setContentComplete] = useState(!isStreaming);
+  const [contentComplete, setContentComplete] = useState(!message.metadata?.streaming);
   
   // 🔧 修复：更精确的用户消息判断
   const isUser = message.sender === 'user' || message.agent === 'user';
@@ -38,18 +39,40 @@ export function MessageBubble({
   // 🔧 确保系统消息显示在左侧
   const actualIsUser = isUser && !isSystemMessage;
 
+  // 🔧 流式消息检测逻辑
+  const isStreamingMessage = useMemo(() => {
+    return (
+      message.streaming === true ||
+      message.metadata?.streaming === true ||
+      (isLast && isGenerating && !actualIsUser) ||
+      (isLast && isStreaming && !actualIsUser)
+    );
+  }, [message.streaming, message.metadata?.streaming, isLast, isGenerating, actualIsUser, isStreaming]);
+
   // 🔧 修复：自动显示表单逻辑
   useEffect(() => {
-    if (message.metadata?.interaction && !actualIsUser) {
-      // 如果有interaction数据，延迟显示表单以提供更好的用户体验
+    if (message.metadata?.interaction && !actualIsUser && !isStreamingMessage) {
       const timer = setTimeout(() => {
         setShowInteraction(true);
         setContentComplete(true);
-      }, isStreaming ? 1000 : 300);
-      
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [message.metadata?.interaction, isStreaming, actualIsUser]);
+  }, [message.metadata?.interaction, actualIsUser, isStreamingMessage]);
+
+  // 🔧 流式消息调试日志
+  useEffect(() => {
+    if (isStreamingMessage) {
+      console.log('🌊 [MessageBubble] 流式状态:', {
+        messageId: message.id,
+        streaming: message.streaming,
+        metadataStreaming: message.metadata?.streaming,
+        isLast,
+        isGenerating,
+        contentLength: message.content?.length || 0
+      });
+    }
+  }, [isStreamingMessage, message.content]);
 
   const handleInteractionSubmit = async () => {
     if (isSubmitting) return;
@@ -266,83 +289,44 @@ export function MessageBubble({
           <div className="whitespace-pre-wrap break-words">
             {/* 🎯 智能内容渲染 */}
             {(() => {
-              // 如果是最后一条消息且正在生成
-              if (isLast && !actualIsUser && isGenerating) {
-                return (
-                  <ThinkingLoader 
-                    text="正在思考中"
-                    size="sm"
-                  />
-                );
-              }
-              
-              // 🔧 新增：检测特定的loading文本并使用GeneratingLoader
-              if (!actualIsUser && (
-                message.content === '正在分析您的选择，请稍候...' ||
-                message.content === '正在为您生成个性化建议...'
-              )) {
-                return (
-                  <GeneratingLoader 
-                    text={message.content.replace('...', '')}
-                    size="sm"
-                  />
-                );
-              }
-              
-              // 如果是流式输出
-              if (isStreaming && !contentComplete) {
+              // 优先级1：流式消息
+              if (isStreamingMessage) {
+                console.log('🌊 [流式渲染] 内容长度:', message.content?.length || 0);
                 return (
                   <StreamingText
-                    text={message.content}
+                    text={message.content || ''}
                     speed={30}
                     onComplete={() => {
                       setContentComplete(true);
-                      // 延迟显示交互表单
                       if (message.metadata?.interaction) {
-                        setTimeout(() => {
-                          setShowInteraction(true);
-                        }, 500);
+                        setTimeout(() => setShowInteraction(true), 500);
                       }
                     }}
                   />
                 );
               }
               
-              // 如果内容正在等待显示（有交互但未完成）
-              if (message.metadata?.interaction && !contentComplete && !showInteraction) {
-                return (
-                  <GeneratingLoader 
-                    text="正在准备个性化选项"
-                    size="sm"
-                  />
-                );
+              // 优先级2：等待响应
+              if (isLast && !actualIsUser && isGenerating && !message.content) {
+                return <ThinkingLoader text="正在思考中" size="sm" />;
               }
               
-              // 🔧 智能去重处理：避免重复显示相同内容
-              let displayContent = message.content;
-              
-              // 检查是否有重复的句子或段落
-              if (displayContent && typeof displayContent === 'string') {
-                const lines = displayContent.split('\n');
-                const uniqueLines = [];
-                const seenLines = new Set();
-                
-                for (const line of lines) {
-                  const cleanLine = line.trim();
-                  if (cleanLine && !seenLines.has(cleanLine)) {
-                    uniqueLines.push(line);
-                    seenLines.add(cleanLine);
-                  } else if (!cleanLine) {
-                    // 保留空行
-                    uniqueLines.push(line);
-                  }
-                }
-                
-                displayContent = uniqueLines.join('\n');
+              // 优先级3：loading文本
+              if (!actualIsUser && message.content && (
+                message.content.includes('正在分析') ||
+                message.content.includes('正在为您生成') ||
+                message.content.includes('请稍候')
+              )) {
+                return <GeneratingLoader text={message.content.replace(/[。.…]+$/g, '')} size="sm" />;
               }
               
-              // 正常显示内容 - 使用Markdown渲染器
-              return <MarkdownRenderer content={displayContent} />;
+              // 优先级4：交互准备中
+              if (message.metadata?.interaction && !contentComplete && !showInteraction && !actualIsUser) {
+                return <GeneratingLoader text="正在准备个性化选项" size="sm" />;
+              }
+              
+              // 优先级5：普通内容
+              return <MarkdownRenderer content={message.content || ''} />;
             })()}
           </div>
 
@@ -833,4 +817,4 @@ export function MessageBubble({
       </div>
     </motion.div>
   );
-} 
+}; 

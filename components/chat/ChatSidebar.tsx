@@ -269,8 +269,8 @@ export function ChatSidebar({
                     <span className="text-sm truncate">
                       {session.id.length > 15 ? `${session.id.substring(0, 15)}...` : session.id}
                     </span>
-                    <button
-                      className={`opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full transition-all duration-200 flex items-center justify-center ml-auto ${
+                    <div
+                      className={`opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full transition-all duration-200 flex items-center justify-center ml-auto cursor-pointer ${
                         theme === "light"
                           ? "hover:bg-emerald-100 text-emerald-500 hover:text-emerald-700"
                           : "hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300"
@@ -281,7 +281,7 @@ export function ChatSidebar({
                       }}
                     >
                       <MoreHorizontal className="w-3 h-3" />
-                    </button>
+                    </div>
                   </motion.button>
                 ))
               ) : (

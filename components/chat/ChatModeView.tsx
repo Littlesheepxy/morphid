@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -19,7 +19,8 @@ interface ChatModeViewProps {
   sessionId?: string;
 }
 
-export function ChatModeView({
+// 🔧 优化：使用React.memo减少不必要的重新渲染
+export const ChatModeView = memo(function ChatModeView({
   currentSession,
   inputValue,
   setInputValue,
@@ -30,11 +31,28 @@ export function ChatModeView({
 }: ChatModeViewProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [previousSessionId, setPreviousSessionId] = useState<string | undefined>(sessionId);
+
+  // 🔧 优化：使用useMemo缓存消息列表
+  const currentMessages = useMemo(() => {
+    return currentSession?.conversationHistory || [];
+  }, [currentSession?.conversationHistory]);
+
+  // 🔧 优化：减少会话切换日志
+  useEffect(() => {
+    if (sessionId !== previousSessionId) {
+      console.log('🔄 [ChatModeView] 会话切换:', {
+        from: previousSessionId,
+        to: sessionId
+      });
+      setPreviousSessionId(sessionId);
+    }
+  }, [sessionId, previousSessionId]);
 
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [currentSession?.conversationHistory]);
+  }, [currentMessages]);
 
   const handleSendClick = () => {
     if (inputValue.trim()) {
@@ -50,38 +68,33 @@ export function ChatModeView({
       }`}>
         <ScrollArea className="h-full">
           <div className="py-8">
-            {currentSession?.conversationHistory?.map((message: any, index: number) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isLast={index === (currentSession?.conversationHistory?.length || 0) - 1}
-                isGenerating={isGenerating}
-                onSendMessage={onSendMessage}
-                sessionId={sessionId}
-              />
-            ))}
+            {currentMessages.length === 0 && !isGenerating ? (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                <div className="text-center">
+                  <p className="text-lg mb-2">开始新的对话</p>
+                  <p className="text-sm">向AI助手发送消息来开始创建您的个人页面</p>
+                </div>
+              </div>
+            ) : (
+              currentMessages.map((message: any, index: number) => (
+                <MessageBubble
+                  key={`${sessionId}-${message.id}-${index}`}
+                  message={message}
+                  isLast={index === currentMessages.length - 1}
+                  isGenerating={isGenerating && index === currentMessages.length - 1}
+                  onSendMessage={onSendMessage}
+                  sessionId={sessionId}
+                />
+              ))
+            )}
             
-            {/* 🎨 加载状态显示 - 简约设计 */}
-            {isGenerating && (
-              <div className="flex items-start gap-4 max-w-4xl mx-auto px-6 py-4">
-                <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center shadow-sm ${
-                  theme === "light" 
-                    ? "bg-gray-100" 
-                    : "bg-gray-800"
-                }`}>
-                  <div className="w-5 h-5 text-emerald-600">
-                    <svg className="animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <ThinkingLoader 
-                    text="HeysMe AI 正在思考中"
-                    size="md"
-                  />
-                </div>
+            {/* 🔧 修复：显示生成中的加载状态 */}
+            {isGenerating && currentMessages.length === 0 && (
+              <div className="px-8">
+                <ThinkingLoader 
+                  text="AI正在思考中"
+                  size="sm"
+                />
               </div>
             )}
             
@@ -168,4 +181,4 @@ export function ChatModeView({
       </div>
     </>
   );
-} 
+}); 

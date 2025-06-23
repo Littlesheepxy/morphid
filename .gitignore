@@ -94,3 +94,7 @@ temp/
 
 # Test files that might contain sensitive data
 test-env.js
+
+# ngrok development files
+.ngrok-url
+ngrok.log

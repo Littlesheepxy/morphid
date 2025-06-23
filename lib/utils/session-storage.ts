@@ -6,7 +6,7 @@
 
 import { SessionData } from '@/lib/types/session';
 import { createServerClient } from '@/lib/supabase-server';
-import { checkAuthStatus } from './auth-helper';
+import { safeCheckAuthStatus } from './auth-helper';
 
 /**
  * Supabase会话存储管理器
@@ -37,7 +37,7 @@ export class SessionStorageManager {
     const sessions = new Map<string, SessionData>();
     
     try {
-      const { userId, isAuthenticated } = await checkAuthStatus();
+      const { userId, isAuthenticated } = await safeCheckAuthStatus();
       if (!isAuthenticated) {
         console.warn('⚠️ [存储] 用户未登录，无法加载会话');
         return sessions;
@@ -78,7 +78,7 @@ export class SessionStorageManager {
    */
   async saveAllSessions(sessions: Map<string, SessionData>): Promise<void> {
     try {
-      const { userId, isAuthenticated } = await checkAuthStatus();
+      const { userId, isAuthenticated } = await safeCheckAuthStatus();
       if (!isAuthenticated) {
         console.warn('⚠️ [存储] 用户未登录，无法保存会话');
         return;
@@ -110,13 +110,16 @@ export class SessionStorageManager {
       }
 
       if (!userId) {
-        const { userId: currentUserId, isAuthenticated } = await checkAuthStatus();
+        const { userId: currentUserId, isAuthenticated } = await safeCheckAuthStatus();
         if (!isAuthenticated || !currentUserId) {
           console.log('⚠️ [存储] 用户未登录，跳过保存');
           return; // 改为return而不是throw，避免阻塞
         }
         userId = currentUserId;
       }
+
+      // 🔧 修复：确保用户记录存在
+      await this.ensureUserExists(userId);
 
       // 保存会话主记录
       const { error: sessionError } = await this.supabase
@@ -183,6 +186,7 @@ export class SessionStorageManager {
 
     } catch (error) {
       console.warn(`⚠️ [存储] 保存会话失败 ${sessionData.id}:`, error);
+      console.warn('⚠️ [存储] 保存会话到Supabase失败:', error);
       
       // 🔧 网络错误时不抛出异常，避免阻塞系统运行
       if (error instanceof Error && error.message.includes('fetch failed')) {
@@ -190,6 +194,108 @@ export class SessionStorageManager {
         return;
       }
       
+      // 🔧 外键约束错误时，尝试创建用户后重试
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23503') {
+        console.log('🔄 [存储] 检测到外键约束错误，尝试创建用户记录');
+        try {
+          await this.ensureUserExists(userId!);
+          // 重试保存
+          await this.saveSession(sessionData, userId);
+          return;
+        } catch (retryError) {
+          console.warn('⚠️ [存储] 重试保存失败:', retryError);
+        }
+      }
+      
+      // 其他错误不抛出，避免阻塞系统
+      return;
+    }
+  }
+
+  /**
+   * 🔧 新增：确保用户记录存在
+   * @param userId 用户ID
+   */
+  private async ensureUserExists(userId: string): Promise<void> {
+    try {
+      // 检查用户是否存在
+      const { data: existingUser, error: checkError } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single();
+
+      if (existingUser) {
+        return; // 用户已存在
+      }
+
+      // 如果用户不存在，创建用户记录
+      if (checkError?.code === 'PGRST116') { // 记录不存在
+        console.log(`🆕 [存储] 创建用户记录: ${userId}`);
+        
+        // 🔧 修复：处理邮箱唯一性约束
+        const userEmail = `user_${userId.slice(-8)}@temp.heysme.local`;
+        
+        const { error: createError } = await this.supabase
+          .from('users')
+          .insert({
+            id: userId,
+            email: userEmail, // 使用临时邮箱避免冲突
+            projects: ['HeysMe'],
+            plan: 'free',
+            default_model: 'claude-sonnet-4-20250514',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (createError) {
+          // 🔧 如果仍然有邮箱冲突，尝试使用时间戳
+          if (createError.code === '23505' && createError.message.includes('email')) {
+            console.log('⚠️ [存储] 邮箱冲突，尝试使用时间戳邮箱');
+            
+            const timestampEmail = `user_${userId.slice(-8)}_${Date.now()}@temp.heysme.local`;
+            const { error: retryError } = await this.supabase
+              .from('users')
+              .insert({
+                id: userId,
+                email: timestampEmail,
+                projects: ['HeysMe'],
+                plan: 'free',
+                default_model: 'claude-sonnet-4-20250514',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              });
+              
+            if (retryError) {
+              console.warn('⚠️ [存储] 重试创建用户记录失败:', retryError);
+              // 🔧 最后尝试：检查是否邮箱字段可以为null
+              const { error: nullEmailError } = await this.supabase
+                .from('users')
+                .insert({
+                  id: userId,
+                  // email: null, // 尝试不设置邮箱
+                  projects: ['HeysMe'],
+                  plan: 'free',
+                  default_model: 'claude-sonnet-4-20250514',
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+                
+              if (nullEmailError) {
+                throw nullEmailError;
+              }
+            }
+          } else {
+            throw createError;
+          }
+        }
+        
+        console.log(`✅ [存储] 用户记录创建成功: ${userId}`);
+      } else {
+        throw checkError;
+      }
+    } catch (error) {
+      console.warn(`⚠️ [存储] 确保用户存在失败 ${userId}:`, error);
       throw error;
     }
   }
@@ -222,7 +328,7 @@ export class SessionStorageManager {
    */
   async cleanupExpiredSessions(expiredThreshold: number = 24 * 60 * 60 * 1000): Promise<number> {
     try {
-      const { userId, isAuthenticated } = await checkAuthStatus();
+      const { userId, isAuthenticated } = await safeCheckAuthStatus();
       if (!isAuthenticated) {
         return 0;
       }
@@ -263,7 +369,7 @@ export class SessionStorageManager {
     activeSessions?: number;
   }> {
     try {
-      const { userId, isAuthenticated } = await checkAuthStatus();
+      const { userId, isAuthenticated } = await safeCheckAuthStatus();
       if (!isAuthenticated) {
         return {
           environment: 'supabase',

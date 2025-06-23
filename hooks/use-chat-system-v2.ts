@@ -233,17 +233,19 @@ export function useChatSystemV2() {
         setIsGenerating(true)
         setCurrentError(null)
 
-        // 🔧 确保有当前会话 - 优化逻辑，避免重复创建
+        // 🔧 修复：更严格的会话检查逻辑
         let targetSession = currentSession;
         
-        // 🆕 严格检查会话存在性
         console.log('📋 [发送消息] 检查会话状态:', {
           hasCurrentSession: !!currentSession,
           sessionId: currentSession?.id,
-          sessionStatus: currentSession?.status
+          sessionStatus: currentSession?.status,
+          hasConversationHistory: !!currentSession?.conversationHistory,
+          conversationLength: currentSession?.conversationHistory?.length || 0
         });
 
-        if (!targetSession || targetSession.status === 'abandoned') {
+        // 🔧 修复：只有在真正没有会话或会话已废弃时才创建新会话
+        if (!targetSession || targetSession.status === 'abandoned' || !targetSession.id) {
           console.log('📝 [发送消息] 当前无有效会话，创建新会话...');
           targetSession = await createNewSession();
           if (!targetSession) {
@@ -376,8 +378,11 @@ export function useChatSystemV2() {
 
     let buffer = '';
     let messageReceived = false;
-    let streamingMessageId: string | null = null; // 🆕 跟踪流式消息ID
-    let streamingMessageIndex: number = -1; // 🆕 跟踪流式消息在数组中的位置
+    let streamingMessageId: string | null = null;
+    let streamingMessageIndex: number = -1;
+    let updateCount = 0; // 🆕 跟踪更新次数
+    let lastUpdateTime = 0; // 🆕 跟踪最后更新时间
+    const UPDATE_THROTTLE = 100; // 🆕 限制更新频率为100ms
     
     try {
       while (true) {
@@ -402,20 +407,18 @@ export function useChatSystemV2() {
             
             try {
               const chunk = JSON.parse(data);
-              console.log('📦 [流式数据]', {
-                type: chunk.type || 'unknown',
-                hasImmediate: !!chunk.immediate_display,
-                hasReply: !!chunk.immediate_display?.reply,
-                replyLength: chunk.immediate_display?.reply?.length || 0,
-                isUpdate: chunk.system_state?.metadata?.is_update,
-                messageId: chunk.system_state?.metadata?.message_id,
-                streamType: chunk.system_state?.metadata?.stream_type
-              });
               
-              // 🔧 修复：处理流式更新逻辑
-              let shouldProcessResponse = false;
-              let agentMessage: any = null;
-
+              // 🔧 优化：减少日志频率
+              if (updateCount % 5 === 0) {
+                console.log('📦 [流式数据] 第', updateCount + 1, '次更新:', {
+                  type: chunk.type || 'unknown',
+                  hasReply: !!chunk.immediate_display?.reply,
+                  replyLength: chunk.immediate_display?.reply?.length || 0,
+                  messageId: chunk.system_state?.metadata?.message_id,
+                  streamType: chunk.system_state?.metadata?.stream_type
+                });
+              }
+              
               // 检查是否是流式更新消息
               const isStreamUpdate = chunk.system_state?.metadata?.is_update;
               const messageId = chunk.system_state?.metadata?.message_id;
@@ -423,13 +426,26 @@ export function useChatSystemV2() {
               const isFinal = chunk.system_state?.metadata?.is_final;
 
               if (chunk.type === 'agent_response' && chunk.immediate_display?.reply) {
-                shouldProcessResponse = true;
+                const now = Date.now();
                 
-                // 🔧 修复：优先检查是否是流式更新，避免重复创建消息
+                // 🔧 优化：限制更新频率，除非是最终消息
+                const shouldUpdate = isFinal || streamType === 'complete' || 
+                                   (now - lastUpdateTime) >= UPDATE_THROTTLE;
+                
+                if (!shouldUpdate && !isFinal) {
+                  updateCount++;
+                  continue; // 跳过这次更新
+                }
+                
+                lastUpdateTime = now;
+                updateCount++;
+                
                 if (messageId && (isStreamUpdate || streamType)) {
                   if (streamingMessageId === messageId && streamingMessageIndex >= 0) {
                     // 🔄 更新现有流式消息
-                    console.log(`🔄 [流式更新] 更新消息 ${messageId} 在位置 ${streamingMessageIndex}, 类型: ${streamType}`);
+                    if (updateCount % 5 === 0 || isFinal) {
+                      console.log(`🔄 [流式更新] 更新消息 ${messageId}, 第${updateCount}次, 类型: ${streamType}`);
+                    }
                     
                     const messageIndex = session.conversationHistory.findIndex(msg => 
                       msg.metadata?.stream_message_id === messageId
@@ -447,20 +463,24 @@ export function useChatSystemV2() {
                         }
                       };
                       
+                      // 🔧 优化：批量更新状态，减少渲染次数
                       setCurrentSession({ ...session });
                       setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                     }
                   } else {
                     // 🆕 首次流式消息，创建新消息
                     console.log(`🆕 [流式创建] 创建新的流式消息 ${messageId}, 类型: ${streamType}`);
-                    agentMessage = {
+                    
+                    const isStreaming = streamType !== 'complete' && !isFinal;
+                    
+                    const agentMessage = {
                       id: `msg-${Date.now()}-agent-${messageId}`,
                       timestamp: new Date(),
                       type: 'agent_response' as const,
                       agent: chunk.immediate_display.agent_name || 'system',
                       content: chunk.immediate_display.reply,
                       metadata: { 
-                        streaming: streamType !== 'complete' && !isFinal,
+                        streaming: isStreaming,
                         stream_message_id: messageId,
                         stream_type: streamType
                       }
@@ -472,16 +492,17 @@ export function useChatSystemV2() {
                     setCurrentSession({ ...session });
                     setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                   }
+                  
                   // 🔧 关键修复：如果是完成状态，清理流式状态
                   if (streamType === 'complete' || isFinal) {
-                    console.log(`✅ [流式完成] 消息 ${messageId} 流式处理完成`);
+                    console.log(`✅ [流式完成] 消息 ${messageId} 流式处理完成，总计${updateCount}次更新`);
                     streamingMessageId = null;
                     streamingMessageIndex = -1;
                   }
                 } else {
                   // 🔧 修复：只有当不是流式消息时才创建普通消息
                   console.log(`📝 [普通消息] 创建新消息（非流式）`);
-                  agentMessage = {
+                  const agentMessage = {
                     id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
                     timestamp: new Date(),
                     type: 'agent_response' as const,

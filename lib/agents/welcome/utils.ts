@@ -125,38 +125,47 @@ export interface StreamContentSeparation {
 
 /**
  * 分离可见内容和隐藏控制信息
+ * 支持流式处理中的部分内容解析
  */
 export function separateVisibleAndHiddenContent(content: string): StreamContentSeparation {
-  // 🔧 修复：支持多种隐藏控制块格式
-  const hiddenControlRegexes = [
-    // 格式1: ```HIDDEN_CONTROL ... ```
-    /```HIDDEN_CONTROL\s*([\s\S]*?)\s*```/,
-    // 格式2: HIDDEN_CONTROL (没有代码块标记)
-    /HIDDEN_CONTROL\s*([\s\S]*?)(?=\n\n|$)/,
-    // 格式3: 更宽松的匹配
-    /HIDDEN_CONTROL[\s\n]*\{([\s\S]*?)\}(?:\s*$|\n|```)/
+  // 🔧 增强：多种隐藏控制标记匹配
+  const patterns = [
+    /```HIDDEN_CONTROL\s*([\s\S]*?)\s*```/,  // 代码块格式
+    /HIDDEN_CONTROL\s*([\s\S]*?)(?=\n\n|$)/   // 简单格式
   ];
   
-  for (const regex of hiddenControlRegexes) {
-    const match = content.match(regex);
+  let match: RegExpMatchArray | null = null;
+  let patternUsed = '';
+  
+  // 尝试各种模式
+  for (const pattern of patterns) {
+    match = content.match(pattern);
     if (match) {
-      console.log(`🔍 [隐藏控制] 使用正则 ${regex.source} 匹配到内容`);
-      
-      // 找到隐藏控制信息，移除它
-      const visibleContent = content.replace(regex, '').trim();
-      
+      patternUsed = pattern.source;
+      break;
+    }
+  }
+  
+  if (match) {
+    console.log(`🔍 [隐藏控制] 使用正则 ${patternUsed} 匹配到内容`);
+    
+    // 分离可见内容（移除隐藏控制部分）
+    const visibleContent = content.replace(match[0], '').trim();
+    
+    // 提取JSON字符串
+    const jsonStr = match[1].trim();
+    
+    // 🔧 增强：JSON解析容错处理
+    if (jsonStr) {
       try {
-        // 尝试解析JSON - 处理可能缺少花括号的情况
-        let jsonStr = match[1]?.trim() || match[0];
-        
-        // 如果没有花括号，尝试添加
-        if (!jsonStr.startsWith('{')) {
-          // 查找第一个 { 和最后一个 }
-          const openBrace = content.indexOf('{', content.indexOf('HIDDEN_CONTROL'));
-          const closeBrace = content.lastIndexOf('}');
-          if (openBrace !== -1 && closeBrace !== -1 && closeBrace > openBrace) {
-            jsonStr = content.substring(openBrace, closeBrace + 1);
-          }
+                 // 🔧 检查JSON是否完整
+         if (!isCompleteJSON(jsonStr)) {
+          console.log(`⚠️ [JSON不完整] 等待更多数据: ${jsonStr.substring(0, 50)}...`);
+          return {
+            visibleContent,
+            hiddenControl: null,
+            isComplete: false
+          };
         }
         
         console.log(`📄 [JSON解析] 尝试解析: ${jsonStr.substring(0, 100)}...`);
@@ -179,6 +188,31 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
       } catch (error) {
         console.warn('⚠️ [隐藏控制信息解析失败]:', error);
         console.warn('📄 [原始匹配内容]:', match[0]);
+        
+        // 🔧 增强：尝试修复常见的JSON问题
+        const fixedJson = tryFixJSON(jsonStr);
+        if (fixedJson) {
+          try {
+            const hiddenJson = JSON.parse(fixedJson);
+            console.log('✅ [JSON修复成功] 使用修复后的JSON');
+            
+            const hiddenControl: WelcomeAIResponse = {
+              reply: visibleContent,
+              collected_info: hiddenJson.collected_info || {},
+              completion_status: hiddenJson.completion_status || 'collecting',
+              next_question: hiddenJson.next_question
+            };
+            
+            return {
+              visibleContent,
+              hiddenControl,
+              isComplete: true
+            };
+          } catch (fixError) {
+            console.warn('⚠️ [JSON修复失败]:', fixError);
+          }
+        }
+        
         // 解析失败，但至少要移除隐藏内容
         return {
           visibleContent,
@@ -195,6 +229,108 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
     hiddenControl: null,
     isComplete: false
   };
+}
+
+/**
+ * 🔧 新增：检查JSON字符串是否完整
+ */
+function isCompleteJSON(jsonStr: string): boolean {
+  // 基本完整性检查
+  const trimmed = jsonStr.trim();
+  
+  // 必须以 { 开始
+  if (!trimmed.startsWith('{')) {
+    return false;
+  }
+  
+  // 简单的括号匹配检查
+  let braceCount = 0;
+  let inString = false;
+  let escaped = false;
+  
+  for (let i = 0; i < trimmed.length; i++) {
+    const char = trimmed[i];
+    
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+      }
+    }
+  }
+  
+  // JSON完整的条件：括号平衡且以}结尾
+  return braceCount === 0 && trimmed.endsWith('}');
+}
+
+/**
+ * 🔧 新增：尝试修复常见的JSON问题
+ */
+function tryFixJSON(jsonStr: string): string | null {
+  try {
+    let fixed = jsonStr.trim();
+    
+    // 修复1：移除末尾的逗号
+    fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+    
+    // 修复2：确保字符串值被正确引用
+    fixed = fixed.replace(/:\s*([^",{}\[\]]+)(?=\s*[,}])/g, (match, value) => {
+      const trimmedValue = value.trim();
+      // 如果不是数字、布尔值或null，则添加引号
+      if (!/^(true|false|null|\d+(\.\d+)?)$/.test(trimmedValue)) {
+        return `: "${trimmedValue}"`;
+      }
+      return match;
+    });
+    
+    // 修复3：处理不完整的字符串
+    const lastQuoteIndex = fixed.lastIndexOf('"');
+    const lastColonIndex = fixed.lastIndexOf(':');
+    
+    if (lastColonIndex > lastQuoteIndex && !fixed.endsWith('}')) {
+      // 可能是不完整的字符串值
+      const afterColon = fixed.substring(lastColonIndex + 1).trim();
+      if (afterColon && !afterColon.startsWith('"')) {
+        // 补全字符串引号和结束括号
+        fixed = fixed.substring(0, lastColonIndex + 1) + ` "${afterColon}"`;
+      }
+      
+      // 确保有结束括号
+      if (!fixed.trim().endsWith('}')) {
+        // 计算需要的结束括号数量
+        const openBraces = (fixed.match(/{/g) || []).length;
+        const closeBraces = (fixed.match(/}/g) || []).length;
+        const needed = openBraces - closeBraces;
+        
+        for (let i = 0; i < needed; i++) {
+          fixed += '}';
+        }
+      }
+    }
+    
+    // 验证修复后的JSON
+    JSON.parse(fixed);
+    return fixed;
+    
+  } catch (error) {
+    return null;
+  }
 }
 
 /**

@@ -103,6 +103,21 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     }
   }, []);
 
+  // 处理sessionId变化，重置消息历史
+  useEffect(() => {
+    if (initialSessionId !== sessionId) {
+      setSessionId(initialSessionId || null);
+      setMessages([]); // 重置消息历史
+      setCurrentAgentResponse(null);
+      setError(null);
+      setIsStreaming(false);
+      
+      if (initialSessionId) {
+        loadSessionStatus();
+      }
+    }
+  }, [initialSessionId]);
+
   const createNewSession = async () => {
     try {
       const response = await fetch('/api/session', {
@@ -277,21 +292,64 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   };
 
   const handleStreamingResponse = (response: Partial<StreamableAgentResponse>) => {
+    // 🔧 修复：实时更新流式响应，而不是等到完成才显示
     setCurrentAgentResponse(response);
 
-    // 如果响应完成，添加到消息历史
-    if (response.system_state?.done || response.system_state?.intent === 'advance') {
-      const agentMessage: ConversationEntry = {
-        id: `agent-${Date.now()}`,
-        timestamp: new Date(),
-        type: 'agent_response',
-        agent: response.immediate_display?.agent_name,
-        content: response.immediate_display?.reply || '',
-        metadata: response.system_state?.metadata
-      };
+    // 🔧 修复：如果有回复内容，立即创建或更新Agent消息
+    if (response.immediate_display?.reply) {
+      const messageId = `agent-${Date.now()}`;
+      
+      setMessages(prev => {
+        // 检查是否已有流式消息正在更新
+        const lastMessage = prev[prev.length - 1];
+        const isStreamingMessage = lastMessage?.metadata?.streaming === true;
+        
+        if (isStreamingMessage && lastMessage.type === 'agent_response') {
+          // 更新现有的流式消息
+          return prev.map((msg, index) => 
+            index === prev.length - 1 
+              ? {
+                  ...msg,
+                  content: response.immediate_display?.reply || '',
+                  metadata: {
+                    ...msg.metadata,
+                    streaming: !response.system_state?.done,
+                    ...response.system_state?.metadata
+                  }
+                }
+              : msg
+          );
+        } else {
+          // 创建新的流式消息
+          const agentMessage: ConversationEntry = {
+            id: messageId,
+            timestamp: new Date(),
+            type: 'agent_response',
+            agent: response.immediate_display?.agent_name || 'system',
+            content: response.immediate_display?.reply || '',
+            metadata: {
+              streaming: !response.system_state?.done,
+              ...response.system_state?.metadata
+            }
+          };
+          
+          return [...prev, agentMessage];
+        }
+      });
+    }
 
-      setMessages(prev => [...prev, agentMessage]);
+    // 如果响应完成，清理流式状态
+    if (response.system_state?.done || response.system_state?.intent === 'advance') {
       setCurrentAgentResponse(null);
+      
+      // 标记最后一条消息为完成状态
+      setMessages(prev => 
+        prev.map((msg, index) => 
+          index === prev.length - 1 && msg.type === 'agent_response'
+            ? { ...msg, metadata: { ...msg.metadata, streaming: false } }
+            : msg
+        )
+      );
     }
   };
 
