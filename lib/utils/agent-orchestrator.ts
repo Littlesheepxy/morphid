@@ -366,8 +366,6 @@ export class AgentOrchestrator {
         hasInteraction: !!response.interaction
       });
       
-      yield response;
-
       // 如果Agent完成，处理后续流程
       if (response.system_state?.done) {
         console.log(`✅ [编排器] ${agentName} 处理完毕`);
@@ -375,16 +373,25 @@ export class AgentOrchestrator {
         // 记录完成情况
         sessionManager.recordAgentCompletion(session, agentName, agentStartTime, response);
         
+        // 🔧 修复：检查是否为静默推进，如果是则不发送空响应
+        const isSilentAdvance = response.system_state?.metadata?.silent_advance;
+        if (!isSilentAdvance || (response.immediate_display?.reply && response.immediate_display.reply.trim())) {
+          yield response; // 只有在非静默推进或有实际内容时才发送响应
+        }
+        
         // 检查是否需要推进到下一个Agent
         const nextAgent = this.getNextAgent(agentName, response);
         if (nextAgent) {
           console.log(`🔄 [编排器] 准备启动下一个Agent: ${nextAgent}`);
-          yield* this.transitionToNextAgent(nextAgent, session);
+          yield* this.transitionToNextAgent(nextAgent, session, userInput);
         } else {
           console.log(`⏹️  [编排器] 流程结束，无需跳转下一个Agent`);
           session.status = 'completed';
         }
         break;
+      } else {
+        // 🔧 对于未完成的响应，正常发送
+        yield response;
       }
     }
 
@@ -433,7 +440,8 @@ export class AgentOrchestrator {
    */
   private async* transitionToNextAgent(
     nextAgentName: string,
-    session: SessionData
+    session: SessionData,
+    userInput?: string
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     const nextAgent = this.agents.get(nextAgentName);
     
@@ -450,8 +458,53 @@ export class AgentOrchestrator {
 
     console.log(`🔄 [编排器] 启动Agent: ${nextAgentName}, 阶段: ${session.metadata.progress.currentStage}`);
 
-    // 开始执行下一个Agent
-    yield* this.executeAgentStreaming(nextAgent, nextAgentName, '', session);
+    // 🆕 特殊处理：info_collection agent前添加引导词
+    if (nextAgentName === 'info_collection') {
+      console.log(`🎯 [编排器] 进入信息收集阶段，发送引导词`);
+      
+      // 发送引导词响应
+      const guideResponse: StreamableAgentResponse = {
+        immediate_display: {
+          reply: `我们现在正式进入信息收集阶段 🎯  
+你可以直接发送任何你觉得有用的素材，我会自动识别并提取重点：
+
+🔗 链接（作品集、社交媒体、GitHub、文章等）  
+📄 文档（简历、项目介绍、讲稿等）  
+✍️ 文本描述（项目经历、技能总结、个人介绍等）
+
+无论内容多少，我都会根据你的输入进行智能分析和对话探索，帮你提炼出最具价值的亮点。
+
+如果你希望快速预览一个页面草稿，也可以直接回复"跳过"或"快进" 👇`,
+          agent_name: 'system',
+          timestamp: new Date().toISOString()
+        },
+        system_state: {
+          intent: 'transition_guide',
+          done: false,
+          progress: session.metadata.progress.percentage,
+          current_stage: session.metadata.progress.currentStage,
+          metadata: {
+            transition_type: 'info_collection_guide',
+            waiting_for_user_input: true
+          }
+        }
+      };
+      
+      console.log(`📤 [编排器] 发送信息收集引导词: {
+  hasReply: true,
+  replyLength: ${guideResponse.immediate_display?.reply?.length || 0},
+  intent: '${guideResponse.system_state?.intent}',
+  done: ${guideResponse.system_state?.done}
+}`);
+      
+      yield guideResponse;
+      
+      // 不立即启动agent，等待用户输入
+      return;
+    }
+
+    // 对于其他agent，直接启动（传递空字符串作为初始输入）
+    yield* this.executeAgentStreaming(nextAgent, nextAgentName, userInput || '', session);
   }
 
   /**

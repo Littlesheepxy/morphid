@@ -15,38 +15,51 @@ export interface CollectedInfo {
   user_role?: string;
   use_case?: string;
   style?: string;
-  highlight_focus?: string[];
+  highlight_focus?: string;
 }
 
 /**
- * AI响应接口
+ * 用户意图分析接口
+ */
+export interface UserIntentAnalysis {
+  commitment_level: '试一试' | '认真制作';
+  reasoning: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+/**
+ * AI响应接口 - 更新版本
  */
 export interface WelcomeAIResponse {
   reply: string;
   collected_info: CollectedInfo;
   completion_status: 'collecting' | 'ready';
+  user_intent_analysis: UserIntentAnalysis;
   next_question?: string;
 }
 
 /**
- * Welcome Agent汇总结果接口 - 简化版
+ * Welcome Agent汇总结果接口 - 匹配 optimized-agent 需求
  */
 export interface WelcomeSummaryResult {
   summary: {
     user_role: string;
     use_case: string;
     style: string;
-    highlight_focus: string[];
+    highlight_focus: string;
   };
   user_intent: {
     commitment_level: '试一试' | '认真制作';
     reasoning: string;
   };
-  context_for_next_agent: string;
   sample_suggestions: {
     should_use_samples: boolean;
-    reason: string;
+    sample_reason: string;
   };
+  collection_priority: string;
+  current_collected_data: CollectedInfo;
+  available_tools: string[];
+  context_for_next_agent: string;
 }
 
 /**
@@ -62,12 +75,14 @@ export function getFirstRoundPrompt(userInput: string): string {
 export function getContinuationPrompt(
   userInput: string, 
   conversationHistory: string, 
-  currentInfo: CollectedInfo
+  currentInfo: CollectedInfo,
+  currentIntent?: UserIntentAnalysis
 ): string {
   return CONTINUATION_PROMPT_TEMPLATE
     .replace('{userInput}', userInput)
     .replace('{conversationHistory}', conversationHistory)
-    .replace('{currentInfo}', JSON.stringify(currentInfo, null, 2));
+    .replace('{currentInfo}', JSON.stringify(currentInfo, null, 2))
+    .replace('{currentIntent}', JSON.stringify(currentIntent || {}, null, 2));
 }
 
 /**
@@ -149,8 +164,10 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
   if (match) {
     console.log(`🔍 [隐藏控制] 使用正则 ${patternUsed} 匹配到内容`);
     
-    // 分离可见内容（移除隐藏控制部分）
-    const visibleContent = content.replace(match[0], '').trim();
+    // 🔧 关键修复：正确分离可见内容，完全移除隐藏控制部分
+    const beforeHidden = content.substring(0, match.index || 0);
+    const afterHidden = content.substring((match.index || 0) + match[0].length);
+    const visibleContent = (beforeHidden + afterHidden).trim();
     
     // 提取JSON字符串
     const jsonStr = match[1].trim();
@@ -158,8 +175,8 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
     // 🔧 增强：JSON解析容错处理
     if (jsonStr) {
       try {
-                 // 🔧 检查JSON是否完整
-         if (!isCompleteJSON(jsonStr)) {
+        // 🔧 检查JSON是否完整
+        if (!isCompleteJSON(jsonStr)) {
           console.log(`⚠️ [JSON不完整] 等待更多数据: ${jsonStr.substring(0, 50)}...`);
           return {
             visibleContent,
@@ -172,13 +189,18 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
         
         const hiddenJson = JSON.parse(jsonStr);
         const hiddenControl: WelcomeAIResponse = {
-          reply: visibleContent,
+          reply: visibleContent, // 使用清理后的可见内容
           collected_info: hiddenJson.collected_info || {},
           completion_status: hiddenJson.completion_status || 'collecting',
+          user_intent_analysis: hiddenJson.user_intent_analysis || {
+            commitment_level: '认真制作',
+            reasoning: '默认分析',
+            confidence: 'low'
+          },
           next_question: hiddenJson.next_question
         };
         
-        console.log(`✅ [隐藏控制解析成功] completion_status: ${hiddenControl.completion_status}`);
+        console.log(`✅ [隐藏控制解析成功] completion_status: ${hiddenControl.completion_status}, commitment_level: ${hiddenControl.user_intent_analysis.commitment_level}`);
         
         return {
           visibleContent,
@@ -197,9 +219,14 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
             console.log('✅ [JSON修复成功] 使用修复后的JSON');
             
             const hiddenControl: WelcomeAIResponse = {
-              reply: visibleContent,
+              reply: visibleContent, // 使用清理后的可见内容
               collected_info: hiddenJson.collected_info || {},
               completion_status: hiddenJson.completion_status || 'collecting',
+              user_intent_analysis: hiddenJson.user_intent_analysis || {
+                commitment_level: '认真制作',
+                reasoning: '修复后的默认分析',
+                confidence: 'low'
+              },
               next_question: hiddenJson.next_question
             };
             
@@ -209,11 +236,11 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
               isComplete: true
             };
           } catch (fixError) {
-            console.warn('⚠️ [JSON修复失败]:', fixError);
+            console.warn('⚠️ [JSON修复也失败了]:', fixError);
           }
         }
         
-        // 解析失败，但至少要移除隐藏内容
+        // 🔧 修复：即使解析失败，也要返回清理后的可见内容
         return {
           visibleContent,
           hiddenControl: null,
@@ -223,9 +250,9 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
     }
   }
   
-  // 没有找到隐藏控制信息，可能还在流式输出中
+  // 没有找到隐藏控制信息，返回原始内容
   return {
-    visibleContent: content,
+    visibleContent: content.trim(),
     hiddenControl: null,
     isComplete: false
   };
@@ -352,9 +379,19 @@ export class StreamContentProcessor {
     
     const separation = separateVisibleAndHiddenContent(this.accumulatedContent);
     
-    // 计算新增的可见内容
-    const newVisibleContent = separation.visibleContent.slice(this.lastVisibleContent.length);
-    this.lastVisibleContent = separation.visibleContent;
+    // 🔧 修复：计算真正新增的可见内容，避免重复发送
+    const currentVisibleContent = separation.visibleContent;
+    const newVisibleContent = currentVisibleContent.slice(this.lastVisibleContent.length);
+    
+    // 🔧 修复：只有当真正有新内容时才更新
+    if (newVisibleContent.length > 0) {
+      this.lastVisibleContent = currentVisibleContent;
+    }
+    
+    // 🔧 调试日志：显示内容处理状态
+    if (newVisibleContent.length > 0) {
+      console.log(`📝 [内容处理器] 新增可见内容长度: ${newVisibleContent.length}, 累计长度: ${currentVisibleContent.length}`);
+    }
     
     return {
       newVisibleContent,
@@ -383,63 +420,49 @@ export class StreamContentProcessor {
  * 解析AI响应 - 更新为支持新格式
  */
 export function parseAIResponse(response: string): WelcomeAIResponse {
-  console.log(`🔍 [解析AI响应] 原始响应长度: ${response.length}`);
+  console.log(`🔍 [parseAIResponse] 开始解析AI响应`);
+  console.log(`📄 [原始响应] 长度: ${response.length}, 前200字符: ${response.substring(0, 200)}`);
   
-  // 🆕 首先尝试新的内容分离格式
+  // 🆕 使用新的内容分离函数
   const separation = separateVisibleAndHiddenContent(response);
+  
   if (separation.hiddenControl) {
-    console.log(`✅ [新格式解析成功] 可见内容长度: ${separation.visibleContent.length}`);
+    console.log(`✅ [解析成功] 找到隐藏控制信息`);
     return separation.hiddenControl;
   }
   
-  // 🔧 兼容旧的JSON格式（向后兼容）
+  // 🔧 回退：尝试直接JSON解析（兼容旧格式）
   try {
-    // 先尝试查找JSON格式的回复
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const jsonStr = jsonMatch[0];
-      console.log(`📄 [发现JSON] 长度: ${jsonStr.length}`);
-      
-      const parsed = JSON.parse(jsonStr);
-      
-      // 验证必要字段
-      if (parsed.reply && parsed.completion_status) {
-        console.log(`✅ [JSON解析成功] 回复长度: ${parsed.reply.length}`);
-        return {
-          reply: parsed.reply,
-          collected_info: parsed.collected_info || {},
-          completion_status: parsed.completion_status,
-          next_question: parsed.next_question
-        };
-      }
-    }
+    console.log(`🔄 [回退解析] 尝试直接JSON解析`);
+    const parsed = JSON.parse(response.trim());
     
-    // 如果没有找到JSON，尝试直接解析整个响应
-    const parsed = JSON.parse(response);
-    if (parsed.reply && parsed.completion_status) {
-      console.log(`✅ [直接JSON解析成功] 回复长度: ${parsed.reply.length}`);
-      return {
-        reply: parsed.reply,
-        collected_info: parsed.collected_info || {},
-        completion_status: parsed.completion_status,
-        next_question: parsed.next_question
+    // 🔧 确保包含必需的用户意图分析
+    if (!parsed.user_intent_analysis) {
+      parsed.user_intent_analysis = {
+        commitment_level: '认真制作',
+        reasoning: '未提供意图分析，默认为认真制作',
+        confidence: 'low'
       };
     }
     
-    throw new Error('AI响应格式不完整');
-    
+    console.log(`✅ [回退解析成功] completion_status: ${parsed.completion_status}`);
+    return parsed;
   } catch (error) {
-    console.warn('⚠️ [AI响应解析失败，使用文本模式]:', error);
+    console.warn('⚠️ [JSON解析失败]:', error);
     
-    // 🔧 修复：智能文本解析 - 使用可见内容作为回复
-    const visibleContent = separation.visibleContent || response.trim();
-    
-    console.log(`📝 [文本模式解析] 最终回复长度: ${visibleContent.length}`);
+    // 🔧 最后的回退：从文本中提取信息
+    const extractedInfo = extractInfoFromText(response);
+    console.log(`🔄 [文本提取] 提取到的信息:`, extractedInfo);
     
     return {
-      reply: visibleContent,
-      collected_info: extractInfoFromText(visibleContent),
-      completion_status: 'collecting'
+      reply: response,
+      collected_info: extractedInfo,
+      completion_status: 'collecting',
+      user_intent_analysis: {
+        commitment_level: '认真制作',
+        reasoning: '从文本分析推断',
+        confidence: 'low'
+      }
     };
   }
 }
@@ -463,11 +486,7 @@ function extractInfoFromText(text: string): CollectedInfo {
  */
 export function calculateCollectionProgress(collectedInfo: CollectedInfo): number {
   const fields = ['user_role', 'use_case', 'style', 'highlight_focus'];
-  const completedFields = fields.filter(field => {
-    const value = collectedInfo[field as keyof CollectedInfo];
-    return value && (Array.isArray(value) ? value.length > 0 : true);
-  });
-  
+  const completedFields = fields.filter(field => collectedInfo[field as keyof CollectedInfo]);
   return Math.round((completedFields.length / fields.length) * 100);
 }
 
@@ -475,45 +494,34 @@ export function calculateCollectionProgress(collectedInfo: CollectedInfo): numbe
  * 构建对话历史文本
  */
 export function buildConversationHistoryText(conversationHistory: any[]): string {
-  return conversationHistory.map((h: any) => 
-    `${h.role}: ${h.content}`
-  ).join('\n');
+  return conversationHistory
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n\n');
 }
 
 /**
  * 验证收集信息的完整性
  */
 export function isInfoCollectionComplete(collectedInfo: CollectedInfo): boolean {
-  const hasRole = !!collectedInfo.user_role;
-  const hasUseCase = !!collectedInfo.use_case;
-  const hasStyle = !!collectedInfo.style;
-  const hasHighlights = collectedInfo.highlight_focus && collectedInfo.highlight_focus.length > 0;
-  
-  // 至少需要3个核心信息
-  const completedCount = [hasRole, hasUseCase, hasStyle, hasHighlights].filter(Boolean).length;
-  return completedCount >= 3;
+  return !!(
+    collectedInfo.user_role && 
+    collectedInfo.use_case && 
+    collectedInfo.style && 
+    collectedInfo.highlight_focus
+  );
 }
 
 /**
  * 生成收集状态摘要
  */
 export function generateCollectionSummary(collectedInfo: CollectedInfo): string {
-  const summary = [];
+  const items = [];
+  if (collectedInfo.user_role) items.push(`身份: ${collectedInfo.user_role}`);
+  if (collectedInfo.use_case) items.push(`目的: ${collectedInfo.use_case}`);
+  if (collectedInfo.style) items.push(`风格: ${collectedInfo.style}`);
+  if (collectedInfo.highlight_focus) items.push(`重点: ${collectedInfo.highlight_focus}`);
   
-  if (collectedInfo.user_role) {
-    summary.push(`👤 身份：${collectedInfo.user_role}`);
-  }
-  if (collectedInfo.use_case) {
-    summary.push(`🎯 目的：${collectedInfo.use_case}`);
-  }
-  if (collectedInfo.style) {
-    summary.push(`🎨 风格：${collectedInfo.style}`);
-  }
-  if (collectedInfo.highlight_focus && collectedInfo.highlight_focus.length > 0) {
-    summary.push(`📋 重点：${collectedInfo.highlight_focus.join('、')}`);
-  }
-  
-  return summary.length > 0 ? summary.join('\n') : '暂无收集信息';
+  return items.length > 0 ? items.join(', ') : '信息收集中';
 }
 
 /**

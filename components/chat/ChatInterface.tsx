@@ -433,7 +433,7 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     return (
       <div className="flex items-center justify-center h-64">
         <ThinkingLoader 
-          text="正在初始化会话"
+          text="正在初始化会话..."
           size="lg"
         />
       </div>

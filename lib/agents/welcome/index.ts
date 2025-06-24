@@ -2,7 +2,7 @@
  * Welcome Agent 模块导出
  */
 
-export { ConversationalWelcomeAgent } from './agent';
+export { ConversationalWelcomeAgent, ConversationalWelcomeAgent as IntelligentWelcomeAgent } from './agent';
 export type { 
   CollectedInfo, 
   WelcomeAIResponse 

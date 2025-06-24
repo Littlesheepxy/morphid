@@ -76,26 +76,28 @@ export const ChatModeView = memo(function ChatModeView({
                 </div>
               </div>
             ) : (
-              currentMessages.map((message: any, index: number) => (
-                <MessageBubble
-                  key={`${sessionId}-${message.id}-${index}`}
-                  message={message}
-                  isLast={index === currentMessages.length - 1}
-                  isGenerating={isGenerating && index === currentMessages.length - 1}
-                  onSendMessage={onSendMessage}
-                  sessionId={sessionId}
-                />
-              ))
-            )}
-            
-            {/* 🔧 修复：显示生成中的加载状态 */}
-            {isGenerating && currentMessages.length === 0 && (
-              <div className="px-8">
-                <ThinkingLoader 
-                  text="AI正在思考中"
-                  size="sm"
-                />
-              </div>
+              <>
+                {currentMessages.map((message: any, index: number) => (
+                  <MessageBubble
+                    key={`${sessionId}-${message.id}-${index}`}
+                    message={message}
+                    isLast={index === currentMessages.length - 1}
+                    isGenerating={isGenerating && index === currentMessages.length - 1}
+                    onSendMessage={onSendMessage}
+                    sessionId={sessionId}
+                  />
+                ))}
+                
+                {/* 🔧 修复：用户发送消息后，AI正在生成时显示思考状态 */}
+                {isGenerating && currentMessages.length > 0 && !currentMessages.some((msg: any) => msg.metadata?.streaming) && (
+                  <div className="px-8">
+                    <ThinkingLoader 
+                      text="正在思考中"
+                      size="sm"
+                    />
+                  </div>
+                )}
+              </>
             )}
             
             <div ref={messagesEndRef} />

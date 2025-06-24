@@ -306,12 +306,7 @@ export const MessageBubble = function MessageBubble({
                 );
               }
               
-              // 优先级2：等待响应
-              if (isLast && !actualIsUser && isGenerating && !message.content) {
-                return <ThinkingLoader text="正在思考中" size="sm" />;
-              }
-              
-              // 优先级3：loading文本
+              // 优先级2：loading文本
               if (!actualIsUser && message.content && (
                 message.content.includes('正在分析') ||
                 message.content.includes('正在为您生成') ||
@@ -320,12 +315,12 @@ export const MessageBubble = function MessageBubble({
                 return <GeneratingLoader text={message.content.replace(/[。.…]+$/g, '')} size="sm" />;
               }
               
-              // 优先级4：交互准备中
+              // 优先级3：交互准备中
               if (message.metadata?.interaction && !contentComplete && !showInteraction && !actualIsUser) {
                 return <GeneratingLoader text="正在准备个性化选项" size="sm" />;
               }
               
-              // 优先级5：普通内容
+              // 优先级4：普通内容
               return <MarkdownRenderer content={message.content || ''} />;
             })()}
           </div>

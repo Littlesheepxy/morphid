@@ -4,6 +4,7 @@ import { SessionData } from '@/lib/types/session';
 import { generateWithModel, generateStreamWithModel } from '@/lib/ai-models';
 import { 
   CollectedInfo,
+  UserIntentAnalysis,
   WelcomeAIResponse,
   WelcomeSummaryResult,
   getSystemPrompt,
@@ -60,7 +61,8 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         userPrompt = getFirstRoundPrompt(input.user_input);
       } else {
         const historyText = buildConversationHistoryText(conversationHistory);
-        userPrompt = getContinuationPrompt(input.user_input, historyText, currentInfo);
+        const currentIntent = metadata.userIntentAnalysis;
+        userPrompt = getContinuationPrompt(input.user_input, historyText, currentInfo, currentIntent);
       }
 
       console.log(`🎯 [大模型调用] 发送流式对话请求`);
@@ -80,8 +82,8 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         // 🆕 使用内容分离处理器处理每个chunk
         const processResult = contentProcessor.processChunk(chunk);
         
-        // 如果有新的可见内容，发送给前端
-        if (processResult.newVisibleContent) {
+        // 🔧 修复：只有当有新的可见内容时才发送响应，避免重复发送
+        if (processResult.newVisibleContent && processResult.newVisibleContent.trim().length > 0) {
           console.log(`📤 [流式可见内容] 第${chunkCount}个块，新增内容长度: ${processResult.newVisibleContent.length}`);
           
           yield this.createResponse({
@@ -128,6 +130,7 @@ export class ConversationalWelcomeAgent extends BaseAgent {
       // 更新会话数据
       metadata.welcomeHistory = conversationHistory;
       metadata.collectedInfo = { ...currentInfo, ...finalAiResponse?.collected_info || {} };
+      metadata.userIntentAnalysis = finalAiResponse?.user_intent_analysis;
       
       console.log(`💾 [信息更新] 当前收集状态:`, metadata.collectedInfo);
 
@@ -136,16 +139,17 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         console.log(`🎉 [收集完成] 信息收集完整，开始汇总处理`);
         
         // 🆕 使用系统汇总，不再调用AI
-        const summaryResult = this.generateSystemSummary(metadata.collectedInfo);
+        const summaryResult = this.generateSystemSummary(metadata.collectedInfo, finalAiResponse.user_intent_analysis);
         
         // 保存汇总结果到会话数据，供下一个Agent使用
         metadata.welcomeSummary = summaryResult;
         
+        // 🔧 关键修复：不发送AI的原始回复，直接发送advance响应
         yield this.createAdvanceResponse(finalAiResponse, summaryResult, sessionData);
       } else {
         console.log(`🔄 [继续收集] 继续对话收集信息`);
         
-        // 🔧 直接发送最终的继续收集响应，不再重复发送中间状态
+        // 🔧 修复：只有在继续收集时才发送AI的回复内容
         yield this.createResponse({
           immediate_display: {
             reply: finalAiResponse?.reply || '',
@@ -232,11 +236,11 @@ export class ConversationalWelcomeAgent extends BaseAgent {
     sessionData: SessionData
   ): StreamableAgentResponse {
     const collectedInfo = aiResponse.collected_info;
-    const summary = generateCollectionSummary(collectedInfo);
     
+    // 🔧 修复：不显示额外的总结信息，直接推进到下一阶段
     return this.createResponse({
       immediate_display: {
-        reply: `${aiResponse.reply}\n\n🎉 太棒了！我已经收集到您的基本信息：\n${summary}\n\n🚀 现在开始为您创建专属的页面！`,
+        reply: '', // 🔑 不显示任何额外内容，让AI的原始回复作为最后的消息
         agent_name: this.name,
         timestamp: new Date().toISOString()
       },
@@ -248,55 +252,120 @@ export class ConversationalWelcomeAgent extends BaseAgent {
         metadata: {
           completion_status: 'ready',
           collected_info: collectedInfo,
-          welcomeSummary: this.generateSystemSummary(collectedInfo),
+          welcomeSummary: summaryResult,
           action: 'advance',
           next_step: 'info_collection',
-          next_agent_context: this.generateContextForNextAgent(collectedInfo)
+          next_agent_context: this.generateContextForNextAgent(collectedInfo),
+          silent_advance: true // 🔑 标记为静默推进，不显示额外内容
         }
       }
     });
   }
 
   /**
-   * 🆕 系统生成汇总结果（替代AI汇总）
+   * 🆕 系统生成汇总结果（替代AI汇总）- 匹配 optimized-agent 需求
    */
-  private generateSystemSummary(collectedInfo: CollectedInfo): WelcomeSummaryResult {
-    const completionProgress = calculateCollectionProgress(collectedInfo);
-    const hasDetailedInfo = completionProgress >= 75;
+  private generateSystemSummary(collectedInfo: CollectedInfo, userIntentAnalysis?: UserIntentAnalysis): WelcomeSummaryResult {
+    // 使用用户意图分析结果，如果没有则基于完整度推断
+    let commitmentLevel: '试一试' | '认真制作' = '认真制作';
+    let reasoning = '基于信息完整度分析';
     
-    const commitmentLevel = hasDetailedInfo ? '认真制作' : '试一试';
+    if (userIntentAnalysis) {
+      commitmentLevel = userIntentAnalysis.commitment_level;
+      reasoning = userIntentAnalysis.reasoning;
+    } else {
+      const completionProgress = calculateCollectionProgress(collectedInfo);
+      if (completionProgress < 50) {
+        commitmentLevel = '试一试';
+        reasoning = `信息收集完整度${completionProgress}%，判断为快速体验需求`;
+      } else {
+        commitmentLevel = '认真制作';
+        reasoning = `信息收集完整度${completionProgress}%，判断为认真制作需求`;
+      }
+    }
+    
+    // 基于用户身份确定收集优先级
+    const collectionPriority = this.determineCollectionPriority(collectedInfo.user_role);
+    
+    // 确定可用工具
+    const availableTools = this.getAvailableTools();
     
     return {
       summary: {
         user_role: collectedInfo.user_role || '新用户',
         use_case: collectedInfo.use_case || '个人展示',
-        style: collectedInfo.style || '简约风格',
-        highlight_focus: collectedInfo.highlight_focus || ['个人信息', '技能展示']
+        style: collectedInfo.style || '简约专业',
+        highlight_focus: collectedInfo.highlight_focus || '个人技能'
       },
       user_intent: {
         commitment_level: commitmentLevel,
-        reasoning: `基于收集信息完整度${completionProgress}%进行判断`
+        reasoning: reasoning
       },
-      context_for_next_agent: this.generateContextForNextAgent(collectedInfo),
       sample_suggestions: {
         should_use_samples: commitmentLevel === '试一试',
-        reason: commitmentLevel === '试一试' 
-          ? '信息收集不够完整，建议使用示例数据快速体验' 
-          : '用户提供了详细信息，可以进行个性化定制'
-      }
+        sample_reason: commitmentLevel === '试一试' 
+          ? '用户表现出探索性需求，建议使用示例数据提供快速体验' 
+          : '用户表现出明确目标，适合进行详细信息收集和个性化定制'
+      },
+      collection_priority: collectionPriority,
+      current_collected_data: collectedInfo,
+      available_tools: availableTools,
+      context_for_next_agent: this.generateContextForNextAgent(collectedInfo, commitmentLevel)
     };
+  }
+
+  /**
+   * 🆕 基于用户身份确定信息收集优先级
+   */
+  private determineCollectionPriority(userRole?: string): string {
+    if (!userRole) return 'basic_info';
+    
+    const role = userRole.toLowerCase();
+    
+    if (role.includes('开发') || role.includes('程序') || role.includes('工程师')) {
+      return 'technical_skills_projects';
+    } else if (role.includes('设计') || role.includes('创意') || role.includes('艺术')) {
+      return 'creative_portfolio_style';
+    } else if (role.includes('产品') || role.includes('运营') || role.includes('管理')) {
+      return 'business_achievements_leadership';
+    } else if (role.includes('学生') || role.includes('实习')) {
+      return 'education_potential_projects';
+    } else if (role.includes('创业') || role.includes('自由')) {
+      return 'business_vision_achievements';
+    } else {
+      return 'comprehensive_profile';
+    }
+  }
+
+  /**
+   * 🆕 获取可用的信息收集工具列表
+   */
+  private getAvailableTools(): string[] {
+    return [
+      'extract_linkedin',
+      'extract_instagram', 
+      'extract_tiktok',
+      'extract_x_twitter',
+      'analyze_social_media',
+      'scrape_webpage',
+      'analyze_document',
+      'analyze_github_user',
+      'integrate_social_network'
+    ];
   }
 
   /**
    * 🆕 为下一个Agent生成上下文
    */
-  private generateContextForNextAgent(collectedInfo: CollectedInfo): string {
+  private generateContextForNextAgent(collectedInfo: CollectedInfo, commitmentLevel?: '试一试' | '认真制作'): string {
     const completionProgress = calculateCollectionProgress(collectedInfo);
     
-    if (completionProgress >= 75) {
-      return `用户信息收集完整，可以基于以下信息进行个性化定制：${JSON.stringify(collectedInfo)}`;
+    if (commitmentLevel === '试一试') {
+      return `用户为试一试类型，建议使用示例数据快速体验。当前收集信息：${JSON.stringify(collectedInfo)}`;
+    } else if (completionProgress >= 75) {
+      return `用户为认真制作类型，信息收集完整，可以基于以下信息进行个性化定制：${JSON.stringify(collectedInfo)}`;
     } else {
-      return `用户信息收集不完整（${completionProgress}%），建议使用示例数据进行快速体验`;
+      return `用户为认真制作类型，但信息收集不完整（${completionProgress}%），建议引导式收集更多信息`;
     }
   }
 
