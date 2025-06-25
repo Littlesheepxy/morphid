@@ -7,6 +7,8 @@ import {
   FIRST_ROUND_PROMPT_TEMPLATE,
   CONTINUATION_PROMPT_TEMPLATE
 } from '@/lib/prompts/welcome';
+import { generateStreamWithModel } from '@/lib/ai-models';
+import { cleanTextContent } from '@/lib/utils';
 
 /**
  * 收集到的信息接口
@@ -164,10 +166,12 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
   if (match) {
     console.log(`🔍 [隐藏控制] 使用正则 ${patternUsed} 匹配到内容`);
     
-    // 🔧 关键修复：正确分离可见内容，完全移除隐藏控制部分
+    // 🔧 关键修复：正确分离可见内容，完全移除隐藏控制部分并清理空行
     const beforeHidden = content.substring(0, match.index || 0);
     const afterHidden = content.substring((match.index || 0) + match[0].length);
-    const visibleContent = (beforeHidden + afterHidden).trim();
+    
+    // 🔧 新增：智能清理空行和空格
+    const cleanVisibleContent = cleanupContent(beforeHidden + afterHidden);
     
     // 提取JSON字符串
     const jsonStr = match[1].trim();
@@ -179,7 +183,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
         if (!isCompleteJSON(jsonStr)) {
           console.log(`⚠️ [JSON不完整] 等待更多数据: ${jsonStr.substring(0, 50)}...`);
           return {
-            visibleContent,
+            visibleContent: cleanVisibleContent,
             hiddenControl: null,
             isComplete: false
           };
@@ -189,7 +193,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
         
         const hiddenJson = JSON.parse(jsonStr);
         const hiddenControl: WelcomeAIResponse = {
-          reply: visibleContent, // 使用清理后的可见内容
+          reply: cleanVisibleContent, // 使用清理后的可见内容
           collected_info: hiddenJson.collected_info || {},
           completion_status: hiddenJson.completion_status || 'collecting',
           user_intent_analysis: hiddenJson.user_intent_analysis || {
@@ -203,7 +207,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
         console.log(`✅ [隐藏控制解析成功] completion_status: ${hiddenControl.completion_status}, commitment_level: ${hiddenControl.user_intent_analysis.commitment_level}`);
         
         return {
-          visibleContent,
+          visibleContent: cleanVisibleContent,
           hiddenControl,
           isComplete: true
         };
@@ -219,7 +223,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
             console.log('✅ [JSON修复成功] 使用修复后的JSON');
             
             const hiddenControl: WelcomeAIResponse = {
-              reply: visibleContent, // 使用清理后的可见内容
+              reply: cleanVisibleContent, // 使用清理后的可见内容
               collected_info: hiddenJson.collected_info || {},
               completion_status: hiddenJson.completion_status || 'collecting',
               user_intent_analysis: hiddenJson.user_intent_analysis || {
@@ -231,7 +235,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
             };
             
             return {
-              visibleContent,
+              visibleContent: cleanVisibleContent,
               hiddenControl,
               isComplete: true
             };
@@ -242,7 +246,7 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
         
         // 🔧 修复：即使解析失败，也要返回清理后的可见内容
         return {
-          visibleContent,
+          visibleContent: cleanVisibleContent,
           hiddenControl: null,
           isComplete: false
         };
@@ -250,12 +254,19 @@ export function separateVisibleAndHiddenContent(content: string): StreamContentS
     }
   }
   
-  // 没有找到隐藏控制信息，返回原始内容
+  // 没有找到隐藏控制信息，返回清理后的原始内容
   return {
-    visibleContent: content.trim(),
+    visibleContent: cleanupContent(content),
     hiddenControl: null,
     isComplete: false
   };
+}
+
+/**
+ * 🔧 使用全局内容清理函数
+ */
+function cleanupContent(content: string): string {
+  return cleanTextContent(content);
 }
 
 /**

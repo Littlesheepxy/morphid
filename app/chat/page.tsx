@@ -118,13 +118,12 @@ export default function ChatPage() {
       return
     }
 
+    // 🔧 修复：立即设置为已开始聊天状态，确保界面立即切换
     if (!hasStartedChat) {
       setHasStartedChat(true)
-      if (!currentSession) {
-        await createNewSession()
-      }
     }
 
+    // 🔧 修复：先发送消息，让用户消息立即显示，会话创建在 sendMessage 内部处理
     sendMessage(inputValue)
     setInputValue("")
   }
@@ -279,8 +278,8 @@ export default function ChatPage() {
 
       {/* 🎨 主内容区域 - 包含header和内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 🎨 顶部导航栏 - 品牌色 */}
-        <ChatHeader />
+        {/* 🎨 顶部导航栏 - 品牌色 - 只在非代码模式下显示 */}
+        {!isCodeMode && <ChatHeader />}
 
         {/* 🎨 主内容区域 */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -294,6 +293,7 @@ export default function ChatPage() {
               isGenerating={isGenerating}
               onBack={handleBackToChat}
               onSendMessage={handleSendMessage}
+              onSendChatMessage={sendMessage}
               onKeyPress={handleKeyPress}
               onDownload={handleCodeDownload}
               onDeploy={handleDeploy}

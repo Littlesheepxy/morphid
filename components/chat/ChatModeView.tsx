@@ -4,9 +4,10 @@ import { useRef, useEffect, useState, memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Paperclip } from 'lucide-react';
+import { Send, Paperclip, Sparkles } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import { ThinkingLoader } from '@/components/ui/unified-loading';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/theme-context';
 
 interface ChatModeViewProps {
@@ -90,11 +91,25 @@ export const ChatModeView = memo(function ChatModeView({
                 
                 {/* 🔧 修复：用户发送消息后，AI正在生成时显示思考状态 */}
                 {isGenerating && currentMessages.length > 0 && !currentMessages.some((msg: any) => msg.metadata?.streaming) && (
-                  <div className="px-8">
-                    <ThinkingLoader 
-                      text="正在思考中"
-                      size="sm"
-                    />
+                  <div className="flex gap-4 max-w-4xl mx-auto px-6 py-4">
+                    {/* AI头像 - 与文本对齐 */}
+                    <div className="flex-shrink-0 pt-1">
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="bg-gray-100 text-gray-600">
+                          <Sparkles className="w-4 h-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    
+                    {/* 思考状态 */}
+                    <div className="flex-1">
+                      <div className="inline-block text-gray-800">
+                        <ThinkingLoader 
+                          text="正在思考中"
+                          size="sm"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </>
@@ -113,54 +128,65 @@ export const ChatModeView = memo(function ChatModeView({
       }`}>
         <div className="p-6">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center gap-4">
-              {/* 🎨 左侧功能按钮 - 简约设计 */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`p-3 h-12 rounded-xl transition-all duration-300 ${
-                  theme === "light"
-                    ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
-                    : "text-gray-400 hover:bg-gray-800 hover:text-gray-300"
-                }`}
-              >
-                <Paperclip className="w-5 h-5" />
-              </Button>
-              
+            <div className="flex items-center">
               {/* 🎨 输入框区域 - 品牌色边框 */}
-              <div className="flex-1 relative">
-                <div className={`relative rounded-2xl transition-all duration-300 border-2 ${
-                  theme === "light" 
-                    ? "bg-white shadow-sm border-emerald-200/80 hover:border-emerald-300/80" 
-                    : "bg-gray-800 shadow-sm border-emerald-700/50 hover:border-emerald-600/50"
-                }`}>
-                  <Input
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={onKeyPress}
-                    placeholder="发送消息给 HeysMe AI..."
-                    className={`pr-16 p-4 h-12 w-full border-0 rounded-2xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${
-                      theme === "light"
-                        ? "bg-transparent placeholder-gray-400 text-gray-900"
-                        : "bg-transparent placeholder-gray-500 text-white"
-                    }`}
-                    disabled={isGenerating}
-                  />
-                  
-                  {/* 🎨 发送按钮 - 品牌渐变 */}
+              <div className="w-full relative">
+                <div 
+                  className={`flex items-center rounded-3xl transition-all duration-300 border-2 cursor-text ${
+                    theme === "light" 
+                      ? "bg-white shadow-sm border-emerald-200/80 hover:border-emerald-300/80" 
+                      : "bg-gray-800 shadow-sm border-emerald-700/50 hover:border-emerald-600/50"
+                  }`}
+                  onClick={() => {
+                    const input = document.querySelector('#chat-input') as HTMLInputElement;
+                    input?.focus();
+                  }}
+                >
+                  {/* 文档上传图标 - 内部左侧 */}
                   <Button
-                    onClick={handleSendClick}
-                    disabled={!inputValue.trim() || isGenerating}
+                    variant="ghost"
                     size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 p-0 rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
-                    style={{
-                      background: !inputValue.trim() || isGenerating 
-                        ? '#9CA3AF' 
-                        : 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
-                    }}
+                    className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
+                      theme === "light"
+                        ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+                        : "text-gray-400 hover:bg-gray-800 hover:text-gray-300"
+                    }`}
                   >
-                    <Send className="w-4 h-4 text-white" />
+                    <Paperclip className="w-5 h-5" />
                   </Button>
+
+                  {/* 输入框 */}
+                  <div className="flex-1 relative">
+                    <Input
+                      id="chat-input"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      onKeyPress={onKeyPress}
+                      placeholder="发送消息给 HeysMe AI..."
+                      className={`px-4 py-4 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 pr-16 ${
+                        theme === "light"
+                          ? "bg-transparent placeholder-gray-400 text-gray-900"
+                          : "bg-transparent placeholder-gray-500 text-white"
+                      }`}
+                      style={{ height: '72px' }}
+                      disabled={isGenerating}
+                    />
+                    
+                    {/* 🎨 发送按钮 - 内部右侧 */}
+                    <Button
+                      onClick={handleSendClick}
+                      disabled={!inputValue.trim() || isGenerating}
+                      size="sm"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 w-12 h-12 p-0 rounded-2xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
+                      style={{
+                        background: !inputValue.trim() || isGenerating 
+                          ? '#9CA3AF' 
+                          : 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
+                      }}
+                    >
+                      <Send className="w-5 h-5 text-white" />
+                    </Button>
+                  </div>
                 </div>
                 
                 {/* 🎨 输入提示 - 简约设计 */}

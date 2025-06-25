@@ -266,12 +266,26 @@ export function useChatSystemV2() {
           metadata: { option }
         }
 
-        targetSession.conversationHistory.push(userMessage)
-        targetSession.metadata.lastActive = new Date()
-        targetSession.metadata.metrics.userInteractions++
+        // 🔧 修复：立即更新会话历史并强制状态更新
+        const updatedSession = {
+          ...targetSession,
+          conversationHistory: [...targetSession.conversationHistory, userMessage],
+          metadata: {
+            ...targetSession.metadata,
+            lastActive: new Date(),
+            metrics: {
+              ...targetSession.metadata.metrics,
+              userInteractions: targetSession.metadata.metrics.userInteractions + 1
+            }
+          }
+        }
 
-        setCurrentSession({ ...targetSession })
-        setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? targetSession : s)))
+        // 🔧 修复：立即更新状态，确保用户消息立即显示
+        setCurrentSession(updatedSession)
+        setSessions((prev) => prev.map((s) => (s.id === updatedSession.id ? updatedSession : s)))
+        
+        // 🔧 修复：更新目标会话引用
+        targetSession = updatedSession
 
         // 🔧 修复：通过API调用后端进行消息处理
         if (option) {

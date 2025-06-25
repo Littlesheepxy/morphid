@@ -221,8 +221,8 @@ export function StreamingText({
   return (
     <span className={cn('relative', className)}>
       {displayedText}
-      {!isComplete && (
-        <span className="inline-block w-0.5 h-4 bg-blue-500 ml-0.5 animate-pulse" />
+      {!isComplete && displayedText && (
+        <span className="inline w-0.5 h-4 bg-blue-500 animate-pulse" />
       )}
     </span>
   );

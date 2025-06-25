@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import {
   ExternalLink,
   RefreshCw,
   Monitor,
-  Tablet,
   Smartphone,
   FileText,
   Folder,
@@ -32,11 +31,14 @@ import {
   Sparkles,
   Zap,
   Settings,
-  Share2
+  Share2,
+  Wand2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/theme-context';
 import WebContainerPreview from './WebContainerPreview';
+import { CodeEditorPanel } from './CodeEditorPanel';
+import { Separator } from '@/components/ui/separator';
 
 // 代码文件接口
 interface CodeFile {
@@ -62,10 +64,12 @@ interface CodePreviewToggleProps {
   onDownload?: () => void;
   onDeploy?: () => void;
   onEditCode?: (filename: string) => void;
+  onSendMessage?: (message: string, options?: any) => void;
 }
 
 type ViewMode = 'code' | 'preview';
-type DeviceType = 'desktop' | 'tablet' | 'mobile';
+type DeviceType = 'desktop' | 'mobile';
+type EditMode = 'none' | 'text' | 'ai';
 
 // 语法高亮函数
 const highlightCode = (code: string, language: string) => {
@@ -434,38 +438,70 @@ export function CodePreviewToggle({
   previewData,
   onDownload,
   onDeploy,
-  onEditCode
+  onEditCode,
+  onSendMessage
 }: CodePreviewToggleProps) {
   const { theme } = useTheme();
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
-  const [activeFile, setActiveFile] = useState(files[0]?.filename || '');
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deviceType, setDeviceType] = useState<DeviceType>('desktop');
+  const [activeFile, setActiveFile] = useState(files[0]?.filename || '');
+  const [editMode, setEditMode] = useState<EditMode>('none');
+  const [previewUrl, setPreviewUrl] = useState<string>('');
 
-  const currentFile = files.find(f => f.filename === activeFile) || files[0];
+  const currentFile = files.find(f => f.filename === activeFile);
 
   const handleContentChange = (field: string, value: string) => {
-    // 这里可以调用AI接口更新代码
-    console.log('内容变更:', field, value);
+    // 处理内容变化
+    console.log('Content changed:', field, value);
+    
+    // 如果是可视化编辑请求，发送到聊天系统
+    if (field === 'visual_edit_request' && onSendMessage) {
+      onSendMessage(value, { 
+        type: 'visual_edit',
+        context: 'stagewise'
+      });
+    }
   };
 
   const handlePreviewReady = (url: string) => {
     setPreviewUrl(url);
   };
 
+  // 编辑模式配置
+  const editModes = [
+    { 
+      key: 'none' as EditMode, 
+      label: '查看', 
+      icon: Eye, 
+      description: '只读模式',
+      color: 'gray'
+    },
+    { 
+      key: 'text' as EditMode, 
+      label: '文本编辑', 
+      icon: Edit3, 
+      description: '直接编辑代码',
+      color: 'blue'
+    },
+    { 
+      key: 'ai' as EditMode, 
+      label: 'AI设计', 
+      icon: Wand2, 
+      description: '可视化AI编辑',
+      color: 'purple'
+    }
+  ];
+
   const getFileIcon = (filename: string, type: string) => {
-    if (type === 'page' || filename.includes('.tsx') || filename.includes('.jsx')) {
-      return <Code2 className="w-4 h-4" />;
-    }
-    if (type === 'styles' || filename.includes('.css')) {
-      return <Sparkles className="w-4 h-4" />;
-    }
-    if (type === 'config') {
-      return <Settings className="w-4 h-4" />;
-    }
+    if (filename.endsWith('.tsx') || filename.endsWith('.ts')) return <FileText className="w-4 h-4" />;
+    if (filename.endsWith('.css')) return <FileText className="w-4 h-4" />;
+    if (filename.endsWith('.json')) return <FileText className="w-4 h-4" />;
     return <FileText className="w-4 h-4" />;
+  };
+
+  const deviceConfigs = {
+    desktop: { width: '100%', height: '100%', label: '桌面' },
+    mobile: { width: '375px', height: '667px', label: '手机' }
   };
 
   if (!files || files.length === 0) {
@@ -492,10 +528,10 @@ export function CodePreviewToggle({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-white">
       {/* 🎨 顶部工具栏 - 品牌设计升级 */}
       <motion.div 
-        className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
+        className={`flex items-center justify-between px-4 py-2 border-b transition-all duration-300 ${
           theme === "light" 
             ? "bg-white/90 border-emerald-100/60 backdrop-blur-xl" 
             : "bg-gray-900/90 border-emerald-700/30 backdrop-blur-xl"
@@ -503,325 +539,227 @@ export function CodePreviewToggle({
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <div className="flex items-center gap-4">
-          {/* 🎨 模式切换按钮 - 品牌色升级 */}
-          <div className={`flex rounded-2xl p-1 transition-all duration-300 ${
-            theme === "light" ? "bg-emerald-100/80" : "bg-emerald-900/30"
-          }`}>
-            <motion.button
-              onClick={() => setViewMode('preview')}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium",
-                viewMode === 'preview'
-                  ? "bg-brand-gradient text-gray-900 shadow-brand font-semibold"
-                  : theme === "light"
-                    ? "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
-                    : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-800/50"
-              )}
-              style={viewMode === 'preview' ? { textShadow: '0 1px 2px rgba(255, 255, 255, 0.9)' } : {}}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Eye className="w-4 h-4" />
-              预览
-            </motion.button>
-            <motion.button
-              onClick={() => setViewMode('code')}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium",
-                viewMode === 'code'
-                  ? "bg-brand-gradient text-gray-900 shadow-brand font-semibold"
-                  : theme === "light"
-                    ? "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50"
-                    : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-800/50"
-              )}
-              style={viewMode === 'code' ? { textShadow: '0 1px 2px rgba(255, 255, 255, 0.9)' } : {}}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Code2 className="w-4 h-4" />
-              代码
-            </motion.button>
-          </div>
+        {/* 左侧：视图切换 */}
+        <div className="flex items-center gap-2">
+          <motion.div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+            {(['preview', 'code'] as ViewMode[]).map((mode) => (
+              <motion.button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  viewMode === mode
+                    ? "bg-white dark:bg-gray-700 text-emerald-700 dark:text-emerald-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                )}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {mode === 'preview' ? <Eye className="w-4 h-4" /> : <Code2 className="w-4 h-4" />}
+                {mode === 'preview' ? '预览' : '代码'}
+              </motion.button>
+            ))}
+          </motion.div>
+        </div>
 
-          {/* 🎨 设备预览切换 - 仅在预览模式显示 */}
-          {viewMode === 'preview' && (
-            <motion.div 
-              className="flex gap-1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              {[
-                { type: 'desktop', icon: Monitor, label: '桌面' },
-                { type: 'tablet', icon: Tablet, label: '平板' },
-                { type: 'mobile', icon: Smartphone, label: '手机' }
-              ].map(({ type, icon: Icon, label }) => (
+        {/* 右侧：编辑模式和设备切换 */}
+        {viewMode === 'preview' && (
+          <div className="flex items-center gap-3">
+            {/* 编辑模式切换 */}
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+              <motion.button
+                onClick={() => setEditMode('none')}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  editMode === 'none'
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                )}
+              >
+                <Eye className="w-4 h-4" />
+                预览
+              </motion.button>
+              
+              <motion.button
+                onClick={() => setEditMode('text')}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  editMode === 'text'
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                )}
+              >
+                <Edit3 className="w-4 h-4" />
+                文本编辑
+              </motion.button>
+              
+              <motion.button
+                onClick={() => setEditMode('ai')}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
+                  editMode === 'ai'
+                    ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                )}
+              >
+                <Wand2 className="w-4 h-4" />
+                AI设计
+                {editMode === 'ai' && (
+                  <motion.div
+                    className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full"
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 2 }}
+                  />
+                )}
+              </motion.button>
+            </div>
+
+            {/* 设备切换 */}
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+              {Object.entries(deviceConfigs).map(([key, config]) => (
                 <motion.button
-                  key={type}
-                  onClick={() => setDeviceType(type as DeviceType)}
+                  key={key}
+                  onClick={() => setDeviceType(key as DeviceType)}
                   className={cn(
-                    "p-2 rounded-xl transition-all duration-200",
-                    deviceType === type
-                      ? theme === "light"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-emerald-800 text-emerald-300"
-                      : theme === "light"
-                        ? "text-gray-600 hover:bg-gray-100"
-                        : "text-gray-400 hover:bg-gray-700"
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200",
+                    deviceType === key
+                      ? "bg-white dark:bg-gray-700 text-emerald-700 dark:text-emerald-400 shadow-sm"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                   )}
-                  title={label}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <Icon className="w-4 h-4" />
+                  {key === 'desktop' && <Monitor className="w-3 h-3" />}
+                  {key === 'mobile' && <Smartphone className="w-3 h-3" />}
+                  {config.label}
                 </motion.button>
               ))}
-            </motion.div>
-          )}
+            </div>
 
-          {/* 🎨 编辑内容按钮 - 仅在预览模式显示 */}
-          {viewMode === 'preview' && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
+            {/* 刷新按钮 */}
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
-                variant={isEditMode ? 'default' : 'outline'}
+                variant="outline"
                 size="sm"
-                onClick={() => setIsEditMode(!isEditMode)}
+                onClick={() => window.location.reload()}
                 className={`rounded-xl border-2 transition-all duration-300 ${
-                  isEditMode
-                    ? "bg-brand-gradient text-white border-0 shadow-brand"
-                    : theme === "light"
-                      ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                      : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+                  theme === "light"
+                    ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
+                    : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
                 }`}
               >
-                <Edit3 className="w-4 h-4 mr-1" />
-                {isEditMode ? '完成编辑' : '编辑内容'}
+                <RefreshCw className="w-4 h-4" />
               </Button>
             </motion.div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="flex items-center gap-2">
-          {/* 分享按钮 */}
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={`rounded-xl border-2 transition-all duration-300 ${
-                theme === "light"
-                  ? "border-pink-200 text-pink-700 hover:border-pink-300 hover:bg-pink-50"
-                  : "border-pink-700 text-pink-400 hover:border-pink-600 hover:bg-pink-900/20"
-              }`}
-              onClick={() => {
-                // TODO: 实现分享功能
-                console.log('分享功能待实现');
-              }}
-            >
-              <Share2 className="w-4 h-4 mr-2" />
-              分享
-            </Button>
+        {/* 代码模式下的编辑提示 */}
+        {viewMode === 'code' && (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              <Edit3 className="w-3 h-3 mr-1" />
+              文本编辑模式
+            </Badge>
+          </div>
+        )}
+
+        {/* AI设计模式使用说明 */}
+        {editMode === 'ai' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-700"
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
+                <Wand2 className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  🎯 AI设计模式已激活
+                </h3>
+                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    <span><strong>选择元素</strong>：点击预览中的任意元素（按钮、文本、图片等）</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                    <span><strong>描述需求</strong>：在弹出的输入框中描述你想要的修改</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    <span><strong>AI自动修改</strong>：AI将分析元素上下文并生成相应代码</span>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💡 示例操作</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">
+                    "把这个按钮改成绿色" • "增加一个联系方式输入框" • "让标题更大一些"
+                  </div>
+                </div>
+              </div>
+            </div>
           </motion.div>
-          
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={`rounded-xl border-2 transition-all duration-300 ${
-                theme === "light"
-                  ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                  : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
-              }`}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className={`rounded-xl border-2 transition-all duration-300 ${
-                theme === "light"
-                  ? "border-cyan-200 text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50"
-                  : "border-cyan-700 text-cyan-400 hover:border-cyan-600 hover:bg-cyan-900/20"
-              }`}
-            >
-              <Play className="w-4 h-4" />
-            </Button>
-          </motion.div>
-        </div>
+        )}
       </motion.div>
 
       {/* 🎨 主内容区域 */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           {viewMode === 'preview' ? (
             <motion.div
-              key="preview-view"
+              key="preview"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="w-full"
+              transition={{ duration: 0.3 }}
+              className="h-full"
             >
               <WebContainerPreview
-                files={files.map(f => ({ ...f, type: f.type as 'component' | 'page' | 'styles' | 'config' | 'data' }))}
-                projectName={previewData?.projectName || 'HeysMe项目'}
-                description={previewData?.description || '基于AI生成的React应用'}
-                isLoading={isPreviewLoading}
+                files={files}
+                projectName={previewData?.projectName || '项目预览'}
+                description={previewData?.description}
+                isLoading={false}
                 previewUrl={previewUrl}
                 enableWebContainer={true}
                 onPreviewReady={handlePreviewReady}
-                onLoadingChange={setIsPreviewLoading}
-                isEditMode={isEditMode}
+                onLoadingChange={(loading) => console.log('Loading:', loading)}
+                isEditMode={editMode === 'ai'}
                 onContentChange={handleContentChange}
+                deviceType={deviceType}
+                editMode={editMode}
               />
             </motion.div>
           ) : (
             <motion.div
-              key="code-view"
+              key="code"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="w-full flex"
+              transition={{ duration: 0.3 }}
+              className="h-full"
             >
-              {/* 🎨 文件树 - 品牌设计升级 */}
-              <div className={`w-80 border-r transition-all duration-300 ${
-                theme === "light" 
-                  ? "bg-emerald-50/50 border-emerald-100/60" 
-                  : "bg-emerald-950/20 border-emerald-700/30"
-              }`}>
-                <div className="p-4 border-b">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 bg-brand-gradient rounded-lg flex items-center justify-center">
-                      <Folder className="w-3 h-3 text-white" />
-                    </div>
-                    <span className={`font-medium text-sm ${
-                      theme === "light" ? "text-gray-900" : "text-white"
-                    }`}>
-                      项目文件
-                    </span>
-                  </div>
-                  <ScrollArea className="max-h-96">
-                    <div className="space-y-1">
-                      {files.map((file) => (
-                        <motion.button
-                          key={file.filename}
-                          onClick={() => setActiveFile(file.filename)}
-                          className={cn(
-                            "w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200",
-                            activeFile === file.filename
-                              ? theme === "light"
-                                ? "bg-emerald-100 text-emerald-800 shadow-sm"
-                                : "bg-emerald-800/50 text-emerald-200 shadow-sm"
-                              : theme === "light"
-                                ? "text-gray-700 hover:bg-emerald-50"
-                                : "text-gray-300 hover:bg-emerald-900/20"
-                          )}
-                          whileHover={{ x: 2 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <div className={cn(
-                            "p-1.5 rounded-lg",
-                            activeFile === file.filename
-                              ? "bg-emerald-200 text-emerald-700"
-                              : theme === "light" 
-                                ? "bg-gray-200 text-gray-600" 
-                                : "bg-gray-700 text-gray-400"
-                          )}>
-                            {getFileIcon(file.filename, file.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {file.filename}
-                            </p>
-                            <p className="text-xs opacity-70 truncate">
-                              {file.description || file.type}
-                            </p>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </div>
-
-              {/* 🎨 代码编辑器 - 品牌设计升级 */}
-              <div className="flex-1 flex flex-col">
-                {currentFile && (
-                  <>
-                    {/* 文件标题栏 */}
-                    <div className={`flex items-center justify-between p-4 border-b transition-all duration-300 ${
-                      theme === "light" 
-                        ? "bg-white/50 border-emerald-100/60" 
-                        : "bg-gray-800/50 border-emerald-700/30"
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-brand-gradient rounded-xl shadow-brand flex items-center">
-                          {getFileIcon(currentFile.filename, currentFile.type)}
-                          <span className="text-white text-xs ml-1">
-                            {currentFile.filename}
-                          </span>
-                        </div>
-                        <div>
-                          <p className={`font-medium ${
-                            theme === "light" ? "text-gray-900" : "text-white"
-                          }`}>
-                            {currentFile.filename}
-                          </p>
-                          <p className={`text-xs ${
-                            theme === "light" ? "text-emerald-600" : "text-emerald-400"
-                          }`}>
-                            {currentFile.description || currentFile.type}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className={`rounded-xl border-2 transition-all duration-300 ${
-                            theme === "light"
-                              ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                              : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
-                          }`}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => onEditCode?.(currentFile.filename)}
-                          className={`rounded-xl border-2 transition-all duration-300 ${
-                            theme === "light"
-                              ? "border-cyan-200 text-cyan-700 hover:border-cyan-300 hover:bg-cyan-50"
-                              : "border-cyan-700 text-cyan-400 hover:border-cyan-600 hover:bg-cyan-900/20"
-                          }`}
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* 代码内容 */}
-                    <ScrollArea className="flex-1 brand-scrollbar">
-                      <div className={`p-6 transition-all duration-300 ${
-                        theme === "light" ? "bg-gray-50/50" : "bg-gray-900/50"
-                      }`}>
-                        <pre className={`text-sm font-mono whitespace-pre-wrap rounded-2xl p-6 border transition-all duration-300 ${
-                          theme === "light" 
-                            ? "bg-white border-emerald-100 text-gray-800" 
-                            : "bg-gray-800 border-emerald-700 text-gray-200"
-                        }`}>
-                          <code>{currentFile.content}</code>
-                        </pre>
-                      </div>
-                    </ScrollArea>
-                  </>
-                )}
-              </div>
+              {/* 🎨 新版代码编辑器 */}
+              <CodeEditorPanel
+                files={files.map(file => ({
+                  ...file,
+                  editable: true
+                }))}
+                onFileUpdate={(filename, content) => {
+                  // 这里可以添加文件更新逻辑
+                  console.log('File updated:', filename, content);
+                }}
+                onFileAdd={(file) => {
+                  // 这里可以添加文件添加逻辑
+                  console.log('File added:', file);
+                }}
+                onFileDelete={(filename) => {
+                  // 这里可以添加文件删除逻辑
+                  console.log('File deleted:', filename);
+                }}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -845,6 +783,22 @@ export function CodePreviewToggle({
           }`}>
             {files.length} 个文件
           </Badge>
+          
+          {/* 编辑模式状态指示器 */}
+          {editMode !== 'none' && (
+            <Badge className={`rounded-full ${
+              editMode === 'ai' 
+                ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white" 
+                : editMode === 'text'
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-500 text-white"
+            }`}>
+              {editMode === 'ai' && <Wand2 className="w-3 h-3 mr-1" />}
+              {editMode === 'text' && <Edit3 className="w-3 h-3 mr-1" />}
+              {editMode === 'ai' ? 'AI设计中' : editMode === 'text' ? '文本编辑中' : '编辑中'}
+            </Badge>
+          )}
+          
           {isStreaming && (
             <Badge className="rounded-full bg-brand-gradient text-white animate-pulse">
               <Zap className="w-3 h-3 mr-1" />

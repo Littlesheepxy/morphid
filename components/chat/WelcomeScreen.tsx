@@ -220,15 +220,22 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
             </div>
 
             <div className="relative">
-              <div className={`flex items-center gap-3 p-4 rounded-xl transition-all duration-300 border ${
-                theme === "light" 
-                  ? "bg-white border-emerald-200/80 shadow-sm hover:border-emerald-300/80 hover:shadow-md" 
-                  : "bg-gray-800 border-emerald-700/50 shadow-sm hover:border-emerald-600/50 hover:shadow-md"
-              }`}>
+              <div 
+                className={`flex items-center rounded-3xl transition-all duration-300 border-2 cursor-text ${
+                  theme === "light" 
+                    ? "bg-white border-emerald-200/80 shadow-sm hover:border-emerald-300/80 hover:shadow-md" 
+                    : "bg-gray-800 border-emerald-700/50 shadow-sm hover:border-emerald-600/50 hover:shadow-md"
+                }`}
+                onClick={() => {
+                  const input = document.querySelector('#welcome-input') as HTMLInputElement;
+                  input?.focus();
+                }}
+              >
+                {/* 文档上传图标 - 内部左侧 */}
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={`p-2 h-10 rounded-lg transition-all duration-300 ${
+                  className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
                     theme === "light"
                       ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                       : "text-gray-400 hover:bg-gray-700 hover:text-gray-300"
@@ -237,33 +244,36 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                   <Paperclip className="w-5 h-5" />
                 </Button>
                 
+                {/* 输入框区域 */}
                 <div className="flex-1 relative">
                   <Input
+                    id="welcome-input"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="告诉我你想要什么样的简历..."
-                    className={`border-0 p-3 text-base h-10 w-full transition-all duration-300 pr-12 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                    className={`border-0 px-4 py-4 text-base h-18 w-full transition-all duration-300 pr-16 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-3xl ${
                       theme === "light"
                         ? "bg-transparent placeholder:text-gray-400 text-gray-900"
                         : "bg-transparent placeholder:text-gray-500 text-white"
                     }`}
+                    style={{ height: '72px' }}
                     autoFocus
                   />
                   
-                  {/* 发送按钮 */}
+                  {/* 发送按钮 - 内部右侧 */}
                   <Button
                     onClick={onSendMessage}
                     disabled={!inputValue.trim() || isGenerating}
                     size="sm"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 w-8 h-8 p-0 rounded-lg hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 w-12 h-12 p-0 rounded-2xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
                     style={{
                       background: !inputValue.trim() || isGenerating 
                         ? '#9CA3AF' 
                         : 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
                     }}
                   >
-                    <Send className="w-4 h-4 text-white" />
+                    <Send className="w-5 h-5 text-white" />
                   </Button>
                 </div>
               </div>

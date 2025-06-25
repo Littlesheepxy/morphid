@@ -9,7 +9,6 @@ import {
   ExternalLink, 
   Download,
   Monitor,
-  Tablet,
   Smartphone,
   Loader2,
   AlertCircle,
@@ -21,6 +20,10 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { WebContainerService, type ContainerStatus, type CodeFile } from '@/lib/services/webcontainer-service';
+import { StagewiseToolbar } from './StagewiseToolbar';
+
+type DeviceType = 'desktop' | 'mobile';
+type EditMode = 'none' | 'text' | 'ai';
 
 interface WebContainerPreviewProps {
   files: CodeFile[];
@@ -33,9 +36,9 @@ interface WebContainerPreviewProps {
   onLoadingChange: (loading: boolean) => void;
   isEditMode?: boolean;
   onContentChange?: (field: string, value: string) => void;
+  deviceType?: DeviceType;
+  editMode?: EditMode;
 }
-
-type DeviceType = 'desktop' | 'tablet' | 'mobile';
 
 export function WebContainerPreview({
   files,
@@ -47,9 +50,10 @@ export function WebContainerPreview({
   onPreviewReady,
   onLoadingChange,
   isEditMode,
-  onContentChange
+  onContentChange,
+  deviceType = 'desktop',
+  editMode = 'none'
 }: WebContainerPreviewProps) {
-  const [deviceType, setDeviceType] = useState<DeviceType>('desktop');
   const [containerStatus, setContainerStatus] = useState<ContainerStatus>('idle');
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
@@ -60,13 +64,14 @@ export function WebContainerPreview({
   // 设备尺寸配置
   const deviceConfigs = {
     desktop: { width: '100%', height: '100%', label: '桌面' },
-    tablet: { width: '768px', height: '1024px', label: '平板' },
     mobile: { width: '375px', height: '667px', label: '手机' }
   };
 
   // 初始化WebContainer服务
   useEffect(() => {
     if (enableWebContainer && !webcontainerService) {
+      console.log('🔧 开始初始化WebContainer服务...');
+      
       const service = new WebContainerService({
         clientId: 'wc_api_littlesheepxy_33595e6cd89a5813663cd3f70b26e12d',
         workdirName: projectName.toLowerCase().replace(/\s+/g, '-')
@@ -74,44 +79,73 @@ export function WebContainerPreview({
 
       // 监听状态变化
       service.onStatusChange((status) => {
+        console.log('📊 WebContainer状态变化:', status);
         setContainerStatus(status);
       });
 
       // 监听日志
       service.onLog((log) => {
+        console.log('📝 WebContainer日志:', log);
         setBuildLogs(prev => [...prev, log]);
       });
 
       setWebcontainerService(service);
 
       // 初始化认证
-      service.initAuth().catch(console.error);
+      console.log('🔐 开始WebContainer认证...');
+      service.initAuth()
+        .then(() => {
+          console.log('✅ WebContainer认证初始化成功');
+        })
+        .catch(error => {
+          console.error('❌ WebContainer认证初始化失败:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          setBuildLogs(prev => [...prev, `❌ 认证失败: ${errorMessage}`]);
+          setContainerStatus('error');
+        });
     }
   }, [enableWebContainer, projectName, webcontainerService]);
 
   // 启动WebContainer
   const startContainer = useCallback(async () => {
-    if (!webcontainerService || !enableWebContainer || files.length === 0) return;
+    if (!webcontainerService || !enableWebContainer || files.length === 0) {
+      console.log('⚠️ WebContainer启动条件不满足:', {
+        hasService: !!webcontainerService,
+        enableWebContainer,
+        filesCount: files.length
+      });
+      return;
+    }
 
     try {
       onLoadingChange(true);
       setBuildLogs(['🚀 开始启动WebContainer...']);
+      console.log('🚀 开始启动WebContainer...');
 
       // 启动WebContainer实例
+      console.log('📦 正在创建WebContainer实例...');
       await webcontainerService.boot();
+      console.log('✅ WebContainer实例创建成功');
 
       // 挂载文件
+      console.log('📁 正在挂载文件...');
       await webcontainerService.mountFiles(files);
+      console.log('✅ 文件挂载成功');
 
       // 安装依赖
+      console.log('📦 正在安装依赖...');
       await webcontainerService.installDependencies();
+      console.log('✅ 依赖安装成功');
 
       // 启动开发服务器
+      console.log('🏗️ 正在启动开发服务器...');
       await webcontainerService.startDevServer();
+      console.log('✅ 开发服务器启动成功');
 
       // 监听服务器就绪事件
       webcontainerService.onStatusChange((status) => {
         if (status === 'running') {
+          console.log('🌐 WebContainer服务器就绪');
           // 生成预览URL (这里应该从WebContainer获取实际URL)
           const previewUrl = generateMockPreviewUrl();
           onPreviewReady(previewUrl);
@@ -119,11 +153,13 @@ export function WebContainerPreview({
       });
 
     } catch (error) {
-      console.error('WebContainer启动失败:', error);
-      setBuildLogs(prev => [...prev, `❌ 启动失败: ${error}`]);
+      console.error('❌ WebContainer启动失败:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setBuildLogs(prev => [...prev, `❌ 启动失败: ${errorMessage}`]);
       setContainerStatus('error');
       
       // 回退到模拟预览
+      console.log('🔄 回退到模拟预览模式');
       const mockPreviewUrl = generateMockPreviewUrl();
       onPreviewReady(mockPreviewUrl);
     } finally {
@@ -139,8 +175,31 @@ export function WebContainerPreview({
 
   // 生成预览HTML
   const generatePreviewHTML = () => {
-    const appFile = files.find(f => f.filename.includes('App.') || f.filename.includes('main.'));
-    const componentContent = appFile ? appFile.content : generateDefaultApp();
+    // 查找主要的React组件文件
+    const appFile = files.find(f => 
+      f.filename.includes('App.') || 
+      f.filename.includes('Resume.') || 
+      f.filename.includes('main.') ||
+      f.type === 'component'
+    );
+    
+    // 查找CSS文件
+    const cssFile = files.find(f => f.filename.includes('.css') || f.type === 'styles');
+    
+    let componentContent;
+    let cssContent = '';
+    
+    if (appFile) {
+      // 处理现有的React组件代码
+      componentContent = processReactComponent(appFile.content);
+    } else {
+      // 使用默认组件
+      componentContent = generateDefaultApp();
+    }
+    
+    if (cssFile) {
+      cssContent = cssFile.content;
+    }
 
     return `
 <!DOCTYPE html>
@@ -166,6 +225,7 @@ export function WebContainerPreview({
         background-color: ${isEditMode ? 'rgb(239 246 255)' : 'transparent'};
         border: ${isEditMode ? '1px solid rgb(147 197 253)' : 'none'};
       }
+      ${cssContent}
     </style>
 </head>
 <body class="bg-gray-50">
@@ -181,6 +241,32 @@ export function WebContainerPreview({
     </script>
 </body>
 </html>`;
+  };
+
+  // 处理React组件代码，确保能在浏览器中运行
+  const processReactComponent = (content: string) => {
+    // 移除import语句，因为在浏览器环境中不需要
+    let processedContent = content
+      .replace(/import\s+.*?from\s+['"].*?['"];?\s*/g, '')
+      .replace(/import\s+['"].*?['"];?\s*/g, '');
+    
+    // 移除export语句
+    processedContent = processedContent.replace(/export\s+(default\s+)?/g, '');
+    
+    // 如果没有App函数，尝试将主要组件重命名为App
+    if (!processedContent.includes('function App')) {
+      // 查找主要的函数组件
+      const componentMatch = processedContent.match(/function\s+(\w+)/);
+      if (componentMatch) {
+        const componentName = componentMatch[1];
+        processedContent = processedContent.replace(
+          new RegExp(`function\\s+${componentName}`, 'g'),
+          'function App'
+        );
+      }
+    }
+    
+    return processedContent;
   };
 
   // 生成默认App组件
@@ -231,85 +317,85 @@ function App() {
   // 刷新预览
   const refreshPreview = () => {
     setRefreshKey(prev => prev + 1);
+    // 总是先生成模拟预览，确保用户能看到内容
+    const mockPreviewUrl = generateMockPreviewUrl();
+    onPreviewReady(mockPreviewUrl);
+    setContainerStatus('running');
+    
+    // 如果启用WebContainer，在后台尝试启动
     if (enableWebContainer && webcontainerService) {
-      startContainer();
-    } else {
-      const mockPreviewUrl = generateMockPreviewUrl();
-      onPreviewReady(mockPreviewUrl);
+      startContainer().catch(() => {
+        console.log('WebContainer刷新失败，保持使用模拟预览');
+      });
     }
   };
 
-  // 自动启动WebContainer
-  useEffect(() => {
-    if (enableWebContainer && files.length > 0 && webcontainerService && containerStatus === 'idle') {
-      startContainer();
+  // 处理可视化编辑请求
+  const handleElementModificationRequest = useCallback(async (elementInfo: any, prompt: string) => {
+    console.log('收到元素修改请求:', elementInfo, prompt);
+    
+    // 构建发送给 coding agent 的消息内容
+    const visualEditMessage = `
+🎯 **可视化编辑请求**
+
+**选中元素：**
+- 标签: \`${elementInfo.tagName}\`
+- 选择器: \`${elementInfo.selector}\`
+- 类名: \`${elementInfo.className}\`
+- 文本内容: "${elementInfo.textContent?.slice(0, 100)}${elementInfo.textContent?.length > 100 ? '...' : ''}"
+
+**修改需求：**
+${prompt}
+
+**项目上下文：**
+- 项目名称: ${projectName}
+- 框架: React
+- 当前文件数: ${files.length}
+
+请帮我修改代码来实现这个需求。
+    `.trim();
+
+    // 通过 onContentChange 回调将消息发送到聊天系统
+    if (onContentChange) {
+      // 使用特殊的字段名来标识这是可视化编辑请求
+      onContentChange('visual_edit_request', visualEditMessage);
+    } else {
+      // 如果没有 onContentChange 回调，可以尝试其他方式
+      console.log('可视化编辑消息:', visualEditMessage);
+      
+      // 可以尝试通过 postMessage 发送到父窗口
+      window.parent.postMessage({
+        type: 'VISUAL_EDIT_TO_CHAT',
+        message: visualEditMessage,
+        elementInfo,
+        prompt
+      }, '*');
     }
-  }, [enableWebContainer, files, webcontainerService, containerStatus, startContainer]);
+    
+    // 显示反馈信息
+    console.log('✅ 可视化编辑请求已发送到聊天系统');
+  }, [files, projectName, onContentChange]);
+
+  // 自动启动预览
+  useEffect(() => {
+    if (files.length > 0) {
+      // 优先使用模拟预览，避免WebContainer初始化问题
+      const mockPreviewUrl = generateMockPreviewUrl();
+      onPreviewReady(mockPreviewUrl);
+      setContainerStatus('running');
+      
+      // 如果启用WebContainer，可以在后台尝试启动
+      if (enableWebContainer && webcontainerService && containerStatus === 'idle') {
+        startContainer().catch(() => {
+          // WebContainer启动失败时，保持使用模拟预览
+          console.log('WebContainer启动失败，使用模拟预览');
+        });
+      }
+    }
+  }, [files, enableWebContainer, webcontainerService, onPreviewReady]);
 
   return (
-    <div className="flex flex-col h-full bg-white border rounded-lg overflow-hidden">
-      {/* 头部工具栏 */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <div className="flex items-center gap-3">
-          <StatusIndicator status={containerStatus} />
-          <div>
-            <h3 className="font-semibold text-sm">{projectName}</h3>
-            <p className="text-xs text-gray-500">
-              {enableWebContainer ? 'WebContainer预览' : '静态预览'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* 设备切换 */}
-          <div className="flex bg-white border rounded-md">
-            {Object.entries(deviceConfigs).map(([key, config]) => (
-              <Button
-                key={key}
-                variant={deviceType === key ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setDeviceType(key as DeviceType)}
-                className="px-2 py-1 text-xs"
-              >
-                {key === 'desktop' && <Monitor className="w-3 h-3" />}
-                {key === 'tablet' && <Tablet className="w-3 h-3" />}
-                {key === 'mobile' && <Smartphone className="w-3 h-3" />}
-              </Button>
-            ))}
-          </div>
-
-          {/* 控制按钮 */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshPreview}
-            disabled={isLoading}
-            className="px-3"
-          >
-            <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowLogs(!showLogs)}
-            className="px-3"
-          >
-            <Terminal className="w-4 h-4" />
-          </Button>
-
-          {previewUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(previewUrl, '_blank')}
-              className="px-3"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="flex flex-col h-full bg-white overflow-hidden">
 
       <div className="flex-1 flex">
         {/* 预览区域 */}
@@ -362,6 +448,16 @@ function App() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* StagewiseIO 可视化编辑工具栏 - 只在AI设计模式下显示 */}
+      {editMode === 'ai' && (
+        <StagewiseToolbar
+          iframeRef={iframeRef}
+          onElementModificationRequest={handleElementModificationRequest}
+          isEnabled={true}
+          onToggle={() => {}} // 通过editMode控制，不需要单独的toggle
+        />
+      )}
     </div>
   );
 }

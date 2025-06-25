@@ -4,6 +4,7 @@ import { SessionData } from '@/lib/types/session';
 import { generateStreamWithModel } from '@/lib/ai-models';
 import { formatPrompt } from '@/lib/prompts';
 import { OPTIMIZED_INFO_COLLECTION_PROMPT } from '@/lib/prompts/info-collection/optimized-agent';
+import { cleanTextContent } from '@/lib/utils';
 
 // 🆕 添加隐藏控制信息处理相关的类型定义
 interface InfoCollectionHiddenControl {
@@ -71,10 +72,9 @@ class InfoCollectionStreamProcessor {
    * 分离可见内容和隐藏控制信息
    */
   private separateVisibleAndHiddenContent(content: string): StreamContentSeparation {
-    // 匹配隐藏控制标记
     const patterns = [
-      /```HIDDEN_CONTROL\s*([\s\S]*?)\s*```/,  // 代码块格式
-      /HIDDEN_CONTROL\s*([\s\S]*?)(?=\n\n|$)/   // 简单格式
+      /```HIDDEN_CONTROL\s*([\s\S]*?)\s*```/,
+      /HIDDEN_CONTROL\s*([\s\S]*?)(?=\n\n|$)/
     ];
     
     let match: RegExpMatchArray | null = null;
@@ -86,8 +86,10 @@ class InfoCollectionStreamProcessor {
     }
     
     if (match) {
-      // 分离可见内容（移除隐藏控制部分）
-      const visibleContent = content.replace(match[0], '').trim();
+      // 🔧 修复：分离可见内容并清理空行
+      const beforeHidden = content.substring(0, match.index || 0);
+      const afterHidden = content.substring((match.index || 0) + match[0].length);
+      const cleanVisibleContent = this.cleanupContent(beforeHidden + afterHidden);
       
       // 提取JSON字符串
       const jsonStr = match[1].trim();
@@ -97,7 +99,7 @@ class InfoCollectionStreamProcessor {
           // 检查JSON是否完整
           if (!this.isCompleteJSON(jsonStr)) {
             return {
-              visibleContent,
+              visibleContent: cleanVisibleContent,
               hiddenControl: null,
               isComplete: false
             };
@@ -116,7 +118,7 @@ class InfoCollectionStreamProcessor {
           };
           
           return {
-            visibleContent,
+            visibleContent: cleanVisibleContent,
             hiddenControl,
             isComplete: true
           };
@@ -140,7 +142,7 @@ class InfoCollectionStreamProcessor {
               };
               
               return {
-                visibleContent,
+                visibleContent: cleanVisibleContent,
                 hiddenControl,
                 isComplete: true
               };
@@ -152,12 +154,19 @@ class InfoCollectionStreamProcessor {
       }
     }
     
-    // 没有找到隐藏控制信息，返回原始内容
+    // 没有找到隐藏控制信息，返回清理后的原始内容
     return {
-      visibleContent: content.trim(),
+      visibleContent: this.cleanupContent(content),
       hiddenControl: null,
       isComplete: false
     };
+  }
+  
+  /**
+   * 🔧 使用全局内容清理函数
+   */
+  private cleanupContent(content: string): string {
+    return cleanTextContent(content);
   }
   
   /**

@@ -797,3 +797,45 @@ html::-webkit-scrollbar-thumb:hover {
 .animate-brand-breathe {
   animation: brand-breathe 4s ease-in-out infinite;
 }
+
+/* 🔧 Stagewise 工具栏样式隔离 */
+/* 确保 stagewise 工具栏不会影响项目的文本颜色和样式 */
+[data-stagewise-toolbar] {
+  isolation: isolate;
+  position: fixed !important;
+  z-index: 999999 !important;
+}
+
+[data-stagewise-toolbar] * {
+  color: initial !important;
+  font-family: initial !important;
+  font-size: initial !important;
+  line-height: initial !important;
+  text-decoration: initial !important;
+}
+
+/* 防止 stagewise 影响主要内容区域的文本 */
+body:not([data-stagewise-toolbar]) {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* 确保我们的品牌色文本不被覆盖 */
+.text-brand-primary,
+.text-emerald-600,
+.text-emerald-500,
+.text-cyan-600,
+.text-cyan-500 {
+  color: #10B981 !important;
+}
+
+.text-gray-800 {
+  color: rgb(31, 41, 55) !important;
+}
+
+.text-gray-600 {
+  color: rgb(75, 85, 99) !important;
+}
+
+.text-gray-500 {
+  color: rgb(107, 114, 128) !important;
+}

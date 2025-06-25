@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '@/contexts/theme-context';
+import { cleanTextContent } from '@/lib/utils';
 
 interface MarkdownRendererProps {
   content: string;
@@ -14,47 +15,77 @@ interface MarkdownRendererProps {
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
   const { theme } = useTheme();
   
+  // 🔧 使用全局内容清理函数
+  const processedContent = React.useMemo(() => {
+    return cleanTextContent(content);
+  }, [content]);
+  
   return (
     <div className={`markdown-content ${className}`}>
       <ReactMarkdown
         components={{
-          // 标题样式
+          // 标题样式 - 🔧 减少间距
           h1: ({ children }) => (
-            <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100 border-b border-emerald-200 dark:border-emerald-700 pb-2">
+            <h1 className="text-2xl font-bold mb-3 text-gray-900 dark:text-gray-100 border-b border-emerald-200 dark:border-emerald-700 pb-2">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-xl font-semibold mb-3 text-gray-800 dark:text-gray-200 mt-6">
+            <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200 mt-4">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200 mt-4">
+            <h3 className="text-lg font-medium mb-1.5 text-gray-800 dark:text-gray-200 mt-3">
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 className="text-base font-medium mb-2 text-gray-700 dark:text-gray-300 mt-3">
+            <h4 className="text-base font-medium mb-1.5 text-gray-700 dark:text-gray-300 mt-2">
               {children}
             </h4>
           ),
           
-          // 段落样式
-          p: ({ children }) => (
-            <p className="mb-4 text-gray-900 dark:text-gray-100 leading-relaxed font-normal">
-              {children}
-            </p>
-          ),
+          // 段落样式 - 🔧 强化空段落检测
+          p: ({ children, ...props }) => {
+            // 🔧 更严格的空内容检测
+            const childrenArray = React.Children.toArray(children);
+            const hasContent = childrenArray.some(child => {
+              if (typeof child === 'string') {
+                return child.trim().length > 0;
+              }
+              if (React.isValidElement(child)) {
+                return true; // React元素认为有内容
+              }
+              return false;
+            });
+            
+            // 🔧 检查是否只包含空白字符或换行符
+            const textContent = childrenArray
+              .filter(child => typeof child === 'string')
+              .join('')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            if (!hasContent || textContent.length === 0) {
+              return null; // 不渲染空段落
+            }
+            
+            return (
+              <p className="mb-1.5 text-gray-900 dark:text-gray-100 leading-relaxed font-normal" {...props}>
+                {children}
+              </p>
+            );
+          },
           
-          // 列表样式
+          // 列表样式 - 🔧 减少间距
           ul: ({ children }) => (
-            <ul className="mb-4 ml-6 space-y-1 text-gray-900 dark:text-gray-100">
+            <ul className="mb-2 ml-4 space-y-0.5 text-gray-900 dark:text-gray-100">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-4 ml-6 space-y-1 text-gray-900 dark:text-gray-100 list-decimal">
+            <ol className="mb-2 ml-4 space-y-0.5 text-gray-900 dark:text-gray-100 list-decimal">
               {children}
             </ol>
           ),
@@ -65,14 +96,14 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             </li>
           ),
           
-          // 代码块样式
+          // 代码块样式 - 🔧 减少间距
           code: ({ node, inline, className, children, ...props }: any) => {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             
             if (!inline && language) {
               return (
-                <div className="my-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                <div className="my-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                   <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                     {language}
                   </div>
@@ -99,9 +130,9 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             );
           },
           
-          // 引用块样式
+          // 引用块样式 - 🔧 减少间距
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-emerald-500 pl-4 my-4 italic text-gray-600 dark:text-gray-400 bg-emerald-50/50 dark:bg-emerald-900/20 py-2 rounded-r">
+            <blockquote className="border-l-4 border-emerald-500 pl-4 my-3 italic text-gray-600 dark:text-gray-400 bg-emerald-50/50 dark:bg-emerald-900/20 py-2 rounded-r">
               {children}
             </blockquote>
           ),
@@ -118,9 +149,9 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             </a>
           ),
           
-          // 表格样式
+          // 表格样式 - 🔧 减少间距
           table: ({ children }) => (
-            <div className="my-4 overflow-x-auto">
+            <div className="my-3 overflow-x-auto">
               <table className="min-w-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                 {children}
               </table>
@@ -142,9 +173,9 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             </td>
           ),
           
-          // 分割线样式
+          // 分割线样式 - 🔧 减少间距
           hr: () => (
-            <hr className="my-6 border-0 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent" />
+            <hr className="my-4 border-0 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent" />
           ),
           
           // 强调样式
@@ -158,15 +189,18 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
               {children}
             </em>
           ),
+          
+          // 🔧 彻底移除换行符，防止不必要的空行
+          br: () => null,
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
       
       <style jsx global>{`
         .markdown-content {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-          line-height: 1.6;
+          line-height: 1.5;
           color: rgb(17, 24, 39);
         }
         
@@ -184,8 +218,48 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
           line-height: 1.25;
         }
         
+        /* 🔧 强化段落间距控制 */
         .markdown-content p {
-          margin-bottom: 1rem;
+          margin-bottom: 0.375rem;
+        }
+        
+        .markdown-content p:last-child {
+          margin-bottom: 0;
+        }
+        
+        /* 🔧 彻底移除空段落 */
+        .markdown-content p:empty {
+          display: none !important;
+        }
+        
+        /* 🔧 移除只包含空白字符的段落 */
+        .markdown-content p:has(> :only-child:empty) {
+          display: none !important;
+        }
+        
+        /* 🔧 移除只包含空白文本的段落 */
+        .markdown-content p:has(> :only-child:is([data-empty="true"])) {
+          display: none !important;
+        }
+        
+        /* 🔧 优化相邻元素间距 */
+        .markdown-content > *:first-child {
+          margin-top: 0 !important;
+        }
+        
+        .markdown-content > *:last-child {
+          margin-bottom: 0 !important;
+        }
+        
+        /* 🔧 优化列表间距 */
+        .markdown-content ul + p,
+        .markdown-content ol + p {
+          margin-top: 0.5rem;
+        }
+        
+        .markdown-content p + ul,
+        .markdown-content p + ol {
+          margin-top: -0.25rem;
         }
         
         .markdown-content ul li::marker {
@@ -195,6 +269,16 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         .markdown-content ol li::marker {
           color: rgb(16, 185, 129);
           font-weight: 600;
+        }
+        
+        /* 🔧 强化空白内容隐藏 */
+        .markdown-content *:empty {
+          display: none !important;
+        }
+        
+        /* 🔧 移除连续的空白节点 */
+        .markdown-content br + br {
+          display: none !important;
         }
         
         /* 优化代码块滚动条 */

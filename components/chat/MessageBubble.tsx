@@ -8,6 +8,8 @@ import { User, Sparkles } from 'lucide-react';
 import { LoadingText, StreamingText, LoadingDots } from '@/components/ui/loading-text';
 import { UnifiedLoading, ThinkingLoader, GeneratingLoader, SimpleTextLoader } from '@/components/ui/unified-loading';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { StreamingMarkdown } from '@/components/ui/streaming-markdown';
+import { cleanTextContent } from '@/lib/utils';
 
 interface MessageBubbleProps {
   message: any;
@@ -265,16 +267,18 @@ export const MessageBubble = function MessageBubble({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex items-start gap-4 max-w-4xl mx-auto px-6 py-4 ${
+      className={`flex gap-4 max-w-4xl mx-auto px-6 py-4 ${
         actualIsUser ? "flex-row-reverse" : ""
       }`}
     >
-      {/* 头像 - 简约设计 */}
-      <Avatar className="w-8 h-8 shrink-0">
-        <AvatarFallback className={actualIsUser ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}>
-          {actualIsUser ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
-        </AvatarFallback>
-      </Avatar>
+      {/* 头像 - 简约设计，顶部对齐但有适当的上边距来与文本对齐 */}
+      <div className="flex-shrink-0 pt-1">
+        <Avatar className="w-8 h-8">
+          <AvatarFallback className={actualIsUser ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}>
+            {actualIsUser ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+          </AvatarFallback>
+        </Avatar>
+      </div>
 
       {/* 消息内容 */}
       <div className={`flex-1 ${actualIsUser ? "text-right" : ""}`}>
@@ -289,12 +293,15 @@ export const MessageBubble = function MessageBubble({
           <div className="whitespace-pre-wrap break-words">
             {/* 🎯 智能内容渲染 */}
             {(() => {
+              // 🔧 预处理内容，移除多余空行
+              const cleanedContent = cleanTextContent(message.content || '');
+              
               // 优先级1：流式消息
               if (isStreamingMessage) {
-                console.log('🌊 [流式渲染] 内容长度:', message.content?.length || 0);
+                console.log('🌊 [流式渲染] 内容长度:', cleanedContent.length);
                 return (
-                  <StreamingText
-                    text={message.content || ''}
+                  <StreamingMarkdown
+                    text={cleanedContent}
                     speed={30}
                     onComplete={() => {
                       setContentComplete(true);
@@ -307,12 +314,12 @@ export const MessageBubble = function MessageBubble({
               }
               
               // 优先级2：loading文本
-              if (!actualIsUser && message.content && (
-                message.content.includes('正在分析') ||
-                message.content.includes('正在为您生成') ||
-                message.content.includes('请稍候')
+              if (!actualIsUser && cleanedContent && (
+                cleanedContent.includes('正在分析') ||
+                cleanedContent.includes('正在为您生成') ||
+                cleanedContent.includes('请稍候')
               )) {
-                return <GeneratingLoader text={message.content.replace(/[。.…]+$/g, '')} size="sm" />;
+                return <GeneratingLoader text={cleanedContent.replace(/[。.…]+$/g, '')} size="sm" />;
               }
               
               // 优先级3：交互准备中
@@ -321,7 +328,7 @@ export const MessageBubble = function MessageBubble({
               }
               
               // 优先级4：普通内容
-              return <MarkdownRenderer content={message.content || ''} />;
+              return <MarkdownRenderer content={cleanedContent} />;
             })()}
           </div>
 
@@ -346,7 +353,13 @@ export const MessageBubble = function MessageBubble({
           )} */}
 
           {/* 🔧 修复：智能确认表单 - 简约设计 */}
-          {!actualIsUser && message.metadata?.interaction && (contentComplete || showInteraction) && (
+          {!actualIsUser && 
+           message.metadata?.interaction && 
+           (contentComplete || showInteraction) && 
+           // 🔧 新增：检查Agent是否已完成，如果完成则不显示交互表单
+           !(message.metadata?.system_state?.done === true) &&
+           !(message.metadata?.system_state?.intent === 'advance_to_next_agent') &&
+           !(message.metadata?.system_state?.intent === 'complete') && (
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -483,7 +496,7 @@ export const MessageBubble = function MessageBubble({
                                   value={formData[`${element.id}_customInput`] || ''}
                                   onChange={(e) => handleInputChange(`${element.id}_customInput`, e.target.value)}
                                   placeholder={`请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                                  className="w-full p-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
+                                  className="w-full p-3 border-2 border-emerald-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
                                   autoFocus
                                   onKeyPress={(e) => {
                                     if (e.key === 'Enter') {
@@ -584,7 +597,7 @@ export const MessageBubble = function MessageBubble({
                               value={formData[element.id] || ''}
                               onChange={(e) => handleInputChange(element.id, e.target.value)}
                               placeholder={element.placeholder || `请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                              className="w-full px-3 py-2 text-sm border border-gray-200/60 rounded-full focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white/90 backdrop-blur-sm hover:border-gray-300/60"
+                              className="w-full px-3 py-2 text-sm border border-gray-200/60 rounded-2xl focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white/90 backdrop-blur-sm hover:border-gray-300/60"
                             />
                           </motion.div>
                         </div>
@@ -688,7 +701,7 @@ export const MessageBubble = function MessageBubble({
                                   value={formData[`${element.id}_customInput`] || ''}
                                   onChange={(e) => handleInputChange(`${element.id}_customInput`, e.target.value)}
                                   placeholder={`请输入您的${element.label.replace('？', '').replace('您', '')}...`}
-                                  className="w-full p-3 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
+                                  className="w-full p-3 border-2 border-emerald-300 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 bg-white"
                                   autoFocus
                                   onKeyPress={(e) => {
                                     if (e.key === 'Enter') {

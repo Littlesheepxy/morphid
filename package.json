@@ -84,6 +84,7 @@
     "pdf-parse": "^1.1.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19",
+    "react-arborist": "^3.4.3",
     "react-day-picker": "^9.4.4",
     "react-dom": "^19",
     "react-hook-form": "^7.54.1",
@@ -111,6 +112,10 @@
     "zustand": "^5.0.5"
   },
   "devDependencies": {
+    "@stagewise-plugins/react": "^0.4.8",
+    "@stagewise/toolbar": "^0.4.8",
+    "@stagewise/toolbar-next": "^0.4.8",
+    "@stagewise/toolbar-react": "^0.4.8",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.15.27",
