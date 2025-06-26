@@ -60,6 +60,7 @@ interface WelcomeScreenProps {
   setInputValue: (value: string) => void;
   onSendMessage: () => void;
   isGenerating?: boolean;
+  chatMode?: 'normal' | 'professional';
 }
 
 // 打字机效果Hook
@@ -99,7 +100,7 @@ const useTypewriter = (phrases: string[], baseText: string = "") => {
   return { text: baseText + currentText, showCursor: true };
 };
 
-export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating }: WelcomeScreenProps) {
+export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating, chatMode }: WelcomeScreenProps) {
   const { theme } = useTheme();
 
   // 动态文本短语
@@ -151,7 +152,25 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
             <h1 className={`text-3xl font-bold mb-4 ${
               theme === "light" ? "text-gray-900" : "text-white"
             }`}>
-              HeysMe AI
+              <div className="flex items-center justify-center gap-3">
+                <span>HeysMe AI</span>
+                {chatMode && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium shadow-sm ${
+                      chatMode === 'professional'
+                        ? 'text-white shadow-emerald-200 dark:shadow-emerald-900/30'
+                        : 'bg-white text-gray-700 border border-gray-200 shadow-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:shadow-gray-900/30'
+                    }`}
+                    style={chatMode === 'professional' ? {
+                      background: 'linear-gradient(to right, #34d399, #14b8a6)'
+                    } : undefined}
+                  >
+                    {chatMode === 'professional' ? '专家' : '普通'}
+                  </motion.div>
+                )}
+              </div>
             </h1>
             
             {/* 打字机效果文本 */}
@@ -166,7 +185,13 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                     return (
                       <span
                         key={index}
-                        className={isInChangingPart ? 'bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent font-bold' : ''}
+                        className={isInChangingPart ? 'font-semibold' : ''}
+                        style={isInChangingPart ? {
+                          background: 'linear-gradient(to right, #10b981, #14b8a6)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text'
+                        } : undefined}
                       >
                         {char}
                       </span>
@@ -191,12 +216,17 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
           >
             {/* 🎨 快捷发送按钮 - 移到输入框上方，一行显示 */}
             <div className="mb-4 flex flex-wrap justify-center gap-2">
-              {[
+              {(chatMode === 'professional' ? [
+                "创建React个人简历组件，包含技能展示和项目经验",
+                "生成响应式作品集页面，支持暗色模式切换",
+                "构建博客首页布局，包含文章列表和分类导航",
+                "制作团队介绍页面，包含成员卡片和联系方式"
+              ] : [
                 "我想制作求职简历，目标是互联网公司",
-                "创建设计师作品集，展示给潜在客户",
+                "创建设计师作品集，展示给潜在客户", 
                 "制作个人主页，分享给社交媒体粉丝",
                 "构建专业博客，吸引行业合作伙伴"
-              ].map((example, index) => (
+              ]).map((example, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 10 }}

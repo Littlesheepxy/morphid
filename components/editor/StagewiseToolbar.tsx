@@ -17,7 +17,7 @@ export function StagewiseToolbar({
   onToggle,
   className
 }: StagewiseToolbarProps) {
-
+  
   // 监听来自iframe的点击事件和用户输入
   useEffect(() => {
     if (!isEnabled || !iframeRef.current) return;

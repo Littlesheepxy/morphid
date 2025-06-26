@@ -37,6 +37,7 @@ export default function ChatPage() {
   const [isCodeMode, setIsCodeMode] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<any[]>([])
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [chatMode, setChatMode] = useState<'normal' | 'professional'>('normal')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // 监听当前会话变化，如果有会话且有消息，则显示对话模式
@@ -123,8 +124,34 @@ export default function ChatPage() {
       setHasStartedChat(true)
     }
 
+    // 根据模式选择不同的处理方式
+    let messageToSend = inputValue
+
+    if (chatMode === 'professional') {
+      // 专业模式：直接使用coding prompt
+      messageToSend = `[专业模式 - 直达代码生成]
+
+用户需求：${inputValue}
+
+请直接生成高质量的代码，包括：
+1. 完整的React组件代码
+2. 相应的TypeScript类型定义
+3. Tailwind CSS样式
+4. 必要的依赖和导入
+
+技术栈：React + TypeScript + Tailwind CSS + Next.js
+请确保代码的可读性、性能和最佳实践。`
+    } else {
+      // 普通模式：使用智能引导
+      messageToSend = `[普通模式 - 智能引导]
+
+用户输入：${inputValue}
+
+请作为专业的AI助手，通过智能对话引导用户明确需求。如果需求已经足够明确，可以直接进入代码生成阶段。请根据用户的技术水平和需求复杂度，选择合适的引导方式。`
+    }
+
     // 🔧 修复：先发送消息，让用户消息立即显示，会话创建在 sendMessage 内部处理
-    sendMessage(inputValue)
+    sendMessage(messageToSend)
     setInputValue("")
   }
 
@@ -279,7 +306,12 @@ export default function ChatPage() {
       {/* 🎨 主内容区域 - 包含header和内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 🎨 顶部导航栏 - 品牌色 - 只在非代码模式下显示 */}
-        {!isCodeMode && <ChatHeader />}
+        {!isCodeMode && (
+          <ChatHeader 
+            chatMode={chatMode}
+            onModeChange={setChatMode}
+          />
+        )}
 
         {/* 🎨 主内容区域 */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -318,6 +350,7 @@ export default function ChatPage() {
               setInputValue={setInputValue}
               onSendMessage={handleSendMessage}
               isGenerating={isGenerating}
+              chatMode={chatMode}
             />
           )}
         </div>
