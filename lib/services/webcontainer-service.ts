@@ -26,6 +26,7 @@ export type ContainerStatus = 'idle' | 'initializing' | 'installing' | 'building
 export class WebContainerService {
   private instance: WebContainer | null = null;
   private isInitialized = false;
+  private isAuthInitialized = false;
   private config: WebContainerConfig;
   private statusListeners: ((status: ContainerStatus) => void)[] = [];
   private logListeners: ((log: string) => void)[] = [];
@@ -44,13 +45,24 @@ export class WebContainerService {
    * 初始化 WebContainer 认证
    */
   async initAuth(): Promise<void> {
+    if (this.isAuthInitialized) {
+      this.log('✅ WebContainer认证已初始化，跳过重复初始化');
+      return;
+    }
+
     try {
       await auth.init({
         clientId: this.config.clientId,
         scope: this.config.scope || '',
       });
+      this.isAuthInitialized = true;
       this.log('✅ WebContainer认证初始化成功');
     } catch (error) {
+      if (error instanceof Error && error.message.includes('Init should only be called once')) {
+        this.isAuthInitialized = true;
+        this.log('✅ WebContainer认证已存在，初始化完成');
+        return;
+      }
       this.log(`❌ WebContainer认证初始化失败: ${error}`);
       throw error;
     }
@@ -401,7 +413,8 @@ export default {
   destroy(): void {
     this.instance = null;
     this.isInitialized = false;
+    this.isAuthInitialized = false;
     this.statusListeners = [];
     this.logListeners = [];
   }
-} 
+}

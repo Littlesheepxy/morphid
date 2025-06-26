@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, MessageSquare, MoreHorizontal, Code, Sparkles, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Plus, MessageSquare, MoreHorizontal, Code, Sparkles, ChevronLeft, ChevronRight, User, Users, BookTemplate } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 import { useEffect, useState } from 'react';
 import { UserButton, SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs';
@@ -183,6 +183,31 @@ export function ChatSidebar({
               <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
             </button>
             
+            {/* 🎨 社区功能导航 */}
+            <a
+              href="/people"
+              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
+                theme === "light"
+                  ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
+                  : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>数字身份广场</span>
+            </a>
+            
+            <a
+              href="/templates"
+              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
+                theme === "light"
+                  ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
+                  : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
+              }`}
+            >
+              <BookTemplate className="w-4 h-4" />
+              <span>灵感模板库</span>
+            </a>
+            
             {/* 🎨 测试按钮 - 透明背景，悬停时显示颜色，无边框 */}
             <button
               onClick={onGenerateTestCode}
@@ -216,6 +241,30 @@ export function ChatSidebar({
               <Plus className="w-4 h-4 relative z-10" />
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
             </button>
+            
+            <a
+              href="/people"
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 ${
+                theme === "light"
+                  ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
+                  : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
+              }`}
+              title="数字身份广场"
+            >
+              <Users className="w-4 h-4" />
+            </a>
+            
+            <a
+              href="/templates"
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 ${
+                theme === "light"
+                  ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
+                  : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
+              }`}
+              title="灵感模板库"
+            >
+              <BookTemplate className="w-4 h-4" />
+            </a>
             
             <button
               onClick={onGenerateTestCode}

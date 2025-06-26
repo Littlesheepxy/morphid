@@ -6,6 +6,7 @@ import { useTheme } from "@/contexts/theme-context"
 import { generateMockResumeCode } from "@/lib/utils/mockCodeGenerator"
 import { useAuthCheck, usePendingAuthAction } from "@/hooks/use-auth-check"
 import { AuthPromptDialog } from "@/components/dialogs"
+import { useToast } from "@/hooks/use-toast"
 
 // 导入新的组件
 import { ChatHeader } from "@/components/chat/ChatHeader"
@@ -16,6 +17,7 @@ import { CodeModeView } from "@/components/chat/CodeModeView"
 
 export default function ChatPage() {
   const { theme } = useTheme()
+  const { toast } = useToast()
   
   // 认证状态
   const { isAuthenticated, isLoading: authLoading, userId } = useAuthCheck()
@@ -128,26 +130,11 @@ export default function ChatPage() {
     let messageToSend = inputValue
 
     if (chatMode === 'professional') {
-      // 专业模式：直接使用coding prompt
-      messageToSend = `[专业模式 - 直达代码生成]
-
-用户需求：${inputValue}
-
-请直接生成高质量的代码，包括：
-1. 完整的React组件代码
-2. 相应的TypeScript类型定义
-3. Tailwind CSS样式
-4. 必要的依赖和导入
-
-技术栈：React + TypeScript + Tailwind CSS + Next.js
-请确保代码的可读性、性能和最佳实践。`
+      // 专业模式：直接使用用户输入，添加模式标识
+      messageToSend = `[专业模式] ${inputValue}`
     } else {
-      // 普通模式：使用智能引导
-      messageToSend = `[普通模式 - 智能引导]
-
-用户输入：${inputValue}
-
-请作为专业的AI助手，通过智能对话引导用户明确需求。如果需求已经足够明确，可以直接进入代码生成阶段。请根据用户的技术水平和需求复杂度，选择合适的引导方式。`
+      // 普通模式：直接使用用户输入，添加模式标识
+      messageToSend = `[普通模式] ${inputValue}`
     }
 
     // 🔧 修复：先发送消息，让用户消息立即显示，会话创建在 sendMessage 内部处理
@@ -190,6 +177,99 @@ export default function ChatPage() {
   const handleEditCode = (filename: string) => {
     console.log('编辑文件:', filename)
   }
+
+  // 处理文件上传
+  const handleFileUpload = async (file: File) => {
+    try {
+      // 验证文件类型和大小
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown', 'application/json'];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "文件类型不支持",
+          description: "请上传 PDF、Word、文本或 Markdown 文件",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (file.size > maxSize) {
+        toast({
+          title: "文件过大",
+          description: "文件大小不能超过 10MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 显示上传中的提示
+      toast({
+        title: "文件上传中",
+        description: `正在处理 ${file.name}...`,
+      });
+
+      // 读取文件内容
+      const fileContent = await readFileContent(file);
+      
+      // 构建文件上传消息
+      const uploadMessage = `📎 ${file.name}
+类型: ${file.type}
+大小: ${(file.size / 1024).toFixed(1)}KB
+
+${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二进制文件内容]'}`;
+
+      // 发送消息
+      sendMessage(uploadMessage);
+      
+      // 如果还没开始聊天，设置为已开始
+      if (!hasStartedChat) {
+        setHasStartedChat(true);
+      }
+
+      // 显示上传成功的提示
+      toast({
+        title: "文件上传成功",
+        description: `${file.name} 已成功上传`,
+      });
+      
+    } catch (error) {
+      console.error('文件上传失败:', error);
+      toast({
+        title: "文件上传失败",
+        description: "请重试或选择其他文件",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 读取文件内容的辅助函数
+  const readFileContent = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          resolve(result);
+        } else {
+          reject(new Error('无法读取文件内容'));
+        }
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('文件读取失败'));
+      };
+      
+      // 根据文件类型选择读取方式
+      if (file.type.includes('text') || file.type.includes('json') || file.type.includes('markdown')) {
+        reader.readAsText(file);
+      } else {
+        // 对于PDF和Word文档，暂时读取为文本（实际项目中可能需要专门的解析库）
+        reader.readAsText(file);
+      }
+    });
+  };
 
   // 转换代码为React预览格式
   const getReactPreviewData = () => {
@@ -250,25 +330,44 @@ export default function ChatPage() {
     return assets
   }
 
-  // 生成测试代码用于演示
+  // 生成测试代码用于演示 - 直接启动coding agent
   const generateTestCode = async () => {
-    const mockUserData = {
-      name: "张三",
-      title: "前端开发工程师",
-      bio: "热爱技术，专注于前端开发和用户体验设计。拥有5年Web开发经验，熟悉React、Vue、Node.js等技术栈。",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-      email: "zhangsan@example.com",
-      linkedin: "https://linkedin.com/in/zhangsan",
-      github: "https://github.com/zhangsan"
-    }
+    try {
+      console.log('🧪 [测试代码生成] 开始启动...');
+      
+      // 设置为代码模式
+      setIsCodeMode(true)
+      setHasStartedChat(true)
+      setGeneratedCode([]) // 清空之前的代码
 
-    const mockCode = generateMockResumeCode(mockUserData)
-    setGeneratedCode(mockCode)
-    setIsCodeMode(true)
-    setHasStartedChat(true)
+      // 创建或获取会话
+      let session = currentSession
+      if (!session) {
+        console.log('🧪 [测试代码生成] 创建新会话...');
+        session = await createNewSession()
+      }
 
-    if (!currentSession) {
-      await createNewSession()
+      console.log('🧪 [测试代码生成] 会话ID:', session?.id);
+
+      // 发送特殊的测试代码生成请求
+      const testMessage = "[FORCE_AGENT:coding][TEST_MODE]启动测试代码生成模式"
+      
+      console.log('🧪 [测试代码生成] 发送消息:', testMessage);
+      console.log('🧪 [测试代码生成] 发送参数:', {
+        forceAgent: 'coding',
+        testMode: true
+      });
+      
+      // 直接调用coding agent
+      await sendMessage(testMessage, {
+        forceAgent: 'coding',
+        testMode: true
+      })
+
+      console.log('🧪 [测试代码生成] 消息发送完成');
+
+    } catch (error) {
+      console.error('❌ [测试代码生成] 启动失败:', error)
     }
   }
 
@@ -331,6 +430,7 @@ export default function ChatPage() {
               onDeploy={handleDeploy}
               onEditCode={handleEditCode}
               getReactPreviewData={getReactPreviewData}
+              onFileUpload={handleFileUpload}
             />
           ) : hasStartedChat ? (
             /* 正常对话模式 */
@@ -342,6 +442,7 @@ export default function ChatPage() {
               onSendMessage={sendMessage}
               onKeyPress={handleKeyPress}
               sessionId={currentSession?.id}
+              onFileUpload={handleFileUpload}
             />
           ) : (
             /* 欢迎屏幕 */
@@ -351,6 +452,7 @@ export default function ChatPage() {
               onSendMessage={handleSendMessage}
               isGenerating={isGenerating}
               chatMode={chatMode}
+              onFileUpload={handleFileUpload}
             />
           )}
         </div>
@@ -360,8 +462,8 @@ export default function ChatPage() {
       <AuthPromptDialog
         isOpen={showAuthDialog}
         onClose={() => setShowAuthDialog(false)}
-        title="需要登录才能开始对话"
-        message="请先登录您的账户来使用AI助手和创建个人页面"
+        title="需要登录才能继续"
+        message="请先登录您的账户来继续使用"
         action="开始对话"
         onLoginSuccess={() => {
           // 登录成功回调会在useEffect中处理

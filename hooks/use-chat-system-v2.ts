@@ -288,8 +288,8 @@ export function useChatSystemV2() {
         targetSession = updatedSession
 
         // 🔧 修复：通过API调用后端进行消息处理
-        if (option) {
-          // 处理用户交互
+        if (option && !option.forceAgent && !option.testMode) {
+          // 处理用户交互（不包含forceAgent和testMode的情况）
           const response = await fetch('/api/chat/interact', {
             method: 'POST',
             headers: {
@@ -319,16 +319,26 @@ export function useChatSystemV2() {
             }
           }
         } else {
-          // 常规消息处理
+          // 常规消息处理（包括forceAgent和testMode）
+          const requestBody: any = {
+            sessionId: targetSession.id,
+            message: content
+          };
+
+          // 如果option中包含forceAgent或testMode，添加到请求中
+          if (option?.forceAgent) {
+            requestBody.forceAgent = option.forceAgent;
+          }
+          if (option?.testMode) {
+            requestBody.testMode = option.testMode;
+          }
+
           const response = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              sessionId: targetSession.id,
-              message: content
-            })
+            body: JSON.stringify(requestBody)
           });
 
           if (!response.ok) {

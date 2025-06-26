@@ -9,6 +9,7 @@ import { MessageBubble } from './MessageBubble';
 import { ThinkingLoader } from '@/components/ui/unified-loading';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/theme-context';
+import { motion } from 'framer-motion';
 
 interface ChatModeViewProps {
   currentSession: any;
@@ -18,6 +19,7 @@ interface ChatModeViewProps {
   onSendMessage: (message: string, option?: any) => void;
   onKeyPress: (e: React.KeyboardEvent) => void;
   sessionId?: string;
+  onFileUpload?: (file: File) => void;
 }
 
 // 🔧 优化：使用React.memo减少不必要的重新渲染
@@ -28,10 +30,12 @@ export const ChatModeView = memo(function ChatModeView({
   isGenerating,
   onSendMessage,
   onKeyPress,
-  sessionId
+  sessionId,
+  onFileUpload
 }: ChatModeViewProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [previousSessionId, setPreviousSessionId] = useState<string | undefined>(sessionId);
 
   // 🔧 优化：使用useMemo缓存消息列表
@@ -61,6 +65,21 @@ export const ChatModeView = memo(function ChatModeView({
     }
   };
 
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // 清空input值，以便重复选择同一文件
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
   return (
     <>
       {/* 🎨 消息列表 - 简约白色背景 */}
@@ -73,7 +92,7 @@ export const ChatModeView = memo(function ChatModeView({
               <div className="flex items-center justify-center h-64 text-gray-500">
                 <div className="text-center">
                   <p className="text-lg mb-2">开始新的对话</p>
-                  <p className="text-sm">向AI助手发送消息来开始创建您的个人页面</p>
+                  <p className="text-sm">发送消息开始创建您的个人页面</p>
                 </div>
               </div>
             ) : (
@@ -146,11 +165,13 @@ export const ChatModeView = memo(function ChatModeView({
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={handleFileUploadClick}
                     className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
                       theme === "light"
                         ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                         : "text-gray-400 hover:bg-gray-800 hover:text-gray-300"
                     }`}
+                    title="上传文件"
                   >
                     <Paperclip className="w-5 h-5" />
                   </Button>
@@ -162,7 +183,7 @@ export const ChatModeView = memo(function ChatModeView({
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={onKeyPress}
-                      placeholder="发送消息给 HeysMe AI..."
+                      placeholder="发送消息..."
                       className={`px-4 py-4 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 pr-16 ${
                         theme === "light"
                           ? "bg-transparent placeholder-gray-400 text-gray-900"
@@ -206,6 +227,15 @@ export const ChatModeView = memo(function ChatModeView({
         
         {/* 🎨 底部装饰线 - 品牌色 */}
         <div className="h-1 bg-brand-gradient opacity-30"></div>
+
+        {/* 隐藏的文件上传输入 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.md,.json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     </>
   );

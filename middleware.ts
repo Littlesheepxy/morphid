@@ -18,6 +18,8 @@ import { NextResponse } from "next/server"
 // 定义受保护的路由
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
+  "/people(.*)",
+  "/templates(.*)",
   "/settings(.*)",
   "/api/pages(.*)",
   "/api/generate-page(.*)",

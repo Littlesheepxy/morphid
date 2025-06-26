@@ -336,6 +336,14 @@ export class AgentOrchestrator {
    * 确定当前应该使用的Agent
    */
   private determineCurrentAgent(session: SessionData, userInput: string): string {
+    // 检查是否有强制指定的Agent
+    const forceAgentMatch = userInput.match(/\[FORCE_AGENT:(\w+)\]/);
+    if (forceAgentMatch) {
+      const forceAgent = forceAgentMatch[1];
+      console.log(`🎯 [编排器] 强制使用Agent: ${forceAgent}`);
+      return forceAgent;
+    }
+    
     const currentStage = session.metadata.progress.currentStage;
     const agentName = agentMappings.getAgentFromStage(currentStage);
     

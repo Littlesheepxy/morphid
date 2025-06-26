@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,7 @@ interface WelcomeScreenProps {
   onSendMessage: () => void;
   isGenerating?: boolean;
   chatMode?: 'normal' | 'professional';
+  onFileUpload?: (file: File) => void;
 }
 
 // 打字机效果Hook
@@ -100,8 +101,9 @@ const useTypewriter = (phrases: string[], baseText: string = "") => {
   return { text: baseText + currentText, showCursor: true };
 };
 
-export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating, chatMode }: WelcomeScreenProps) {
+export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating, chatMode, onFileUpload }: WelcomeScreenProps) {
   const { theme } = useTheme();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 动态文本短语
   const phrases = [
@@ -121,6 +123,21 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSendMessage();
+    }
+  };
+
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // 清空input值，以便重复选择同一文件
+    if (e.target) {
+      e.target.value = '';
     }
   };
 
@@ -265,11 +282,13 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={handleFileUploadClick}
                   className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
                     theme === "light"
                       ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                       : "text-gray-400 hover:bg-gray-700 hover:text-gray-300"
                   }`}
+                  title="上传文件"
                 >
                   <Paperclip className="w-5 h-5" />
                 </Button>
@@ -281,7 +300,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="告诉我你想要什么样的简历..."
+                    placeholder="告诉我你想要什么样的页面..."
                     className={`border-0 px-4 py-4 text-base h-18 w-full transition-all duration-300 pr-16 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-3xl ${
                       theme === "light"
                         ? "bg-transparent placeholder:text-gray-400 text-gray-900"
@@ -317,6 +336,15 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
             </div>
           </motion.div>
         </div>
+
+        {/* 隐藏的文件上传输入 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.md,.json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
     </>
   );

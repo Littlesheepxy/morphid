@@ -6,6 +6,7 @@ import { ClerkProvider } from "@clerk/nextjs"
 import { ThemeProvider } from "@/contexts/theme-context"
 import { StagewiseToolbar } from "@stagewise/toolbar-next"
 import { ReactPlugin } from "@stagewise-plugins/react"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -62,6 +63,7 @@ export default function RootLayout({
         <body className={inter.className}>
           <ThemeProvider>
             {children}
+            <Toaster />
             {/* 只在开发环境显示 stagewise 工具栏，并添加样式隔离 */}
             {process.env.NODE_ENV === 'development' && (
               <div style={{ isolation: 'isolate', zIndex: 9999 }}>

@@ -39,6 +39,7 @@ import { useTheme } from '@/contexts/theme-context';
 import WebContainerPreview from './WebContainerPreview';
 import { CodeEditorPanel } from './CodeEditorPanel';
 import { Separator } from '@/components/ui/separator';
+import { ShareDialog } from '@/components/dialogs/share-dialog';
 
 // 代码文件接口
 interface CodeFile {
@@ -447,6 +448,7 @@ export function CodePreviewToggle({
   const [activeFile, setActiveFile] = useState(files[0]?.filename || '');
   const [editMode, setEditMode] = useState<EditMode>('none');
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [showAiTip, setShowAiTip] = useState(true);
 
   const currentFile = files.find(f => f.filename === activeFile);
 
@@ -594,7 +596,10 @@ export function CodePreviewToggle({
               </motion.button>
               
               <motion.button
-                onClick={() => setEditMode('ai')}
+                onClick={() => {
+                  setEditMode('ai');
+                  setShowAiTip(true);
+                }}
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 relative",
                   editMode === 'ai'
@@ -664,40 +669,71 @@ export function CodePreviewToggle({
           </div>
         )}
 
-        {/* AI设计模式使用说明 */}
-        {editMode === 'ai' && (
+        {/* AI设计模式使用说明 - 浮动卡片 */}
+        {editMode === 'ai' && showAiTip && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-700"
+            initial={{ opacity: 0, scale: 0.9, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -20 }}
+            className="fixed top-20 right-6 z-50 max-w-sm backdrop-blur-md bg-white/80 dark:bg-gray-800/80 shadow-2xl rounded-2xl border border-white/20 dark:border-gray-700/50 overflow-hidden"
+            style={{
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)'
+            }}
           >
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg">
-                <Wand2 className="w-5 h-5 text-white" />
+            {/* 关闭按钮 */}
+            <button
+              onClick={() => setShowAiTip(false)}
+              className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center transition-colors z-10 hover:opacity-70"
+            >
+              <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+
+            {/* 头部 */}
+            <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                  <Wand2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base leading-tight">AI设计模式</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5 leading-tight">点击元素即可编辑</p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  🎯 AI设计模式已激活
-                </h3>
-                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    <span><strong>选择元素</strong>：点击预览中的任意元素（按钮、文本、图片等）</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                    <span><strong>描述需求</strong>：在弹出的输入框中描述你想要的修改</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    <span><strong>AI自动修改</strong>：AI将分析元素上下文并生成相应代码</span>
+            </div>
+
+            {/* 内容区域 */}
+            <div className="p-4 relative">
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-start gap-3">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0 shadow-sm"></span>
+                  <div>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">选择元素</span>
+                    <p className="text-xs opacity-80">点击预览中的任意元素</p>
                   </div>
                 </div>
-                <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">💡 示例操作</div>
-                  <div className="text-sm text-gray-700 dark:text-gray-300">
-                    "把这个按钮改成绿色" • "增加一个联系方式输入框" • "让标题更大一些"
+                <div className="flex items-start gap-3">
+                  <span className="w-2 h-2 bg-pink-500 rounded-full mt-2 flex-shrink-0 shadow-sm"></span>
+                  <div>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">描述需求</span>
+                    <p className="text-xs opacity-80">在弹出框中描述修改</p>
                   </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0 shadow-sm"></span>
+                  <div>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">AI自动修改</span>
+                    <p className="text-xs opacity-80">AI将生成相应代码</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-gradient-to-r from-purple-50/80 to-pink-50/80 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-100/50 dark:border-purple-700/30 backdrop-blur-sm">
+                <div className="text-xs text-purple-600 dark:text-purple-400 font-medium mb-1">💡 示例</div>
+                <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed opacity-90">
+                  "把按钮改成绿色"<br/>
+                  "增加联系方式"<br/>
+                  "让标题更大"
                 </div>
               </div>
             </div>
@@ -809,32 +845,26 @@ export function CodePreviewToggle({
 
         <div className="flex gap-2">
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDownload}
-              className={`rounded-xl border-2 transition-all duration-300 ${
-                theme === "light"
-                  ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                  : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
-              }`}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              下载
-            </Button>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Button
-              size="sm"
-              onClick={onDeploy}
-              className="rounded-xl text-white font-medium transition-all duration-300 hover:shadow-lg"
-              style={{
-                background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
+            <ShareDialog
+              pageId={previewData?.projectName || 'project'}
+              pageTitle={previewData?.projectName || '我的项目'}
+              pageContent={previewData}
+              onShare={async (shareData: any) => {
+                console.log('分享数据:', shareData);
+                // 这里可以添加分享逻辑
               }}
             >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              部署
-            </Button>
+              <Button
+                size="sm"
+                className="rounded-xl text-white font-medium transition-all duration-300 hover:shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
+                }}
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                分享
+              </Button>
+            </ShareDialog>
           </motion.div>
         </div>
       </motion.div>

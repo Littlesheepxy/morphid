@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, sessionId, currentStage } = await req.json();
+    const { message, sessionId, currentStage, forceAgent, testMode } = await req.json();
 
     if (!message || !sessionId) {
       return NextResponse.json(
@@ -96,7 +96,9 @@ export async function POST(req: NextRequest) {
     console.log(`🚀 [流式API] 处理消息:`, {
       sessionId,
       messageLength: message.length,
-      currentStage
+      currentStage,
+      forceAgent,
+      testMode
     });
 
     // 创建流式响应
@@ -105,11 +107,38 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          // 构建传递给编排器的会话数据
+          let sessionData = undefined;
+          let finalMessage = message;
+          
+          // 如果有forceAgent参数，修改消息和会话数据
+          if (forceAgent) {
+            // 获取现有会话数据
+            const existingSession = await agentOrchestrator.getSessionData(sessionId);
+            
+            if (existingSession) {
+              // 修改现有会话的阶段
+              sessionData = {
+                ...existingSession,
+                metadata: {
+                  ...existingSession.metadata,
+                  progress: {
+                    ...existingSession.metadata.progress,
+                    currentStage: forceAgent === 'coding' ? 'code_generation' : existingSession.metadata.progress.currentStage
+                  }
+                }
+              };
+            }
+            
+            // 在消息中添加特殊标记，让编排器知道这是强制指定的agent
+            finalMessage = `[FORCE_AGENT:${forceAgent}]${testMode ? '[TEST_MODE]' : ''}${message}`;
+          }
+
           // 使用Agent编排器处理流式输入
           const responseGenerator = agentOrchestrator.processUserInputStreaming(
             sessionId,
-            message,
-            currentStage
+            finalMessage,
+            sessionData
           );
 
           let responseCount = 0;
@@ -119,7 +148,9 @@ export async function POST(req: NextRequest) {
               hasReply: !!chunk.immediate_display?.reply,
               replyLength: chunk.immediate_display?.reply?.length || 0,
               intent: chunk.system_state?.intent,
-              done: chunk.system_state?.done
+              done: chunk.system_state?.done,
+              forceAgent,
+              testMode
             });
 
             // 🔧 修复：确保响应格式统一

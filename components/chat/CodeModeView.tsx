@@ -1,13 +1,15 @@
 'use client';
 
 import { useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, ExternalLink, Send, CheckCircle, Paperclip, Eye } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Send, CheckCircle, Paperclip, Eye, Share2 } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 import { MessageBubble } from './MessageBubble';
 import { CodePreviewToggle } from '@/components/editor/CodePreviewToggle';
+import { ShareDialog } from '@/components/dialogs/share-dialog';
 
 interface CodeModeViewProps {
   currentSession: any;
@@ -23,6 +25,7 @@ interface CodeModeViewProps {
   onDeploy: () => void;
   onEditCode: (filename: string) => void;
   getReactPreviewData: () => any;
+  onFileUpload?: (file: File) => void;
 }
 
 export function CodeModeView({
@@ -38,15 +41,79 @@ export function CodeModeView({
   onDownload,
   onDeploy,
   onEditCode,
-  getReactPreviewData
+  getReactPreviewData,
+  onFileUpload
 }: CodeModeViewProps) {
   const { theme } = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentSession?.conversationHistory]);
+
+  // 处理分享功能
+  const handleShare = async (shareData: any) => {
+    console.log('分享数据:', shareData);
+    
+    try {
+      // 根据分享类型调用不同的API
+      const response = await fetch('/api/share', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: shareData.type,
+          config: shareData.config,
+          pageId: currentSession?.id,
+          pageTitle: getPageTitle(),
+          pageContent: getReactPreviewData(),
+          conversationHistory: currentSession?.conversationHistory
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('分享失败');
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // 显示成功提示
+        console.log('分享成功:', result);
+        // TODO: 显示成功toast
+      }
+    } catch (error) {
+      console.error('分享失败:', error);
+      // TODO: 显示错误toast
+    }
+  };
+
+  // 获取页面标题
+  const getPageTitle = () => {
+    if (currentSession?.conversationHistory?.length > 0) {
+      const firstMessage = currentSession.conversationHistory[0];
+      return firstMessage.content?.slice(0, 50) + '...' || '我的个人页面';
+    }
+    return '我的个人页面';
+  };
+
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+    }
+    // 清空input值，以便重复选择同一文件
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full">
@@ -72,10 +139,6 @@ export function CodeModeView({
 
         {/* 右侧：操作按钮 */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onDeploy}>
-            <ExternalLink className="w-4 h-4 mr-2" />
-            部署
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -151,11 +214,13 @@ export function CodeModeView({
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={handleFileUploadClick}
                     className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
                       theme === "light"
                         ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                         : "text-gray-400 hover:bg-gray-700 hover:text-gray-300"
                     }`}
+                    title="上传文件"
                   >
                     <Paperclip className="w-5 h-5" />
                   </Button>
@@ -167,7 +232,7 @@ export function CodeModeView({
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={onKeyPress}
-                      placeholder="告诉我需要如何修改代码..."
+                      placeholder="输入修改需求..."
                       className="px-4 py-4 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent pr-16"
                       style={{ height: '72px' }}
                       disabled={isGenerating}
@@ -231,6 +296,15 @@ export function CodeModeView({
           </div>
         </div>
       </div>
+
+      {/* 隐藏的文件上传输入 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.txt,.md,.json"
+        onChange={handleFileChange}
+        className="hidden"
+      />
     </div>
   );
 } 

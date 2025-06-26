@@ -200,7 +200,7 @@ HeysMe 作为 AI 原生的数字身份平台，需要构建两个核心社区功
 ```
 ┌─────────────────────────────────────────────────────┐
 │ 顶部导航栏（Logo / 我的页面 / 设置）                │
-├─────────────┬───────────────────────────────────────┤
+├───────────┬─────────────────────────────────────────┤
 │ 侧边栏      │ 主体区域                              │
 │             │                                       │
 │           │ [AI对话框]                            │
@@ -209,7 +209,7 @@ HeysMe 作为 AI 原生的数字身份平台，需要构建两个核心社区功
 │ ● 模板库    │ [推荐模板区域 - 横向滑动]             │
 │ ● 人物广场  │                                       │
 │ ● 设置      │                                       │
-└─────────────┴───────────────────────────────────────┘
+└───────────┴─────────────────────────────────────────┘
 ```
 
 ### 3.2 功能入口设计
@@ -299,11 +299,11 @@ CREATE TABLE user_favorites (
 ## 5. 未来 TODO
 
 ### 5.1 Phase 1: 基础功能（MVP）
-- [ ] 数字身份广场基础页面搭建
-- [ ] 名片卡片组件开发
-- [ ] 基础搜索和分类筛选
-- [ ] 模板库基础页面搭建
-- [ ] 模板卡片组件开发
+- [x] 数字身份广场基础页面搭建
+- [x] 名片卡片组件开发
+- [x] 基础搜索和分类筛选
+- [x] 模板库基础页面搭建
+- [x] 模板卡片组件开发
 - [ ] Fork功能实现
 
 ### 5.2 Phase 2: 增强功能
@@ -389,6 +389,654 @@ CREATE TABLE user_favorites (
 
 ---
 
-*文档版本：v1.0*  
-*最后更新：2025年6月27日*  
-*负责人：产品团队* 
+## 8. 数据获取策略与分享机制
+
+### 8.1 数据获取与隐私保护策略
+
+#### 8.1.1 数据分类与处理原则
+
+**敏感数据（后端存储，前端不展示，付费功能使用）**：
+- 真实姓名
+- 手机号码
+- 邮箱地址
+- 身份证号
+- 家庭住址
+- 具体公司名称
+- 具体项目名称
+- 银行卡信息
+- 详细工作经历
+- 薪资信息
+- 学历证书信息
+
+**可分享数据（经用户同意后可分享）**：
+- 用户自定义昵称/标题
+- 职业领域/行业标签
+- 技能标签
+- 工作经验年限（范围）
+- 地区信息（城市级别）
+- 个人简介（用户自定义）
+- 作品集（非敏感）
+- 社交媒体链接
+
+**公开数据（默认可分享）**：
+- 页面视觉设计
+- 布局结构
+- 色彩搭配
+- 组件使用方式
+- Prompt对话记录（脱敏后）
+
+#### 8.1.2 数据脱敏处理规则
+
+| 原始数据类型 | 脱敏处理方式 | 示例 |
+|-------------|-------------|------|
+| **公司名称** | 替换为行业+规模 | "腾讯" → "大型互联网公司" |
+| **项目名称** | 替换为项目类型 | "微信支付" → "移动支付系统" |
+| **具体数字** | 范围化处理 | "年薪50万" → "年薪40-60万" |
+| **真实姓名** | 替换为角色名 | "张三" → "产品经理小张" |
+| **联系方式** | 完全移除 | 电话、邮箱不显示 |
+| **地址信息** | 城市级别 | "北京市朝阳区xxx" → "北京" |
+
+### 8.2 分享机制设计
+
+#### 8.2.1 分享流程设计
+
+```mermaid
+graph TD
+    A[用户完成页面创建] --> B[点击分享按钮]
+    B --> C{选择分享类型}
+    C -->|数字身份广场| D[个人身份展示]
+    C -->|灵感模板库| E[创作模板分享]
+    C -->|私密分享| F[生成分享链接]
+    
+    D --> G[填写分享信息]
+    E --> H[填写模板信息]
+    
+    G --> I[隐私设置检查]
+    H --> J[内容脱敏处理]
+    
+    I --> K[敏感信息提醒]
+    J --> L[模板化处理]
+    
+    K --> M[用户确认分享]
+    L --> N[用户确认分享]
+    
+    M --> O[发布到身份广场]
+    N --> P[发布到模板库]
+```
+
+#### 8.2.2 分享界面设计
+
+**数字身份广场分享界面**：
+```
+┌─────────────────────────────────────────┐
+│ 分享到数字身份广场                        │
+├─────────────────────────────────────────┤
+│ 📝 页面标题: [资深产品经理寻找远程机会]    │
+│ 🏷️ 目标标签: [#求职] [#远程工作]         │
+│ 📄 一句话简介: [8年B端产品经验...]        │
+│ 🏢 行业标签: [AI] [产品设计] [SaaS]      │
+│ 📍 地区: [北京] [可远程]                 │
+│                                         │
+│ ⚠️ 隐私提醒:                            │
+│ • 真实姓名将被隐藏                       │
+│ • 联系方式不会显示                       │
+│ • 公司名称将模糊化处理                   │
+│                                         │
+│ 🔒 隐私设置:                            │
+│ ☑️ 允许他人查看我的页面                  │
+│ ☑️ 允许他人收藏我的页面                  │
+│ ☐ 显示我的用户名                        │
+│                                         │
+│ [预览效果] [取消] [确认分享]             │
+└─────────────────────────────────────────┘
+```
+
+**灵感模板库分享界面**：
+```
+┌─────────────────────────────────────────┐
+│ 分享到灵感模板库                          │
+├─────────────────────────────────────────┤
+│ 📝 模板标题: [高级产品经理简历页]         │
+│ 🏷️ 用途标签: [#简历] [#高端职位]         │
+│ 📄 适用场景: [适用于年薪30w+的职场精英]   │
+│ 🎨 设计风格: [简约商务] [深色主题]        │
+│                                         │
+│ 🤖 包含内容:                            │
+│ ☑️ 页面设计和布局                        │
+│ ☑️ 对话记录（已脱敏）                    │
+│ ☑️ Prompt模板                           │
+│ ☐ 个人信息（将被完全移除）               │
+│                                         │
+│ 📊 预期效果:                            │
+│ • 其他用户可以Fork此模板                 │
+│ • 您将获得创作者署名                     │
+│ • 模板使用数据将统计到您的贡献           │
+│                                         │
+│ [预览脱敏效果] [取消] [确认分享]         │
+└─────────────────────────────────────────┘
+```
+
+### 8.3 数据表结构更新
+
+#### 8.3.1 增强的数据表设计
+
+```sql
+-- 用户身份页面表（增强版）
+CREATE TABLE user_pages (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  
+  -- 基础信息
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  content JSONB,
+  
+  -- 分享相关
+  is_shared_to_plaza BOOLEAN DEFAULT false,
+  plaza_share_config JSONB, -- 分享配置
+  
+  -- 分类和标签
+  category VARCHAR(50),
+  tags TEXT[],
+  industry_tags TEXT[],
+  location VARCHAR(100),
+  
+  -- 隐私设置
+  privacy_settings JSONB DEFAULT '{"allow_view": true, "allow_favorite": true, "show_username": false}',
+  
+  -- 统计信息
+  view_count INTEGER DEFAULT 0,
+  favorite_count INTEGER DEFAULT 0,
+  
+  -- 时间戳
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  shared_at TIMESTAMP
+);
+
+-- 模板表（增强版）
+CREATE TABLE templates (
+  id UUID PRIMARY KEY,
+  creator_id UUID REFERENCES auth.users(id),
+  source_page_id UUID REFERENCES user_pages(id), -- 源页面引用
+  
+  -- 基础信息
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  
+  -- 脱敏内容
+  sanitized_content JSONB, -- 脱敏后的页面内容
+  sanitized_prompt_history JSONB, -- 脱敏后的对话记录
+  
+  -- 分类和标签
+  category VARCHAR(50),
+  tags TEXT[],
+  design_tags TEXT[], -- 设计风格标签
+  
+  -- 统计信息
+  fork_count INTEGER DEFAULT 0,
+  use_count INTEGER DEFAULT 0,
+  view_count INTEGER DEFAULT 0,
+  
+  -- 状态
+  is_featured BOOLEAN DEFAULT false,
+  status VARCHAR(20) DEFAULT 'published', -- published, pending, rejected
+  
+  -- 时间戳
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 分享记录表
+CREATE TABLE share_records (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  page_id UUID REFERENCES user_pages(id),
+  share_type VARCHAR(20) NOT NULL, -- 'plaza', 'template', 'link'
+  share_config JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 数据脱敏日志表
+CREATE TABLE sanitization_logs (
+  id UUID PRIMARY KEY,
+  template_id UUID REFERENCES templates(id),
+  original_fields JSONB, -- 原始敏感字段
+  sanitized_fields JSONB, -- 脱敏后字段
+  sanitization_rules JSONB, -- 使用的脱敏规则
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 8.4 技术实现要点
+
+#### 8.4.1 数据脱敏服务
+
+```typescript
+// 数据脱敏服务接口
+interface SanitizationService {
+  // 脱敏页面内容
+  sanitizePageContent(content: any): Promise<any>;
+  
+  // 脱敏对话记录
+  sanitizePromptHistory(history: any[]): Promise<any[]>;
+  
+  // 检测敏感信息
+  detectSensitiveInfo(text: string): SensitiveInfo[];
+  
+  // 生成脱敏规则
+  generateSanitizationRules(content: any): SanitizationRules;
+}
+
+// 敏感信息类型
+interface SensitiveInfo {
+  type: 'name' | 'phone' | 'email' | 'company' | 'project' | 'address';
+  value: string;
+  position: { start: number; end: number };
+  confidence: number;
+}
+
+// 脱敏规则
+interface SanitizationRules {
+  companyNames: { [key: string]: string };
+  projectNames: { [key: string]: string };
+  personalNames: { [key: string]: string };
+  contactInfo: string[]; // 需要完全移除的字段
+}
+```
+
+#### 8.4.2 分享流程服务
+
+```typescript
+// 分享服务接口
+interface ShareService {
+  // 分享到身份广场
+  shareToPlaza(pageId: string, config: PlazaShareConfig): Promise<ShareResult>;
+  
+  // 分享到模板库
+  shareToTemplateHub(pageId: string, config: TemplateShareConfig): Promise<ShareResult>;
+  
+  // 生成私密分享链接
+  generatePrivateLink(pageId: string, config: PrivateShareConfig): Promise<string>;
+  
+  // 预览分享效果
+  previewShare(pageId: string, shareType: ShareType): Promise<PreviewResult>;
+}
+
+// 分享配置
+interface PlazaShareConfig {
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  industryTags: string[];
+  location?: string;
+  privacySettings: {
+    allowView: boolean;
+    allowFavorite: boolean;
+    showUsername: boolean;
+  };
+}
+
+interface TemplateShareConfig {
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  designTags: string[];
+  includePromptHistory: boolean;
+}
+```
+
+### 8.5 用户体验优化
+
+#### 8.5.1 智能提醒机制
+
+- **敏感信息检测**：AI自动检测页面中的敏感信息并提醒用户
+- **分享建议**：根据页面内容智能推荐分享类型和标签
+- **隐私评估**：评估分享内容的隐私风险等级
+- **效果预测**：预测分享后可能获得的关注度
+
+#### 8.5.2 分享后管理
+
+- **分享统计**：查看分享内容的浏览、收藏、Fork数据
+- **隐私控制**：随时修改分享设置或撤回分享
+- **内容更新**：源页面更新时选择是否同步到分享内容
+- **互动管理**：管理来自分享内容的互动和联系
+
+---
+
+## 9. 实施优先级
+
+### 9.1 Phase 1: 核心分享功能（MVP）
+- [ ] 基础分享界面开发
+- [ ] 数据脱敏核心算法
+- [ ] 隐私设置功能
+- [ ] 分享预览功能
+
+### 9.2 Phase 2: 智能化功能
+- [ ] AI敏感信息检测
+- [ ] 智能标签推荐
+- [ ] 分享效果预测
+- [ ] 自动分类建议
+
+### 9.3 Phase 3: 高级管理功能
+- [ ] 分享数据统计
+- [ ] 批量管理工具
+- [ ] 高级隐私控制
+- [ ] 分享内容同步
+
+---
+
+## 10. 付费功能与敏感数据应用
+
+### 10.1 敏感数据存储策略
+
+#### 10.1.1 数据存储架构
+```sql
+-- 敏感信息表（加密存储）
+CREATE TABLE user_sensitive_data (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  
+  -- 个人信息（加密存储）
+  real_name_encrypted TEXT,
+  phone_encrypted TEXT,
+  email_encrypted TEXT,
+  id_number_encrypted TEXT,
+  address_encrypted TEXT,
+  
+  -- 职业信息（加密存储）
+  company_name_encrypted TEXT,
+  project_details_encrypted JSONB,
+  salary_info_encrypted JSONB,
+  education_details_encrypted JSONB,
+  work_history_encrypted JSONB,
+  
+  -- 元数据
+  encryption_key_id VARCHAR(50),
+  data_completeness_score INTEGER, -- 数据完整度评分
+  last_verified_at TIMESTAMP,
+  
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 付费功能使用记录表
+CREATE TABLE premium_feature_usage (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id),
+  feature_type VARCHAR(50), -- 'contact_info', 'detailed_profile', 'batch_export'
+  target_user_id UUID, -- 被查看的用户ID
+  credits_consumed INTEGER,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### 10.1.2 数据安全措施
+- **端到端加密**：敏感数据使用AES-256加密存储
+- **密钥管理**：使用AWS KMS或类似服务管理加密密钥
+- **访问控制**：严格的RBAC权限控制
+- **审计日志**：所有敏感数据访问都有详细日志
+
+### 10.2 付费功能设计
+
+#### 10.2.1 联系信息解锁功能
+
+**功能描述**：付费用户可以查看感兴趣用户的真实联系方式
+
+**使用场景**：
+- 招聘者想要联系求职者
+- 投资人想要联系创业者
+- 合作方想要深度沟通
+
+**界面设计**：
+```
+┌─────────────────────────────────────────┐
+│ 👤 产品经理小张                          │
+├─────────────────────────────────────────┤
+│ 📍 北京 | 💼 8年经验 | 🎯 寻找远程机会    │
+│                                         │
+│ 📄 公开信息：                           │
+│ • 擅长AI产品设计和用户体验               │
+│ • 有多个成功产品案例                     │
+│ • 熟悉敏捷开发流程                       │
+│                                         │
+│ 🔒 详细信息（需要解锁）：                │
+│ ┌─────────────────────────────────────┐   │
+│ │ 💎 解锁联系方式 - 5积分              │   │
+│ │ • 真实姓名：张***                   │   │
+│ │ • 手机号码：138****8888             │   │
+│ │ • 邮箱地址：****@gmail.com          │   │
+│ │ • 微信号：****                      │   │
+│ │                                     │   │
+│ │ [立即解锁] [加入收藏]               │   │
+│ └─────────────────────────────────────┘   │
+│                                         │
+│ 💼 详细履历（需要解锁）：                │
+│ ┌─────────────────────────────────────┐   │
+│ │ 💎 解锁完整履历 - 10积分             │   │
+│ │ • 具体公司名称和项目经历             │   │
+│ │ • 详细技能评估和认证                 │   │
+│ │ • 薪资期望和福利要求                 │   │
+│ │                                     │   │
+│ │ [立即解锁] [预约面试]               │   │
+│ └─────────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+#### 10.2.2 付费功能层级
+
+| 功能层级 | 费用 | 包含内容 |
+|---------|------|----------|
+| **基础解锁** | 5积分 | 真实姓名、联系方式 |
+| **详细履历** | 10积分 | 完整工作经历、项目详情 |
+| **深度档案** | 20积分 | 薪资信息、教育背景、技能认证 |
+| **批量导出** | 50积分 | 批量导出多个用户信息 |
+
+#### 10.2.3 积分系统设计
+
+**积分获取方式**：
+- 💰 **充值购买**：1元 = 10积分
+- 🎁 **新用户赠送**：注册送20积分
+- 📝 **完善资料**：完整填写个人信息获得10积分
+- 🔄 **分享模板**：每个模板被Fork获得2积分
+- 📊 **活跃奖励**：每日登录获得1积分
+
+**积分消耗场景**：
+- 查看联系方式：5积分
+- 查看详细履历：10积分
+- 查看深度档案：20积分
+- 批量导出数据：50积分
+- 置顶推广页面：30积分/天
+
+### 10.3 商业模式设计
+
+#### 10.3.1 目标用户群体
+
+| 用户类型 | 付费意愿 | 主要需求 | 建议定价 |
+|---------|---------|---------|---------|
+| **企业HR** | 高 | 批量筛选简历、联系求职者 | 299元/月 |
+| **猎头顾问** | 高 | 精准人才搜索、详细背景 | 599元/月 |
+| **投资人** | 中高 | 创业者背景调研 | 199元/月 |
+| **业务合作** | 中 | 寻找合作伙伴 | 99元/月 |
+| **个人用户** | 低 | 偶尔查看感兴趣的人 | 按次付费 |
+
+#### 10.3.2 付费套餐设计
+
+**个人套餐**：
+- 💎 **基础版**：99元/月，300积分
+- 💎 **专业版**：199元/月，800积分 + 高级搜索
+- 💎 **企业版**：599元/月，2000积分 + 批量功能
+
+**企业服务**：
+- 🏢 **团队版**：999元/月，支持5个账号
+- 🏢 **定制版**：面议，API接入 + 专属服务
+
+### 10.4 技术实现要点
+
+#### 10.4.1 权限控制服务
+
+```typescript
+interface PremiumService {
+  // 检查用户权限
+  checkUserPermission(userId: string, feature: PremiumFeature): Promise<boolean>;
+  
+  // 消耗积分
+  consumeCredits(userId: string, amount: number, reason: string): Promise<boolean>;
+  
+  // 解锁敏感信息
+  unlockSensitiveData(userId: string, targetUserId: string, dataType: DataType): Promise<SensitiveData>;
+  
+  // 记录使用行为
+  logFeatureUsage(userId: string, feature: PremiumFeature, metadata: any): Promise<void>;
+}
+
+enum PremiumFeature {
+  CONTACT_INFO = 'contact_info',
+  DETAILED_PROFILE = 'detailed_profile',
+  DEEP_PROFILE = 'deep_profile',
+  BATCH_EXPORT = 'batch_export',
+  ADVANCED_SEARCH = 'advanced_search'
+}
+
+enum DataType {
+  CONTACT = 'contact',
+  WORK_HISTORY = 'work_history',
+  SALARY_INFO = 'salary_info',
+  EDUCATION = 'education'
+}
+```
+
+#### 10.4.2 数据解密服务
+
+```typescript
+interface EncryptionService {
+  // 加密敏感数据
+  encryptSensitiveData(data: any, userId: string): Promise<string>;
+  
+  // 解密敏感数据
+  decryptSensitiveData(encryptedData: string, userId: string): Promise<any>;
+  
+  // 批量解密（用于付费功能）
+  batchDecrypt(encryptedDataList: string[], userId: string): Promise<any[]>;
+  
+  // 密钥轮换
+  rotateEncryptionKey(userId: string): Promise<void>;
+}
+```
+
+### 10.5 实施优先级
+
+#### 10.5.1 Phase 1: 基础付费功能
+- [ ] 敏感数据加密存储
+- [ ] 积分系统基础功能
+- [ ] 联系信息解锁功能
+- [ ] 支付集成（微信/支付宝）
+
+---
+
+## 11. 实施进度记录
+
+### ✅ 已完成功能 (2025-01-27)
+
+#### Phase 1: 基础页面结构 ✅
+- **数字身份广场页面** (`/dashboard/people`)
+  - 完整的响应式布局设计
+  - 搜索和筛选功能界面
+  - 用户卡片组件设计
+  - 加载状态和骨架屏
+  - 模拟数据展示
+
+- **灵感模板库页面** (`/dashboard/templates`)
+  - 模板卡片展示界面
+  - 分类和排序功能
+  - 创建者信息展示
+  - Fork和使用统计
+  - 精选模板标识
+
+- **导航集成**
+  - 侧边栏新增社区功能入口
+  - 图标和交互设计
+  - 折叠状态适配
+
+#### Phase 2: 核心功能实现 ✅
+- **数据库表结构** (`supabase-community-tables.sql`)
+  - 用户身份页面表 (user_pages)
+  - 敏感信息表 (user_sensitive_data) 
+  - 模板表 (templates)
+  - 创作者认证表 (creator_verifications)
+  - 分享记录表 (share_records)
+  - 数据脱敏日志表 (sanitization_logs)
+  - Fork关系表 (template_forks)
+  - 收藏表 (user_favorites)
+  - 付费功能使用记录表 (premium_feature_usage)
+  - 用户积分表 (user_credits)
+  - 完整的索引、触发器和RLS策略
+
+- **分享功能系统**
+  - 分享对话框组件 (`components/dialogs/share-dialog.tsx`)
+    - 数字身份广场分享配置
+    - 灵感模板库分享配置
+    - 私密链接生成
+    - 隐私设置和数据脱敏提醒
+  - 分享API路由 (`app/api/share/route.ts`)
+    - 三种分享类型处理
+    - 数据脱敏算法
+    - 敏感信息检测和替换
+    - 分享记录和日志
+  - 聊天页面分享集成 (`components/chat/CodeModeView.tsx`)
+    - 代码模式顶部导航栏分享按钮
+    - 分享数据收集和处理
+
+- **创作者认证系统**
+  - 认证申请对话框 (`components/dialogs/creator-verification-dialog.tsx`)
+    - 四步认证流程
+    - 多种认证类型（设计师、开发者、专家、企业）
+    - 专业领域选择
+    - 作品集和案例上传
+    - 社交媒体链接验证
+  - 认证API路由 (`app/api/creator-verification/route.ts`)
+    - 认证申请提交
+    - 重复申请检查
+    - 认证状态查询
+  - 模板页面认证入口 (`app/(dashboard)/templates/page.tsx`)
+    - 创作者认证横幅
+    - 认证申请按钮集成
+
+#### 技术特性
+- 使用 Next.js 14 App Router
+- 完整的 TypeScript 类型定义
+- shadcn/ui 组件库集成
+- 响应式设计（移动端适配）
+- 加载状态和错误处理
+- 现代化的 UI/UX 设计
+- 数据安全和隐私保护
+- 完整的数据库设计和API架构
+
+### 🔄 下一步计划 (Phase 3)
+1. **真实数据集成**
+   - 连接数据库表到前端页面
+   - 实现真实的搜索和筛选功能
+   - 用户页面数据获取和展示
+
+2. **付费功能开发**
+   - 积分系统实现
+   - 敏感信息解锁功能
+   - 支付集成（微信/支付宝）
+
+3. **高级功能**
+   - AI推荐算法
+   - 个性化首页Feed
+   - 社交互动功能
+
+### 📊 开发统计
+- **已完成文件**: 8个主要文件
+- **代码行数**: 约2000行
+- **功能模块**: 6个核心模块
+- **数据库表**: 10个表结构
+- **API路由**: 2个主要路由
+
+---
+
+*最后更新：2025年1月27日 - Phase 2 完成*

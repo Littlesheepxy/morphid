@@ -19,7 +19,8 @@ import {
   MessageSquare,
   Sparkles,
   Send,
-  Activity
+  Activity,
+  Paperclip
 } from 'lucide-react';
 import { 
   StreamableAgentResponse, 
@@ -37,9 +38,10 @@ interface ChatInterfaceProps {
   sessionId?: string;
   onSessionUpdate?: (session: SessionData) => void;
   className?: string;
+  onFileUpload?: (file: File) => void;
 }
 
-export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, className = '' }: ChatInterfaceProps) {
+export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, className = '', onFileUpload }: ChatInterfaceProps) {
   // 认证状态
   const { isAuthenticated, isLoading: authLoading, userId } = useAuthCheck();
   const { executePendingAction } = usePendingAuthAction();
@@ -68,6 +70,7 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const processingMessagesRef = useRef<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -404,6 +407,51 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     sendMessage(inputMessage);
   };
 
+  const handleFileUpload = (file: File) => {
+    // 验证文件类型
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown', 'application/json'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    if (!allowedTypes.includes(file.type)) {
+      setError('不支持的文件类型。请上传 PDF、Word、文本或 Markdown 文件。');
+      return;
+    }
+    
+    if (file.size > maxSize) {
+      setError('文件大小不能超过 10MB。');
+      return;
+    }
+    
+    // 发送文件上传消息
+    const uploadMessage = `📎 已上传文件：${file.name} (${(file.size / 1024).toFixed(1)}KB)`;
+    sendMessage(uploadMessage, {
+      type: 'file_upload',
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+    
+    // 调用外部处理函数
+    if (onFileUpload) {
+      onFileUpload(file);
+    }
+  };
+
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+    // 清空input值，以便重复选择同一文件
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
   const renderMessage = (message: ConversationEntry) => {
     const isUser = message.type === 'user_message';
     const isLast = messages[messages.length - 1]?.id === message.id;
@@ -447,7 +495,7 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              智能简历助手
+              HeysMe AI
             </div>
             
             {sessionStatus && (
@@ -548,10 +596,21 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
 
         {/* 输入区域 */}
         <form onSubmit={handleSubmit} className="flex gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleFileUploadClick}
+            disabled={isStreaming}
+            className="flex-shrink-0"
+            title="上传文件"
+          >
+            <Paperclip className="w-4 h-4" />
+          </Button>
           <Input
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="输入您的消息..."
+            placeholder="输入消息..."
             disabled={isStreaming}
             className="flex-1"
           />
@@ -569,6 +628,15 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
         </form>
       </CardContent>
     </Card>
+
+    {/* 隐藏的文件上传输入 */}
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept=".pdf,.doc,.docx,.txt,.md,.json"
+      onChange={handleFileChange}
+      className="hidden"
+    />
 
     {/* 未登录提醒对话框 */}
     <AuthPromptDialog
