@@ -50,13 +50,22 @@ export class CodingAgent extends BaseAgent {
     try {
       const userInput = input.user_input || '';
       
-      // 检查是否为测试模式 - 直接进行代码生成，跳过设计阶段
-      const isTestMode = userInput.includes('[TEST_MODE]');
-      const cleanInput = userInput.replace(/\[FORCE_AGENT:\w+\]/, '').replace(/\[TEST_MODE\]/, '').trim();
+      // 检查是否为专业模式测试 - 直接进行代码生成，跳过设计阶段
+      const isExpertMode = userInput.includes('[TEST_MODE]') || context?.expertMode === true;
+      const cleanInput = userInput
+        .replace(/\[FORCE_AGENT:\w+\]/g, '')  // 使用全局标志 g
+        .replace(/\[TEST_MODE\]/g, '')        // 使用全局标志 g
+        .trim();
       
-      if (isTestMode) {
-        // 🔧 测试模式：直接根据用户需求生成代码，不依赖设计数据
-        yield* this.handleDirectCodeGeneration(cleanInput, sessionData);
+      console.log('🔧 [CodingAgent] 输入分析:', {
+        原始输入: userInput,
+        是否专业模式: isExpertMode,
+        清理后输入: cleanInput
+      });
+      
+      if (isExpertMode) {
+        // 🔧 专业模式：使用专业模式 prompt 直接根据用户需求生成代码
+        yield* this.handleExpertModeGeneration(cleanInput, sessionData);
         return;
       }
 
@@ -378,7 +387,7 @@ export function ${componentName}({ data }: ${componentName}Props) {
   /**
    * 处理测试模式
    */
-  private async* handleDirectCodeGeneration(
+  private async* handleExpertModeGeneration(
     userInput: string, 
     sessionData: SessionData
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
@@ -387,9 +396,9 @@ export function ${componentName}({ data }: ${componentName}Props) {
       if (!userInput || userInput === '启动测试代码生成模式') {
         yield this.createResponse({
           immediate_display: {
-            reply: `🧪 **直接代码生成模式已启动！**
+            reply: `🎯 **专业模式已启动！**
 
-我可以直接根据你的需求生成完整的Web项目代码，跳过设计阶段。
+专业模式将使用最先进的代码生成能力，为你创建高质量的Web项目。
 
 ### 💡 支持的项目类型：
 - 个人简历/作品集网站
@@ -401,13 +410,14 @@ export function ${componentName}({ data }: ${componentName}Props) {
 - 仪表板界面
 - 其他任何Web应用
 
-### 🔧 技术栈：
+### 🔧 专业特性：
+- V0 级别的代码质量
 - Next.js 15 + TypeScript
 - Tailwind CSS + shadcn/ui
-- 响应式设计
-- 现代化UI
+- 响应式设计和无障碍支持
+- 现代化动画效果
 
-请告诉我你想要创建什么类型的项目，我会直接为你生成完整的代码！
+请告诉我你想要创建什么类型的项目！
 
 **示例：**
 - "创建一个个人简历网站"
@@ -422,7 +432,7 @@ export function ${componentName}({ data }: ${componentName}Props) {
             progress: 10,
             current_stage: '等待用户需求',
             metadata: {
-              directCodeGeneration: true,
+              expertMode: true,
               awaitingUserInput: true
             }
           }
@@ -430,54 +440,37 @@ export function ${componentName}({ data }: ${componentName}Props) {
         return;
       }
 
-      // 🔧 直接代码生成：调用大模型API生成真实代码
-      yield this.createThinkingResponse('正在分析你的需求...', 30);
+      // 专业模式：使用专业模式 prompt 直接生成代码
+      yield this.createThinkingResponse('🎯 正在使用专业模式分析需求...', 20);
+      await this.delay(500);
+
+      yield this.createThinkingResponse('🤖 正在调用V0级别的代码生成引擎...', 40);
       await this.delay(800);
 
-      // 🔧 第一步：发送项目分析回复（显示在左侧对话框）
+      console.log('🎯 [专业模式] 开始调用专业模式代码生成，用户输入:', userInput);
+      
+      // 调用专业模式代码生成
+      const expertGeneratedCode = await this.callExpertModeGeneration(userInput);
+      
+      console.log('🎯 [专业模式] 代码生成完成，文件数量:', expertGeneratedCode.length);
+      
+      yield this.createThinkingResponse('⚡ 正在优化代码结构和样式...', 80);
+      await this.delay(600);
+
+      // 发送完成响应
       yield this.createResponse({
         immediate_display: {
-          reply: `🎯 **项目分析完成！**
+          reply: `✅ **专业模式代码生成完成！**
 
-根据你的需求"${userInput}"，我将调用大模型API为你生成一个完整的现代化Web应用。
+已使用专业级 prompt 为你生成了高质量的项目代码，包含 ${expertGeneratedCode.length} 个文件。
 
-**项目特性：**
-- 🎨 现代化UI设计，使用Tailwind CSS
-- 📱 完全响应式，支持所有设备
-- ⚡ Next.js 15 + TypeScript 技术栈
-- 🚀 优化的性能和SEO
+**专业特性：**
+- 🎨 V0 级别的代码质量
+- 📱 完全响应式设计
+- ⚡ 优化的性能
+- 🚀 现代化架构
 
-正在调用大模型生成项目文件，请稍候...`,
-          agent_name: this.name,
-          timestamp: new Date().toISOString()
-        },
-        system_state: {
-          intent: 'continue',
-          done: false,
-          progress: 70,
-          current_stage: '项目分析完成',
-          metadata: {
-            directCodeGeneration: true,
-            analysisComplete: true
-          }
-        }
-      });
-
-      // 🔧 第二步：调用大模型API生成代码
-      yield this.createThinkingResponse('正在调用大模型生成代码文件...', 85);
-      await this.delay(1000);
-
-      // 🔧 调用大模型API
-      const aiGeneratedCode = await this.callAIForCodeGeneration(userInput);
-
-      // 🔧 第三步：发送代码生成完成响应（文本显示在左侧，文件显示在右侧）
-      yield this.createResponse({
-        immediate_display: {
-          reply: `✅ **代码生成完成！**
-
-项目已成功生成，包含 ${aiGeneratedCode.length} 个文件。右侧预览区域将显示完整的项目代码和实时预览。
-
-如需修改任何内容，请直接告诉我具体要调整什么！`,
+右侧预览区域将显示完整的项目代码和实时预览。如需修改，请直接告诉我！`,
           agent_name: this.name,
           timestamp: new Date().toISOString()
         },
@@ -485,13 +478,13 @@ export function ${componentName}({ data }: ${componentName}Props) {
           intent: 'project_complete',
           done: true,
           progress: 100,
-          current_stage: '代码生成完成',
+          current_stage: '专业模式生成完成',
           metadata: {
-            directCodeGeneration: true,
+            expertMode: true,
             projectGenerated: true,
-            totalFiles: aiGeneratedCode.length,
+            totalFiles: expertGeneratedCode.length,
             generatedAt: new Date().toISOString(),
-            projectFiles: aiGeneratedCode,
+            projectFiles: expertGeneratedCode,
             userRequest: userInput,
             hasCodeFiles: true,
             codeFilesReady: true
@@ -500,83 +493,15 @@ export function ${componentName}({ data }: ${componentName}Props) {
       });
 
       // 更新会话数据
-      this.updateSessionWithProject(sessionData, aiGeneratedCode);
+      this.updateSessionWithProject(sessionData, expertGeneratedCode);
 
     } catch (error) {
+      console.error('🔧 [专业模式] 发生错误:', error);
       yield await this.handleError(error as Error, sessionData);
     }
   }
 
-  /**
-   * 生成测试模式的文件
-   */
-  private generateTestModeFiles(userInput: string): CodeFile[] {
-    // 根据用户输入生成不同类型的项目
-    const projectType = this.determineProjectType(userInput);
-    
-    const files: CodeFile[] = [];
 
-    // 基础配置文件
-    files.push({
-      filename: 'package.json',
-      content: this.generateTestPackageJson(projectType),
-      description: 'Node.js项目配置文件',
-      language: 'json'
-    });
-
-    files.push({
-      filename: 'tailwind.config.js',
-      content: this.generateTestTailwindConfig(),
-      description: 'Tailwind CSS配置',
-      language: 'javascript'
-    });
-
-    files.push({
-      filename: 'tsconfig.json',
-      content: this.generateTestTsConfig(),
-      description: 'TypeScript配置',
-      language: 'json'
-    });
-
-    // 主要组件文件
-    files.push({
-      filename: 'app/page.tsx',
-      content: this.generateTestMainPage(projectType, userInput),
-      description: 'React主页面组件',
-      language: 'typescript'
-    });
-
-    files.push({
-      filename: 'app/layout.tsx',
-      content: this.generateTestLayout(projectType),
-      description: 'Next.js应用布局',
-      language: 'typescript'
-    });
-
-    files.push({
-      filename: 'app/globals.css',
-      content: this.generateTestGlobalStyles(),
-      description: '全局CSS样式',
-      language: 'css'
-    });
-
-    // 组件文件
-    files.push({
-      filename: 'components/ui/button.tsx',
-      content: this.generateTestButtonComponent(),
-      description: 'Button组件',
-      language: 'typescript'
-    });
-
-    files.push({
-      filename: 'lib/utils.ts',
-      content: this.generateTestUtils(),
-      description: '工具函数',
-      language: 'typescript'
-    });
-
-    return files;
-  }
 
   /**
    * 确定项目类型
@@ -598,268 +523,9 @@ export function ${componentName}({ data }: ${componentName}Props) {
     }
   }
 
-  /**
-   * 生成测试用的package.json
-   */
-  private generateTestPackageJson(projectType: string): string {
-    return JSON.stringify({
-      "name": `heysme-${projectType}-project`,
-      "version": "0.1.0",
-      "private": true,
-      "scripts": {
-        "dev": "next dev",
-        "build": "next build",
-        "start": "next start",
-        "lint": "next lint"
-      },
-      "dependencies": {
-        "react": "^18",
-        "react-dom": "^18",
-        "next": "15.0.3",
-        "@types/node": "^20",
-        "@types/react": "^18",
-        "@types/react-dom": "^18",
-        "typescript": "^5",
-        "tailwindcss": "^3.4.0",
-        "autoprefixer": "^10.0.1",
-        "postcss": "^8",
-        "lucide-react": "^0.263.1",
-        "framer-motion": "^10.16.4"
-      }
-    }, null, 2);
-  }
 
-  /**
-   * 生成测试用的Tailwind配置
-   */
-  private generateTestTailwindConfig(): string {
-    return `/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  theme: {
-    extend: {
-      colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
-        },
-      },
-    },
-  },
-  plugins: [],
-}`;
-  }
 
-  /**
-   * 生成测试用的TypeScript配置
-   */
-  private generateTestTsConfig(): string {
-    return JSON.stringify({
-      "compilerOptions": {
-        "target": "es5",
-        "lib": ["dom", "dom.iterable", "es6"],
-        "allowJs": true,
-        "skipLibCheck": true,
-        "strict": true,
-        "noEmit": true,
-        "esModuleInterop": true,
-        "module": "esnext",
-        "moduleResolution": "bundler",
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "jsx": "preserve",
-        "incremental": true,
-        "plugins": [
-          {
-            "name": "next"
-          }
-        ],
-        "baseUrl": ".",
-        "paths": {
-          "@/*": ["./*"]
-        }
-      },
-      "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-      "exclude": ["node_modules"]
-    }, null, 2);
-  }
 
-  /**
-   * 生成测试用的主页面
-   */
-  private generateTestMainPage(projectType: string, userInput: string): string {
-    return `import { Button } from '@/components/ui/button'
-
-export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">
-            ${this.getProjectTitle(projectType, userInput)}
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            ${this.getProjectDescription(projectType)}
-          </p>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg text-lg">
-            开始探索
-          </Button>
-        </div>
-        
-        <div className="mt-16 grid md:grid-cols-3 gap-8">
-          ${this.getProjectSections(projectType)}
-        </div>
-      </div>
-    </div>
-  )
-}`;
-  }
-
-  /**
-   * 生成测试用的布局
-   */
-  private generateTestLayout(projectType: string): string {
-    return `import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: '${this.getProjectTitle(projectType, '')}',
-  description: '${this.getProjectDescription(projectType)}',
-}
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="zh-CN">
-      <body className={inter.className}>{children}</body>
-    </html>
-  )
-}`;
-  }
-
-  /**
-   * 生成测试用的全局样式
-   */
-  private generateTestGlobalStyles(): string {
-    return `@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 222.2 47.4% 11.2%;
-  --primary-foreground: 210 40% 98%;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}`;
-  }
-
-  /**
-   * 生成测试用的Button组件
-   */
-  private generateTestButtonComponent(): string {
-    return `import * as React from "react"
-
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
-  size?: 'default' | 'sm' | 'lg' | 'icon'
-}
-
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'default', size = 'default', ...props }, ref) => {
-    const baseClasses = "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background"
-    
-    const variantClasses = {
-      default: "bg-primary text-primary-foreground hover:bg-primary/90",
-      destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-      outline: "border border-input hover:bg-accent hover:text-accent-foreground",
-      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-      ghost: "hover:bg-accent hover:text-accent-foreground",
-      link: "underline-offset-4 hover:underline text-primary"
-    }
-    
-    const sizeClasses = {
-      default: "h-10 py-2 px-4",
-      sm: "h-9 px-3 rounded-md",
-      lg: "h-11 px-8 rounded-md",
-      icon: "h-10 w-10"
-    }
-
-    return (
-      <button
-        className={\`\${baseClasses} \${variantClasses[variant]} \${sizeClasses[size]} \${className}\`}
-        ref={ref}
-        {...props}
-      />
-    )
-  }
-)
-Button.displayName = "Button"
-
-export { Button }`;
-  }
-
-  /**
-   * 生成测试用的工具函数
-   */
-  private generateTestUtils(): string {
-    return `import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwindcss-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
-export function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(date)
-}
-
-export function slugify(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9 -]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-}`;
-  }
 
   /**
    * 获取项目标题
@@ -985,16 +651,21 @@ export function slugify(str: string): string {
 
 
   /**
-   * 调用大模型API生成代码
+   * 调用专业模式API生成代码
    */
-  private async callAIForCodeGeneration(userInput: string): Promise<CodeFile[]> {
+  private async callExpertModeGeneration(userInput: string): Promise<CodeFile[]> {
     try {
-      // 🔧 导入测试模式提示词和AI模型函数
-      const { CODING_TEST_MODE_PROMPT } = await import('@/lib/prompts/coding');
+      console.log('🤖 [AI调用] 步骤1: 开始导入模块...');
+      
+      // 🔧 导入专家模式提示词和AI模型函数
+      const { CODING_EXPERT_MODE_PROMPT } = await import('@/lib/prompts/coding');
+      console.log('🤖 [AI调用] 步骤2: 提示词导入成功');
+      
       const { generateWithModel } = await import('@/lib/ai-models');
+      console.log('🤖 [AI调用] 步骤3: AI模型函数导入成功');
       
       // 🔧 构建完整的提示词
-      const fullPrompt = `${CODING_TEST_MODE_PROMPT}
+      const fullPrompt = `${CODING_EXPERT_MODE_PROMPT}
 
 ## 🎯 用户需求：
 ${userInput}
@@ -1012,7 +683,8 @@ ${userInput}
 
 请以JSON格式返回，每个文件包含filename、content、description、language字段。`;
 
-      console.log('🤖 [AI调用] 开始调用大模型生成代码...');
+      console.log('🤖 [AI调用] 步骤4: 提示词构建完成，长度:', fullPrompt.length);
+      console.log('🤖 [AI调用] 步骤5: 开始调用大模型API...');
       
       // 🔧 调用大模型API
       const result = await generateWithModel(
@@ -1022,22 +694,43 @@ ${userInput}
         { maxTokens: 8000 }
       );
       
+      console.log('🤖 [AI调用] 步骤6: 大模型API调用成功');
+      
       // 提取响应文本
       const responseText = 'text' in result ? result.text : JSON.stringify(result);
       
-      console.log('🤖 [AI调用] 大模型响应:', responseText.substring(0, 200) + '...');
+      console.log('🤖 [AI调用] 步骤7: 响应文本提取完成，长度:', responseText.length);
+      console.log('🤖 [AI调用] 步骤8: 响应预览:', responseText.substring(0, 500) + '...');
+      
+      // 检查响应长度，如果太短可能有问题
+      if (responseText.length < 100) {
+        console.warn('🤖 [AI调用] 警告: 响应内容过短，可能生成失败');
+        console.log('🤖 [AI调用] 完整响应内容:', responseText);
+        throw new Error(`AI响应内容过短(${responseText.length}字符)，可能生成失败`);
+      }
       
       // 🔧 解析AI响应
       const parsedResponse = this.parseAICodeResponse(responseText);
       
-      console.log('🤖 [AI调用] 解析得到', parsedResponse.length, '个文件');
+      console.log('🤖 [AI调用] 步骤9: 解析完成，得到', parsedResponse.length, '个文件');
+      
+      // 检查解析结果
+      if (parsedResponse.length === 0) {
+        console.warn('🤖 [AI调用] 警告: 解析结果为空，使用回退方案');
+        return this.generateFallbackFiles(userInput);
+      }
       
       return parsedResponse;
       
     } catch (error) {
-      console.error('🤖 [AI调用] 调用大模型失败:', error);
+      console.error('🤖 [AI调用] 调用失败，错误详情:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        type: typeof error
+      });
       
       // 🔧 回退到基础文件生成
+      console.log('🤖 [AI调用] 使用回退方案生成基础文件...');
       return this.generateFallbackFiles(userInput);
     }
   }
@@ -1118,47 +811,209 @@ ${userInput}
   private generateFallbackFiles(userInput: string): CodeFile[] {
     console.log('🤖 [回退生成] 使用回退文件生成器...');
     
+    const projectType = this.determineProjectType(userInput);
+    const projectTitle = this.getProjectTitle(projectType, userInput);
+    
     return [
       {
         filename: 'package.json',
         content: JSON.stringify({
           name: 'ai-generated-project',
           version: '1.0.0',
-          description: `基于"${userInput}"生成的项目`,
+          description: `基于"${userInput}"生成的${projectTitle}项目`,
           scripts: {
             dev: 'next dev',
             build: 'next build',
-            start: 'next start'
+            start: 'next start',
+            lint: 'next lint'
           },
           dependencies: {
             'next': '^15.0.0',
             'react': '^18.2.0',
             'react-dom': '^18.2.0',
             'typescript': '^5.0.0',
-            'tailwindcss': '^3.3.0'
+            'tailwindcss': '^3.3.0',
+            'autoprefixer': '^10.4.14',
+            'postcss': '^8.4.24',
+            'lucide-react': '^0.263.1',
+            'framer-motion': '^10.16.4'
+          },
+          devDependencies: {
+            '@types/node': '^20.5.2',
+            '@types/react': '^18.2.21',
+            '@types/react-dom': '^18.2.7',
+            'eslint': '^8.48.0',
+            'eslint-config-next': '^13.4.19'
           }
         }, null, 2),
         description: '项目配置文件',
         language: 'json'
       },
       {
-        filename: 'app/page.tsx',
-        content: `export default function HomePage() {
+        filename: 'tailwind.config.js',
+        content: `/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0f9ff',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+        }
+      }
+    },
+  },
+  plugins: [],
+}`,
+        description: 'Tailwind CSS配置文件',
+        language: 'javascript'
+      },
+      {
+        filename: 'app/layout.tsx',
+        content: `import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: '${projectTitle}',
+  description: '${this.getProjectDescription(projectType)}',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          ${this.getProjectTitle('general', userInput)}
-        </h1>
-        <p className="text-lg text-gray-600">
-          基于AI生成的现代化Web应用
-        </p>
-      </div>
+    <html lang="zh-CN">
+      <body className={inter.className}>{children}</body>
+    </html>
+  )
+}`,
+        description: 'Next.js应用布局',
+        language: 'typescript'
+      },
+      {
+        filename: 'app/page.tsx',
+        content: `'use client'
+
+import { motion } from 'framer-motion'
+import { ArrowRight, Mail, Github, Linkedin } from 'lucide-react'
+
+export default function HomePage() {
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-center"
+          >
+            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
+              ${projectTitle}
+            </h1>
+            <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              ${this.getProjectDescription(projectType)}
+            </p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="inline-flex items-center px-8 py-4 bg-blue-600 text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-colors"
+            >
+              了解更多
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </motion.button>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Content Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            ${this.getProjectSections(projectType)}
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-8">联系方式</h2>
+          <div className="flex justify-center space-x-6">
+            <a href="mailto:hello@example.com" className="flex items-center text-gray-600 hover:text-blue-600">
+              <Mail className="w-5 h-5 mr-2" />
+              邮箱
+            </a>
+            <a href="https://github.com" className="flex items-center text-gray-600 hover:text-blue-600">
+              <Github className="w-5 h-5 mr-2" />
+              GitHub
+            </a>
+            <a href="https://linkedin.com" className="flex items-center text-gray-600 hover:text-blue-600">
+              <Linkedin className="w-5 h-5 mr-2" />
+              LinkedIn
+            </a>
+          </div>
+        </div>
+      </section>
     </main>
   )
 }`,
         description: 'React主页面组件',
         language: 'typescript'
+      },
+      {
+        filename: 'app/globals.css',
+        content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}`,
+        description: '全局CSS样式',
+        language: 'css'
       }
     ];
   }

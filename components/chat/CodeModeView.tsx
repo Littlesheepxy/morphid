@@ -117,46 +117,6 @@ export function CodeModeView({
 
   return (
     <div className="flex-1 flex flex-col h-full">
-      {/* 统一的顶部导航栏 */}
-      <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 ${
-        theme === "light" ? "bg-gray-50 border-gray-200" : "bg-gray-800 border-gray-700"
-      }`}>
-        {/* 左侧：返回按钮和对话历史 */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            返回对话
-          </Button>
-          <div className="text-sm font-medium">对话历史</div>
-        </div>
-
-        {/* 中间：项目代码和预览 */}
-        <div className="text-sm font-medium">项目代码和预览</div>
-
-        {/* 右侧：操作按钮 */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className={`rounded-lg border transition-all duration-300 h-8 px-3 text-sm ${
-              theme === "light"
-                ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
-            }`}
-          >
-            <a href="/dashboard" className="flex items-center gap-1">
-              <Eye className="w-3 h-3" />
-              工作台
-            </a>
-          </Button>
-        </div>
-      </div>
-
       {/* 主要内容区域 */}
       <div className="flex-1 flex h-full">
         {/* 左侧对话区域 */}

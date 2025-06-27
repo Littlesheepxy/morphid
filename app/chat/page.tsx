@@ -157,26 +157,36 @@ export default function ChatPage() {
       setHasStartedChat(true)
     }
 
-    // 🔧 检查是否在直接代码生成模式
-    const isInDirectCodeMode = isCodeMode && currentSession?.conversationHistory?.some(msg => 
-      msg.metadata?.directCodeGeneration && msg.metadata?.awaitingUserInput
+    // 🔧 检查是否在专业模式测试
+    const isInExpertMode = isCodeMode && currentSession?.conversationHistory?.some(msg => 
+      msg.metadata?.expertMode && msg.metadata?.awaitingUserInput
     )
 
     // 根据模式选择不同的处理方式
     let messageToSend = inputValue
     let sendOptions: any = {}
 
-    if (isInDirectCodeMode) {
-      // 🧪 直接代码生成模式：添加测试模式标识和强制使用coding agent
+    if (isInExpertMode) {
+      // 🎯 专业模式测试：添加专业模式标识和强制使用coding agent
       messageToSend = `[FORCE_AGENT:coding][TEST_MODE]${inputValue}`
       sendOptions = {
         forceAgent: 'coding',
-        testMode: true
+        expertMode: true
       }
-      console.log('🧪 [直接代码生成模式发送] 消息:', messageToSend)
+      console.log('🎯 [专业模式测试发送] 消息:', messageToSend)
     } else if (chatMode === 'professional') {
-      // 专业模式：直接使用用户输入，添加模式标识
-      messageToSend = `[专业模式] ${inputValue}`
+      // 专业模式：自动进入代码模式，使用专业模式 prompt
+      messageToSend = `[FORCE_AGENT:coding][TEST_MODE]${inputValue}`
+      sendOptions = {
+        forceAgent: 'coding',
+        expertMode: true
+      }
+      // 自动切换到代码模式
+      if (!isCodeMode) {
+        setIsCodeMode(true)
+        setGeneratedCode([])
+      }
+      console.log('🎯 [专业模式发送] 消息:', messageToSend)
     } else {
       // 普通模式：直接使用用户输入，添加模式标识
       messageToSend = `[普通模式] ${inputValue}`
@@ -375,10 +385,10 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
     return assets
   }
 
-  // 生成测试代码用于演示 - 进入测试模式等待用户输入
+  // 启动专业模式测试 - 直接进入专业模式体验
   const generateTestCode = async () => {
     try {
-      console.log('🧪 [测试代码生成] 进入测试模式...');
+      console.log('🎯 [专业模式测试] 启动专业模式...');
       
       // 设置为代码模式
       setIsCodeMode(true)
@@ -388,19 +398,18 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
       // 创建或获取会话
       let session = currentSession
       if (!session) {
-        console.log('🧪 [测试代码生成] 创建新会话...');
+        console.log('🎯 [专业模式测试] 创建新会话...');
         session = await createNewSession()
       }
 
-      console.log('🧪 [测试代码生成] 会话ID:', session?.id);
+      console.log('🎯 [专业模式测试] 会话ID:', session?.id);
 
-      // 🔧 新逻辑：不直接发送，而是显示测试模式提示
-      // 让用户可以输入具体的项目需求
-      const testModePrompt = `🧪 **测试代码生成模式已启动！**
+      // 显示专业模式提示
+      const expertModePrompt = `🎯 **专业模式已启动！**
 
-请告诉我你想要创建什么类型的项目，我会为你生成完整的代码。
+专业模式使用最先进的代码生成能力，为你创建V0级别的高质量Web项目。
 
-**支持的项目类型：**
+### 💡 支持的项目类型：
 - 个人简历/作品集网站
 - 商业展示页面  
 - 博客网站
@@ -410,34 +419,41 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
 - 仪表板界面
 - 其他任何Web应用
 
+### 🔧 专业特性：
+- V0 级别的代码质量
+- Next.js 15 + TypeScript
+- Tailwind CSS + shadcn/ui
+- 响应式设计和无障碍支持
+- 现代化动画效果
+
+请告诉我你想要创建什么类型的项目！
+
 **示例输入：**
 - "创建一个个人简历网站"
 - "生成一个产品展示页面" 
-- "制作一个公司介绍网站"
-
-请在下方输入框中描述你的需求...`
+- "制作一个公司介绍网站"`
 
       // 手动添加一个系统提示消息到会话历史
       if (session) {
-        const testModeMessage = {
-          id: `msg-${Date.now()}-testmode`,
+        const expertModeMessage = {
+          id: `msg-${Date.now()}-expertmode`,
           timestamp: new Date(),
           type: 'agent_response' as const,
           agent: 'system',
-          content: testModePrompt,
+          content: expertModePrompt,
           metadata: {
-            testMode: true,
+            expertMode: true,
             awaitingUserInput: true
           }
         }
         
-        session.conversationHistory.push(testModeMessage)
+        session.conversationHistory.push(expertModeMessage)
       }
 
-      console.log('🧪 [测试代码生成] 测试模式准备完成，等待用户输入...');
+      console.log('🎯 [专业模式测试] 专业模式准备完成，等待用户输入...');
 
     } catch (error) {
-      console.error('❌ [测试代码生成] 启动失败:', error)
+      console.error('❌ [专业模式测试] 启动失败:', error)
     }
   }
 
@@ -467,20 +483,20 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
         isCodeMode={isCodeMode}
         onNewChat={handleNewChat}
         onSelectSession={selectSession}
-        onGenerateTestCode={generateTestCode}
+        onGenerateExpertMode={generateTestCode}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
       />
 
       {/* 🎨 主内容区域 - 包含header和内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 🎨 顶部导航栏 - 品牌色 - 只在非代码模式下显示 */}
-        {!isCodeMode && (
-          <ChatHeader 
-            chatMode={chatMode}
-            onModeChange={setChatMode}
-          />
-        )}
+        {/* 🎨 顶部导航栏 - 品牌色 - 在所有模式下显示 */}
+        <ChatHeader 
+          chatMode={chatMode}
+          onModeChange={setChatMode}
+          isCodeMode={isCodeMode}
+          onBackToChat={handleBackToChat}
+        />
 
         {/* 🎨 主内容区域 */}
         <div className="flex-1 flex flex-col overflow-hidden">

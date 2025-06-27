@@ -67,9 +67,13 @@ export async function POST(req: NextRequest) {
       console.error(`❌ [会话错误] 会话 ${sessionId} 未找到`);
       
       // 🔍 调试信息：检查会话存储状态
-      const allSessions = agentOrchestrator.getAllActiveSessions();
-      console.log(`🔍 [调试] 当前活跃会话数: ${allSessions.length}`);
-      console.log(`🔍 [调试] 会话ID列表:`, allSessions.map(s => s.id));
+      try {
+        const allSessions = await agentOrchestrator.getAllActiveSessions();
+        console.log(`🔍 [调试] 当前活跃会话数: ${allSessions.length}`);
+        console.log(`🔍 [调试] 会话ID列表:`, allSessions.map(s => s.id));
+      } catch (debugError) {
+        console.error(`⚠️ [调试] 获取活跃会话失败:`, debugError);
+      }
       
       return NextResponse.json(
         { error: 'Session not found' },

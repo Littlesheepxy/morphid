@@ -389,7 +389,7 @@ export const CODING_AGENT_CONFIG = {
 export { QUICKEDIT_AGENT_PROMPT, QUICKEDIT_AGENT_CONFIG } from './quickedit-agent';
 
 // 测试模式专用Prompt
-export const CODING_TEST_MODE_PROMPT = `你是HeysMe平台的V0风格代码生成专家，专门生成高质量的React + TypeScript项目。
+export const CODING_EXPERT_MODE_PROMPT = `你是HeysMe平台的V0风格代码生成专家，专门生成高质量的React + TypeScript项目。
 
 ## 🎯 **核心设计理念**（参考V0）
 

@@ -16,7 +16,7 @@ interface ChatSidebarProps {
   onToggleCollapse: () => void;
   onNewChat: () => void;
   onSelectSession: (sessionId: string) => void;
-  onGenerateTestCode: () => void;
+  onGenerateExpertMode: () => void;
 }
 
 export function ChatSidebar({ 
@@ -27,7 +27,7 @@ export function ChatSidebar({
   onToggleCollapse,
   onNewChat, 
   onSelectSession, 
-  onGenerateTestCode 
+  onGenerateExpertMode 
 }: ChatSidebarProps) {
   const { theme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
@@ -208,9 +208,9 @@ export function ChatSidebar({
               <span>灵感模板库</span>
             </a>
             
-            {/* 🎨 测试按钮 - 透明背景，悬停时显示颜色，无边框 */}
+            {/* 🎨 专业模式测试按钮 - 透明背景，悬停时显示颜色，无边框 */}
             <button
-              onClick={onGenerateTestCode}
+              onClick={onGenerateExpertMode}
               className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
                 theme === "light"
                   ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
@@ -218,7 +218,7 @@ export function ChatSidebar({
               }`}
             >
               <Code className="w-4 h-4" />
-              <span>生成测试代码</span>
+              <span>专业模式测试</span>
             </button>
           </motion.div>
         )}
@@ -267,13 +267,13 @@ export function ChatSidebar({
             </a>
             
             <button
-              onClick={onGenerateTestCode}
+              onClick={onGenerateExpertMode}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 ${
                 theme === "light"
                   ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
                   : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
               }`}
-              title="生成测试代码"
+              title="专业模式测试"
             >
               <Code className="w-4 h-4" />
             </button>

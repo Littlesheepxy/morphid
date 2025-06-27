@@ -72,7 +72,7 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
             }
             
             return (
-              <p className="mb-1.5 text-gray-900 dark:text-gray-100 leading-relaxed font-normal" {...props}>
+              <p className="mb-2 text-gray-900 dark:text-gray-100 leading-normal font-normal" {...props}>
                 {children}
               </p>
             );
@@ -220,7 +220,8 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
         
         /* 🔧 强化段落间距控制 */
         .markdown-content p {
-          margin-bottom: 0.375rem;
+          margin-bottom: 0.5rem;
+          line-height: 1.6;
         }
         
         .markdown-content p:last-child {
