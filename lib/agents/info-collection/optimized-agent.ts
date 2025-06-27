@@ -311,6 +311,17 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     try {
       console.log(`🧠 [Claude流式分析] 开始调用Claude进行智能分析`);
       
+      // 🚀 检查是否有预解析的文件内容
+      const uploadedFiles = this.extractUploadedFiles(userInput);
+      const hasPreParsedFiles = uploadedFiles.length > 0;
+      const parsedFileContent = uploadedFiles.map(file => 
+        `文件名: ${file.name}\n类型: ${file.type}\n内容: ${file.content}`
+      ).join('\n\n');
+
+      // 🔗 检查是否有链接需要处理（无论是否有预解析文件）
+      const hasLinks = this.detectLinksInInput(userInput);
+      const linkInfo = hasLinks ? this.extractLinkInfo(userInput) : '无链接';
+
       // 构建prompt
       const prompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, {
         user_role: welcomeData.user_role || '未知身份',
@@ -321,6 +332,14 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
         reasoning: welcomeData.reasoning || '基于用户表达分析',
         should_use_samples: welcomeData.should_use_samples || false,
         sample_reason: welcomeData.sample_reason || '根据用户需求判断',
+        // 🆕 文件相关信息
+        uploaded_files_count: uploadedFiles.length,
+        files_pre_parsed: hasPreParsedFiles,
+        parsed_file_content: parsedFileContent || '无',
+        // 🆕 链接相关信息
+        has_links: hasLinks,
+        link_info: linkInfo,
+        // 原有信息
         collection_priority: welcomeData.collection_priority || 'balanced',
         current_collected_data: JSON.stringify(welcomeData.current_collected_data || {}),
         available_tools: JSON.stringify(welcomeData.available_tools || []),
@@ -685,5 +704,78 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
         }
       }
     });
+  }
+
+  /**
+   * 从用户输入中提取已上传的文件信息
+   */
+  private extractUploadedFiles(userInput: string): Array<{name: string, type: string, content: string}> {
+    const files: Array<{name: string, type: string, content: string}> = [];
+    
+    // 匹配文件信息的正则表达式
+    const filePattern = /📎\s+([^\n]+)\n类型:\s+([^\n]+)\n大小:\s+[^\n]+\n(?:内容:\s+([\s\S]*?)(?=\n\n📎|\n\n$|$))?/g;
+    
+    let match;
+    while ((match = filePattern.exec(userInput)) !== null) {
+      const fileName = match[1]?.trim();
+      const fileType = match[2]?.trim();
+      const fileContent = match[3]?.trim() || '';
+      
+      if (fileName && fileType) {
+        files.push({
+          name: fileName,
+          type: fileType,
+          content: fileContent
+        });
+      }
+    }
+    
+    console.log(`📎 [文件提取] 从用户输入中提取到 ${files.length} 个文件`);
+    if (files.length > 0) {
+      files.forEach((file, index) => {
+        console.log(`📄 [文件${index + 1}] ${file.name} (${file.type}) - 内容长度: ${file.content.length}`);
+      });
+    }
+    
+    return files;
+  }
+
+  /**
+   * 检测用户输入中是否包含链接
+   */
+  private detectLinksInInput(userInput: string): boolean {
+    const linkPatterns = [
+      /https?:\/\/[^\s]+/g,
+      /linkedin\.com\/in\/[^\s]+/g,
+      /github\.com\/[^\s]+/g,
+      /instagram\.com\/[^\s]+/g,
+      /twitter\.com\/[^\s]+/g,
+      /x\.com\/[^\s]+/g,
+      /behance\.net\/[^\s]+/g,
+      /dribbble\.com\/[^\s]+/g
+    ];
+
+    return linkPatterns.some(pattern => pattern.test(userInput));
+  }
+
+  /**
+   * 提取用户输入中的链接信息
+   */
+  private extractLinkInfo(userInput: string): string {
+    const links: string[] = [];
+    const linkPattern = /https?:\/\/[^\s]+/g;
+    
+    let match;
+    while ((match = linkPattern.exec(userInput)) !== null) {
+      links.push(match[0]);
+    }
+
+    if (links.length === 0) {
+      return '无链接';
+    }
+
+    return links.map((link, index) => 
+      `链接${index + 1}: ${link}`
+    ).join('\n');
   }
 } 

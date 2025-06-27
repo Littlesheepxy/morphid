@@ -235,64 +235,73 @@ export default function ChatPage() {
 
   // 处理文件上传
   const handleFileUpload = async (file: File) => {
-    try {
-      // 验证文件类型和大小
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown', 'application/json'];
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "文件类型不支持",
-          description: "请上传 PDF、Word、文本或 Markdown 文件",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (file.size > maxSize) {
-        toast({
-          title: "文件过大",
-          description: "文件大小不能超过 10MB",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // 显示上传中的提示
+    // 这个函数现在主要用于验证，实际处理在 WelcomeScreen 中进行
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'text/markdown', 'application/json'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    
+    if (!allowedTypes.includes(file.type)) {
       toast({
-        title: "文件上传中",
-        description: `正在处理 ${file.name}...`,
+        title: "文件类型不支持",
+        description: "请上传 PDF、Word、文本或 Markdown 文件",
+        variant: "destructive",
       });
+      return;
+    }
+    
+    if (file.size > maxSize) {
+      toast({
+        title: "文件过大",
+        description: "文件大小不能超过 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+  };
 
-      // 读取文件内容
-      const fileContent = await readFileContent(file);
-      
-      // 构建文件上传消息
-      const uploadMessage = `📎 ${file.name}
-类型: ${file.type}
-大小: ${(file.size / 1024).toFixed(1)}KB
+  // 处理带文件的消息发送
+  const handleSendWithFiles = async (message: string, files: any[]) => {
+    try {
+      // 检查认证状态
+      if (!authLoading && !isAuthenticated) {
+        setPendingMessage(message);
+        setShowAuthDialog(true);
+        return;
+      }
 
-${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二进制文件内容]'}`;
-
-      // 发送消息
-      sendMessage(uploadMessage);
-      
-      // 如果还没开始聊天，设置为已开始
       if (!hasStartedChat) {
         setHasStartedChat(true);
       }
 
-      // 显示上传成功的提示
-      toast({
-        title: "文件上传成功",
-        description: `${file.name} 已成功上传`,
-      });
+      // 构建包含文件信息的消息
+      let fullMessage = message;
       
-    } catch (error) {
-      console.error('文件上传失败:', error);
+      if (files.length > 0) {
+        const fileInfos = files.map(fileWithPreview => {
+          const file = fileWithPreview.file;
+          return `📎 ${file.name}
+类型: ${file.type}
+大小: ${(file.size / 1024).toFixed(1)}KB
+${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : ''}`;
+        }).join('\n\n');
+
+        fullMessage = `${message}\n\n${fileInfos}`;
+      }
+
+      // 发送消息
+      sendMessage(fullMessage);
+      setInputValue("");
+
+      // 显示成功提示
       toast({
-        title: "文件上传失败",
-        description: "请重试或选择其他文件",
+        title: "消息发送成功",
+        description: `已发送${files.length > 0 ? `包含 ${files.length} 个文件的` : ''}消息`,
+      });
+
+    } catch (error) {
+      console.error('发送消息失败:', error);
+      toast({
+        title: "发送失败",
+        description: "请重试",
         variant: "destructive",
       });
     }
@@ -539,6 +548,7 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
               isGenerating={isGenerating}
               chatMode={chatMode}
               onFileUpload={handleFileUpload}
+              onSendWithFiles={handleSendWithFiles}
             />
           )}
         </div>

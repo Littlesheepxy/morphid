@@ -31,18 +31,52 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const { theme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
+  const [isAutoCollapsed, setIsAutoCollapsed] = useState(false); // 跟踪是否是自动折叠
   const { isLoaded, isSignedIn } = useAuth();
 
-  // 检测移动端
+  // 检测移动端和自动折叠
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    // 自动折叠逻辑
+    const handleResize = () => {
+      const width = window.innerWidth;
+      
+      // 更新移动端状态
+      setIsMobile(width < 768);
+      
+      // 自动折叠逻辑：当窗口宽度小于1024px时自动折叠侧边栏
+      if (width < 1024 && !isCollapsed) {
+        console.log('🔄 窗口缩小至', width + 'px，自动折叠侧边栏');
+        setIsAutoCollapsed(true);
+        onToggleCollapse();
+      }
+      // 当窗口宽度大于1200px且之前是自动折叠时，自动展开侧边栏
+      else if (width >= 1200 && isCollapsed && isAutoCollapsed && width >= 768) {
+        console.log('🔄 窗口放大至', width + 'px，自动展开侧边栏');
+        setIsAutoCollapsed(false);
+        onToggleCollapse();
+      }
+    };
+    
+    // 初始检查
+    handleResize();
+    
+    // 添加resize监听器，使用防抖优化性能
+    let timeoutId: NodeJS.Timeout;
+    const debouncedResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleResize, 150);
+    };
+    
+    window.addEventListener('resize', debouncedResize);
+    return () => {
+      window.removeEventListener('resize', debouncedResize);
+      clearTimeout(timeoutId);
+    };
+  }, [isCollapsed, onToggleCollapse, isAutoCollapsed]);
 
   // 计算实际宽度
   const getWidth = () => {
@@ -85,12 +119,15 @@ export function ChatSidebar({
             className={`flex items-center gap-3 relative group ${
               isCollapsed && !isMobile ? 'cursor-pointer' : ''
             }`}
-            onClick={isCollapsed && !isMobile ? onToggleCollapse : undefined}
+            onClick={isCollapsed && !isMobile ? () => {
+              setIsAutoCollapsed(false); // 用户手动操作，重置自动折叠状态
+              onToggleCollapse();
+            } : undefined}
             whileHover={{ scale: isCollapsed && !isMobile ? 1.05 : 1 }}
             transition={{ duration: 0.2 }}
           >
             <motion.div 
-              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg relative overflow-hidden"
+              className="w-10 h-10 rounded-[10px] flex items-center justify-center shadow-lg relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
               }}
@@ -105,7 +142,7 @@ export function ChatSidebar({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   whileHover={{ opacity: 1, scale: 1 }}
-                  className="absolute inset-0 bg-black/20 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                  className="absolute inset-0 bg-black/20 rounded-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
                 >
                   <ChevronRight className="w-4 h-4 text-white" />
                 </motion.div>
@@ -145,14 +182,15 @@ export function ChatSidebar({
                 size="sm"
                 onClick={() => {
                   console.log('Toggle sidebar clicked, current state:', isCollapsed);
+                  setIsAutoCollapsed(false); // 用户手动操作，重置自动折叠状态
                   onToggleCollapse();
                 }}
-                className={`w-8 h-8 p-0 rounded-lg transition-all duration-200 hover:scale-105 ${
+                className={`w-8 h-8 p-0 rounded-[10px] transition-all duration-200 hover:scale-105 ${
                   theme === "light"
                     ? "hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700"
                     : "hover:bg-emerald-900/30 text-emerald-400 hover:text-emerald-300"
                 }`}
-                title="折叠侧边栏 (Ctrl+B)"
+                title={isAutoCollapsed ? "侧边栏已自动折叠 (Ctrl+B)" : "折叠侧边栏 (Ctrl+B)"}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
@@ -172,7 +210,7 @@ export function ChatSidebar({
             {/* 🎨 新建对话按钮 - 使用品牌色渐变 */}
             <button
               onClick={onNewChat}
-              className="w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group relative overflow-hidden text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="w-full flex items-center justify-start gap-3 h-9 px-4 rounded-[10px] font-medium transition-all duration-200 group relative overflow-hidden text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
               style={{
                 background: 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
               }}
@@ -186,7 +224,7 @@ export function ChatSidebar({
             {/* 🎨 社区功能导航 */}
             <a
               href="/people"
-              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
+              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-[10px] font-medium transition-all duration-200 group ${
                 theme === "light"
                   ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
                   : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
@@ -198,7 +236,7 @@ export function ChatSidebar({
             
             <a
               href="/templates"
-              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
+              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-[10px] font-medium transition-all duration-200 group ${
                 theme === "light"
                   ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
                   : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
@@ -211,7 +249,7 @@ export function ChatSidebar({
             {/* 🎨 专业模式测试按钮 - 透明背景，悬停时显示颜色，无边框 */}
             <button
               onClick={onGenerateExpertMode}
-              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-2xl font-medium transition-all duration-200 group ${
+              className={`w-full flex items-center justify-start gap-3 h-9 px-4 rounded-[10px] font-medium transition-all duration-200 group ${
                 theme === "light"
                   ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
                   : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
@@ -303,7 +341,7 @@ export function ChatSidebar({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className={`group w-full flex items-center justify-start gap-3 h-9 px-3 rounded-2xl font-medium transition-all duration-200 ${
+                    className={`group w-full flex items-center justify-start gap-3 h-9 px-3 rounded-[10px] font-medium transition-all duration-200 ${
                       currentSession?.id === session.id
                         ? theme === "light"
                           ? "bg-emerald-50 text-emerald-700"
@@ -453,7 +491,7 @@ export function ChatSidebar({
               <div className="space-y-2">
                 <SignInButton mode="modal">
                   <Button 
-                    className={`w-full justify-start gap-3 h-10 rounded-xl transition-all duration-200 ${
+                    className={`w-full justify-start gap-3 h-10 rounded-[10px] transition-all duration-200 ${
                       theme === "light"
                         ? "bg-white/80 hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800"
                         : "bg-gray-800/60 hover:bg-emerald-900/20 text-emerald-300 hover:text-emerald-200"
@@ -474,7 +512,7 @@ export function ChatSidebar({
                   <Button 
                     size="sm"
                     variant="ghost"
-                    className={`w-8 h-8 p-0 rounded-lg transition-all duration-200 ${
+                    className={`w-8 h-8 p-0 rounded-[10px] transition-all duration-200 ${
                       theme === "light"
                         ? "bg-white/80 hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800"
                         : "bg-gray-800/60 hover:bg-emerald-900/20 text-emerald-300 hover:text-emerald-200"

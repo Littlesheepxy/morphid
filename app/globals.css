@@ -199,6 +199,16 @@
   background: transparent;
 }
 
+/* 隐藏滚动条但保持滚动功能 */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
 .brand-scrollbar::-webkit-scrollbar-thumb {
   background: linear-gradient(135deg, #10B981, #06B6D4);
   border-radius: 6px;
@@ -787,6 +797,53 @@ html::-webkit-scrollbar-thumb:hover {
   50% {
     transform: scale(1.05);
     opacity: 1;
+  }
+}
+
+/* 🎨 优雅的品牌光效动画 */
+@keyframes brand-glow-pulse {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes brand-shine-sweep {
+  0%, 90%, 100% {
+    opacity: 0;
+    background-position: -200% 0;
+  }
+  10%, 80% {
+    opacity: 0.3;
+    background-position: 200% 0;
+  }
+}
+
+/* 备选方案：彩虹渐变流动 */
+@keyframes brand-rainbow-flow {
+  0%, 100% {
+    background-position: 0% 50%;
+    opacity: 0.6;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 1;
+  }
+}
+
+/* 备选方案：呼吸光效 */
+@keyframes brand-breathe-glow {
+  0%, 100% {
+    opacity: 0.4;
+    filter: blur(0px);
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    filter: blur(0.5px);
+    transform: scale(1.02);
   }
 }
 
