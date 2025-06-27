@@ -483,7 +483,9 @@ export function useChatSystemV2() {
                         metadata: {
                           ...session.conversationHistory[messageIndex].metadata,
                           streaming: streamType !== 'complete' && !isFinal,
-                          stream_type: streamType
+                          stream_type: streamType,
+                          // 🔧 关键修复：更新时也要保存system_state中的metadata
+                          ...(chunk.system_state?.metadata || {})
                         }
                       };
                       
@@ -506,7 +508,9 @@ export function useChatSystemV2() {
                       metadata: { 
                         streaming: isStreaming,
                         stream_message_id: messageId,
-                        stream_type: streamType
+                        stream_type: streamType,
+                        // 🔧 关键修复：保存system_state中的所有metadata
+                        ...(chunk.system_state?.metadata || {})
                       }
                     };
                     

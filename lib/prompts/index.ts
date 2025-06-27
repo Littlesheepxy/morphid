@@ -32,7 +32,9 @@ export {
 // Coding Module
 export {
   CODING_AGENT_PROMPT,
-  CODING_AGENT_CONFIG
+  CODING_AGENT_CONFIG,
+  CODING_TEST_MODE_PROMPT,
+  CODING_TEST_MODE_CONFIG
 } from './coding';
 
 /**

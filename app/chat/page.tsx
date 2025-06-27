@@ -54,25 +54,56 @@ export default function ChatPage() {
     if (currentSession && currentSession.conversationHistory && currentSession.conversationHistory.length > 0) {
       setHasStartedChat(true)
       
-      // 检查是否有代码生成相关的消息
-      const hasCodeGeneration = currentSession.conversationHistory.some(message => 
-        message.metadata?.systemState?.current_stage === '代码生成中' ||
-        message.metadata?.codeBlocks
-      )
+          // 检查是否有代码生成相关的消息
+    const hasCodeGeneration = currentSession.conversationHistory.some(message => 
+      message.metadata?.systemState?.current_stage === '代码生成中' ||
+      message.metadata?.codeBlocks ||
+      // 🔧 检查直接代码生成模式
+      message.metadata?.directCodeGeneration ||
+      message.metadata?.projectGenerated ||
+      message.metadata?.projectFiles ||
+      // 🔧 检查不同的intent状态
+      message.metadata?.intent === 'project_complete'
+    )
       
-      if (hasCodeGeneration && !isCodeMode) {
-        setIsCodeMode(true)
-        // 提取生成的代码
-        const codeMessages = currentSession.conversationHistory.filter(msg => msg.metadata?.codeBlocks)
-        if (codeMessages.length > 0) {
-          const latestCodeMessage = codeMessages[codeMessages.length - 1]
-          if (latestCodeMessage.metadata?.codeBlocks) {
-            setGeneratedCode(latestCodeMessage.metadata.codeBlocks)
-          }
+      if (hasCodeGeneration) {
+        // 🔧 修复：无论是否已在代码模式，都要检查和更新代码
+        if (!isCodeMode) {
+          setIsCodeMode(true)
+        }
+        
+        // 提取生成的代码 - 支持多种数据源
+        let extractedCode: any[] = []
+        
+        // 1. 优先检查最新的项目文件（测试模式）
+        const projectMessages = currentSession.conversationHistory.filter(msg => 
+          msg.metadata?.projectFiles && Array.isArray(msg.metadata.projectFiles)
+        )
+        
+                 if (projectMessages.length > 0) {
+           const latestProjectMessage = projectMessages[projectMessages.length - 1]
+           extractedCode = latestProjectMessage.metadata?.projectFiles || []
+           console.log('🎯 [代码提取] 从projectFiles提取到', extractedCode.length, '个文件')
+         } else {
+           // 2. 回退到传统的codeBlocks
+           const codeMessages = currentSession.conversationHistory.filter(msg => msg.metadata?.codeBlocks)
+           if (codeMessages.length > 0) {
+             const latestCodeMessage = codeMessages[codeMessages.length - 1]
+             extractedCode = latestCodeMessage.metadata?.codeBlocks || []
+             console.log('🎯 [代码提取] 从codeBlocks提取到', extractedCode.length, '个文件')
+           }
+         }
+        
+        // 🔧 修复：只有当提取到的代码与当前代码不同时才更新
+        if (extractedCode.length > 0 && extractedCode.length !== generatedCode.length) {
+          setGeneratedCode(extractedCode)
+          console.log('✅ [代码设置] 成功设置生成的代码，共', extractedCode.length, '个文件')
+        } else if (extractedCode.length === 0) {
+          console.log('⚠️ [代码提取] 未找到任何代码文件')
         }
       }
     }
-  }, [currentSession, isCodeMode])
+  }, [currentSession, isCodeMode, generatedCode.length])
 
   // 处理登录成功后的继续操作
   useEffect(() => {
@@ -126,10 +157,24 @@ export default function ChatPage() {
       setHasStartedChat(true)
     }
 
+    // 🔧 检查是否在直接代码生成模式
+    const isInDirectCodeMode = isCodeMode && currentSession?.conversationHistory?.some(msg => 
+      msg.metadata?.directCodeGeneration && msg.metadata?.awaitingUserInput
+    )
+
     // 根据模式选择不同的处理方式
     let messageToSend = inputValue
+    let sendOptions: any = {}
 
-    if (chatMode === 'professional') {
+    if (isInDirectCodeMode) {
+      // 🧪 直接代码生成模式：添加测试模式标识和强制使用coding agent
+      messageToSend = `[FORCE_AGENT:coding][TEST_MODE]${inputValue}`
+      sendOptions = {
+        forceAgent: 'coding',
+        testMode: true
+      }
+      console.log('🧪 [直接代码生成模式发送] 消息:', messageToSend)
+    } else if (chatMode === 'professional') {
       // 专业模式：直接使用用户输入，添加模式标识
       messageToSend = `[专业模式] ${inputValue}`
     } else {
@@ -138,7 +183,7 @@ export default function ChatPage() {
     }
 
     // 🔧 修复：先发送消息，让用户消息立即显示，会话创建在 sendMessage 内部处理
-    sendMessage(messageToSend)
+    sendMessage(messageToSend, sendOptions)
     setInputValue("")
   }
 
@@ -330,10 +375,10 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
     return assets
   }
 
-  // 生成测试代码用于演示 - 直接启动coding agent
+  // 生成测试代码用于演示 - 进入测试模式等待用户输入
   const generateTestCode = async () => {
     try {
-      console.log('🧪 [测试代码生成] 开始启动...');
+      console.log('🧪 [测试代码生成] 进入测试模式...');
       
       // 设置为代码模式
       setIsCodeMode(true)
@@ -349,22 +394,47 @@ ${file.type.includes('text') || file.type.includes('json') ? fileContent : '[二
 
       console.log('🧪 [测试代码生成] 会话ID:', session?.id);
 
-      // 发送特殊的测试代码生成请求
-      const testMessage = "[FORCE_AGENT:coding][TEST_MODE]启动测试代码生成模式"
-      
-      console.log('🧪 [测试代码生成] 发送消息:', testMessage);
-      console.log('🧪 [测试代码生成] 发送参数:', {
-        forceAgent: 'coding',
-        testMode: true
-      });
-      
-      // 直接调用coding agent
-      await sendMessage(testMessage, {
-        forceAgent: 'coding',
-        testMode: true
-      })
+      // 🔧 新逻辑：不直接发送，而是显示测试模式提示
+      // 让用户可以输入具体的项目需求
+      const testModePrompt = `🧪 **测试代码生成模式已启动！**
 
-      console.log('🧪 [测试代码生成] 消息发送完成');
+请告诉我你想要创建什么类型的项目，我会为你生成完整的代码。
+
+**支持的项目类型：**
+- 个人简历/作品集网站
+- 商业展示页面  
+- 博客网站
+- 产品介绍页
+- 公司官网
+- 登陆页面
+- 仪表板界面
+- 其他任何Web应用
+
+**示例输入：**
+- "创建一个个人简历网站"
+- "生成一个产品展示页面" 
+- "制作一个公司介绍网站"
+
+请在下方输入框中描述你的需求...`
+
+      // 手动添加一个系统提示消息到会话历史
+      if (session) {
+        const testModeMessage = {
+          id: `msg-${Date.now()}-testmode`,
+          timestamp: new Date(),
+          type: 'agent_response' as const,
+          agent: 'system',
+          content: testModePrompt,
+          metadata: {
+            testMode: true,
+            awaitingUserInput: true
+          }
+        }
+        
+        session.conversationHistory.push(testModeMessage)
+      }
+
+      console.log('🧪 [测试代码生成] 测试模式准备完成，等待用户输入...');
 
     } catch (error) {
       console.error('❌ [测试代码生成] 启动失败:', error)

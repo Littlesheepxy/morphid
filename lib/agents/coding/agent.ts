@@ -50,16 +50,17 @@ export class CodingAgent extends BaseAgent {
     try {
       const userInput = input.user_input || '';
       
-      // 检查是否为测试模式
+      // 检查是否为测试模式 - 直接进行代码生成，跳过设计阶段
       const isTestMode = userInput.includes('[TEST_MODE]');
       const cleanInput = userInput.replace(/\[FORCE_AGENT:\w+\]/, '').replace(/\[TEST_MODE\]/, '').trim();
       
       if (isTestMode) {
-        yield* this.handleTestMode(cleanInput, sessionData);
+        // 🔧 测试模式：直接根据用户需求生成代码，不依赖设计数据
+        yield* this.handleDirectCodeGeneration(cleanInput, sessionData);
         return;
       }
 
-      // 原有的正常模式逻辑
+      // 原有的正常模式逻辑 - 需要设计数据
       // 步骤1: 提取设计数据
       yield this.createThinkingResponse('正在解析页面设计方案...', 80);
       await this.delay(1000);
@@ -377,18 +378,18 @@ export function ${componentName}({ data }: ${componentName}Props) {
   /**
    * 处理测试模式
    */
-  private async* handleTestMode(
+  private async* handleDirectCodeGeneration(
     userInput: string, 
     sessionData: SessionData
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     try {
-      // 如果是初始启动测试模式（空输入或启动消息）
+      // 如果是初始启动（空输入或启动消息）
       if (!userInput || userInput === '启动测试代码生成模式') {
         yield this.createResponse({
           immediate_display: {
-            reply: `🧪 **代码生成测试模式已启动！**
+            reply: `🧪 **直接代码生成模式已启动！**
 
-我现在可以根据你的具体需求生成各种类型的Web项目代码。
+我可以直接根据你的需求生成完整的Web项目代码，跳过设计阶段。
 
 ### 💡 支持的项目类型：
 - 个人简历/作品集网站
@@ -406,7 +407,7 @@ export function ${componentName}({ data }: ${componentName}Props) {
 - 响应式设计
 - 现代化UI
 
-请告诉我你想要创建什么类型的项目，我会为你生成完整的代码！
+请告诉我你想要创建什么类型的项目，我会直接为你生成完整的代码！
 
 **示例：**
 - "创建一个个人简历网站"
@@ -416,60 +417,90 @@ export function ${componentName}({ data }: ${componentName}Props) {
             timestamp: new Date().toISOString()
           },
           system_state: {
-            intent: 'test_mode_ready',
+            intent: 'awaiting_requirements',
             done: false,
             progress: 10,
             current_stage: '等待用户需求',
             metadata: {
-              testMode: true,
-              readyForInput: true
+              directCodeGeneration: true,
+              awaitingUserInput: true
             }
           }
         });
         return;
       }
 
-      // 处理用户的具体需求
+      // 🔧 直接代码生成：调用大模型API生成真实代码
       yield this.createThinkingResponse('正在分析你的需求...', 30);
-      await this.delay(1000);
+      await this.delay(800);
 
-      yield this.createThinkingResponse('正在设计项目结构...', 50);
-      await this.delay(1500);
-
-      yield this.createThinkingResponse('正在生成代码文件...', 80);
-      await this.delay(2000);
-
-      // 生成测试项目代码
-      const testFiles = this.generateTestModeFiles(userInput);
-
+      // 🔧 第一步：发送项目分析回复（显示在左侧对话框）
       yield this.createResponse({
         immediate_display: {
-          reply: `🎉 **测试代码生成完成！**
+          reply: `🎯 **项目分析完成！**
 
-根据你的需求"${userInput}"，我已经生成了一个完整的项目，包含${testFiles.length}个文件。
+根据你的需求"${userInput}"，我将调用大模型API为你生成一个完整的现代化Web应用。
 
-你可以在右侧查看代码和预览效果。如果需要修改，请告诉我具体要调整什么！`,
+**项目特性：**
+- 🎨 现代化UI设计，使用Tailwind CSS
+- 📱 完全响应式，支持所有设备
+- ⚡ Next.js 15 + TypeScript 技术栈
+- 🚀 优化的性能和SEO
+
+正在调用大模型生成项目文件，请稍候...`,
           agent_name: this.name,
           timestamp: new Date().toISOString()
         },
         system_state: {
-          intent: 'test_project_complete',
+          intent: 'continue',
+          done: false,
+          progress: 70,
+          current_stage: '项目分析完成',
+          metadata: {
+            directCodeGeneration: true,
+            analysisComplete: true
+          }
+        }
+      });
+
+      // 🔧 第二步：调用大模型API生成代码
+      yield this.createThinkingResponse('正在调用大模型生成代码文件...', 85);
+      await this.delay(1000);
+
+      // 🔧 调用大模型API
+      const aiGeneratedCode = await this.callAIForCodeGeneration(userInput);
+
+      // 🔧 第三步：发送代码生成完成响应（文本显示在左侧，文件显示在右侧）
+      yield this.createResponse({
+        immediate_display: {
+          reply: `✅ **代码生成完成！**
+
+项目已成功生成，包含 ${aiGeneratedCode.length} 个文件。右侧预览区域将显示完整的项目代码和实时预览。
+
+如需修改任何内容，请直接告诉我具体要调整什么！`,
+          agent_name: this.name,
+          timestamp: new Date().toISOString()
+        },
+        system_state: {
+          intent: 'project_complete',
           done: true,
           progress: 100,
-          current_stage: '测试项目生成完成',
+          current_stage: '代码生成完成',
           metadata: {
-            testMode: true,
+            directCodeGeneration: true,
             projectGenerated: true,
-            totalFiles: testFiles.length,
+            totalFiles: aiGeneratedCode.length,
             generatedAt: new Date().toISOString(),
-            projectFiles: testFiles,
-            userRequest: userInput
+            projectFiles: aiGeneratedCode,
+            userRequest: userInput,
+            hasCodeFiles: true,
+            codeFilesReady: true
           }
         }
       });
 
       // 更新会话数据
-      this.updateSessionWithProject(sessionData, testFiles);
+      this.updateSessionWithProject(sessionData, aiGeneratedCode);
 
     } catch (error) {
       yield await this.handleError(error as Error, sessionData);
@@ -949,5 +980,186 @@ export function slugify(str: string): string {
           </div>`
     };
     return sections[projectType as keyof typeof sections] || sections.general;
+  }
+
+
+
+  /**
+   * 调用大模型API生成代码
+   */
+  private async callAIForCodeGeneration(userInput: string): Promise<CodeFile[]> {
+    try {
+      // 🔧 导入测试模式提示词和AI模型函数
+      const { CODING_TEST_MODE_PROMPT } = await import('@/lib/prompts/coding');
+      const { generateWithModel } = await import('@/lib/ai-models');
+      
+      // 🔧 构建完整的提示词
+      const fullPrompt = `${CODING_TEST_MODE_PROMPT}
+
+## 🎯 用户需求：
+${userInput}
+
+## 📋 输出要求：
+请生成一个完整的Next.js项目，包含以下文件：
+1. package.json - 项目配置
+2. tailwind.config.js - Tailwind配置  
+3. tsconfig.json - TypeScript配置
+4. app/layout.tsx - 应用布局
+5. app/page.tsx - 主页面
+6. app/globals.css - 全局样式
+7. components/ui/button.tsx - Button组件
+8. lib/utils.ts - 工具函数
+
+请以JSON格式返回，每个文件包含filename、content、description、language字段。`;
+
+      console.log('🤖 [AI调用] 开始调用大模型生成代码...');
+      
+      // 🔧 调用大模型API
+      const result = await generateWithModel(
+        'claude',
+        'claude-sonnet-4-20250514',
+        [{ role: 'user', content: fullPrompt }],
+        { maxTokens: 8000 }
+      );
+      
+      // 提取响应文本
+      const responseText = 'text' in result ? result.text : JSON.stringify(result);
+      
+      console.log('🤖 [AI调用] 大模型响应:', responseText.substring(0, 200) + '...');
+      
+      // 🔧 解析AI响应
+      const parsedResponse = this.parseAICodeResponse(responseText);
+      
+      console.log('🤖 [AI调用] 解析得到', parsedResponse.length, '个文件');
+      
+      return parsedResponse;
+      
+    } catch (error) {
+      console.error('🤖 [AI调用] 调用大模型失败:', error);
+      
+      // 🔧 回退到基础文件生成
+      return this.generateFallbackFiles(userInput);
+    }
+  }
+
+  /**
+   * 解析AI代码响应
+   */
+  private parseAICodeResponse(response: string): CodeFile[] {
+    try {
+      // 尝试解析JSON响应
+      const parsed = JSON.parse(response);
+      
+      if (parsed.files && Array.isArray(parsed.files)) {
+        return parsed.files.map((file: any) => ({
+          filename: file.filename || 'unknown.txt',
+          content: file.content || '',
+          description: file.description || '生成的文件',
+          language: file.language || 'text'
+        }));
+      }
+      
+      // 如果不是标准格式，尝试其他解析方式
+      return this.parseAlternativeFormat(response);
+      
+    } catch (error) {
+      console.error('🤖 [解析错误] JSON解析失败:', error);
+      
+      // 尝试从文本中提取代码块
+      return this.extractCodeBlocksFromText(response);
+    }
+  }
+
+  /**
+   * 解析备用格式
+   */
+  private parseAlternativeFormat(response: string): CodeFile[] {
+    // 这里可以添加其他格式的解析逻辑
+    console.log('🤖 [备用解析] 尝试备用格式解析...');
+    return this.extractCodeBlocksFromText(response);
+  }
+
+  /**
+   * 从文本中提取代码块
+   */
+  private extractCodeBlocksFromText(text: string): CodeFile[] {
+    const files: CodeFile[] = [];
+    
+    // 匹配代码块模式：```filename\ncontent\n```
+    const codeBlockRegex = /```(\w+)?\s*(?:filename:?\s*([^\n]+))?\n([\s\S]*?)```/gi;
+    let match;
+    
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      const [, language, filename, content] = match;
+      
+      if (filename && content) {
+        files.push({
+          filename: filename.trim(),
+          content: content.trim(),
+          description: `从AI响应中提取的${language || ''}文件`,
+          language: language || 'text'
+        });
+      }
+    }
+    
+    console.log('🤖 [文本提取] 从文本中提取到', files.length, '个代码块');
+    
+    // 如果没有提取到文件，返回回退文件
+    if (files.length === 0) {
+      return this.generateFallbackFiles(text.substring(0, 100));
+    }
+    
+    return files;
+  }
+
+  /**
+   * 生成回退文件
+   */
+  private generateFallbackFiles(userInput: string): CodeFile[] {
+    console.log('🤖 [回退生成] 使用回退文件生成器...');
+    
+    return [
+      {
+        filename: 'package.json',
+        content: JSON.stringify({
+          name: 'ai-generated-project',
+          version: '1.0.0',
+          description: `基于"${userInput}"生成的项目`,
+          scripts: {
+            dev: 'next dev',
+            build: 'next build',
+            start: 'next start'
+          },
+          dependencies: {
+            'next': '^15.0.0',
+            'react': '^18.2.0',
+            'react-dom': '^18.2.0',
+            'typescript': '^5.0.0',
+            'tailwindcss': '^3.3.0'
+          }
+        }, null, 2),
+        description: '项目配置文件',
+        language: 'json'
+      },
+      {
+        filename: 'app/page.tsx',
+        content: `export default function HomePage() {
+  return (
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+          ${this.getProjectTitle('general', userInput)}
+        </h1>
+        <p className="text-lg text-gray-600">
+          基于AI生成的现代化Web应用
+        </p>
+      </div>
+    </main>
+  )
+}`,
+        description: 'React主页面组件',
+        language: 'typescript'
+      }
+    ];
   }
 } 
