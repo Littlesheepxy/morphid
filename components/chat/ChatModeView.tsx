@@ -10,6 +10,7 @@ import { ThinkingLoader } from '@/components/ui/unified-loading';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/theme-context';
 import { motion } from 'framer-motion';
+import { UnifiedInputBox } from '@/components/ui/unified-input-box';
 
 interface ChatModeViewProps {
   currentSession: any;
@@ -139,13 +140,13 @@ export const ChatModeView = memo(function ChatModeView({
         </ScrollArea>
       </div>
 
-      {/* 🎨 底部输入框 - 简约设计，品牌色仅用于边框 */}
+      {/* 🎨 底部输入框 - 修复高度问题 */}
       <div className={`border-t shrink-0 transition-all duration-300 ${
         theme === "light" 
           ? "bg-white border-gray-200" 
           : "bg-gray-900 border-gray-700"
       }`}>
-        <div className="p-6">
+        <div className="p-4">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center">
               {/* 🎨 输入框区域 - 品牌色边框 */}
@@ -166,7 +167,7 @@ export const ChatModeView = memo(function ChatModeView({
                     variant="ghost"
                     size="sm"
                     onClick={handleFileUploadClick}
-                    className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
+                    className={`ml-3 p-2 h-10 w-10 rounded-2xl transition-all duration-300 flex-shrink-0 ${
                       theme === "light"
                         ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                         : "text-gray-400 hover:bg-gray-800 hover:text-gray-300"
@@ -184,12 +185,12 @@ export const ChatModeView = memo(function ChatModeView({
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={onKeyPress}
                       placeholder="发送消息..."
-                      className={`px-4 py-4 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 pr-16 ${
+                      className={`px-4 py-3 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 pr-14 ${
                         theme === "light"
                           ? "bg-transparent placeholder-gray-400 text-gray-900"
                           : "bg-transparent placeholder-gray-500 text-white"
                       }`}
-                      style={{ height: '72px' }}
+                      style={{ height: '56px' }}
                       disabled={isGenerating}
                     />
                     
@@ -198,7 +199,7 @@ export const ChatModeView = memo(function ChatModeView({
                       onClick={handleSendClick}
                       disabled={!inputValue.trim() || isGenerating}
                       size="sm"
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 w-12 h-12 p-0 rounded-2xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 p-0 rounded-2xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
                       style={{
                         background: !inputValue.trim() || isGenerating 
                           ? '#9CA3AF' 
@@ -211,7 +212,7 @@ export const ChatModeView = memo(function ChatModeView({
                 </div>
                 
                 {/* 🎨 输入提示 - 简约设计 */}
-                <div className={`flex items-center justify-between mt-3 px-4 text-xs ${
+                <div className={`flex items-center justify-between mt-2 px-4 text-xs ${
                   theme === "light" ? "text-gray-500" : "text-gray-400"
                 }`}>
                   <span>按 Enter 发送，Shift + Enter 换行</span>

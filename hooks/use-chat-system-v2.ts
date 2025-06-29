@@ -308,9 +308,13 @@ export function useChatSystemV2() {
 
           // 检查是否是流式响应
           const contentType = response.headers.get('content-type');
-          if (contentType?.includes('text/event-stream')) {
+          console.log('📡 [响应类型] Content-Type:', contentType);
+          
+          if (contentType?.includes('text/event-stream') || contentType?.includes('text/plain')) {
+            console.log('🌊 [流式响应] 开始处理流式数据');
             await handleStreamingResponse(response, targetSession);
           } else {
+            console.log('📄 [普通响应] 处理JSON响应');
             const result = await response.json();
             if (result.success) {
               console.log('✅ 交互处理成功:', result);
@@ -432,118 +436,137 @@ export function useChatSystemV2() {
             try {
               const chunk = JSON.parse(data);
               
-              // 🔧 优化：减少日志频率
-              if (updateCount % 5 === 0) {
-                console.log('📦 [流式数据] 第', updateCount + 1, '次更新:', {
-                  type: chunk.type || 'unknown',
-                  hasReply: !!chunk.immediate_display?.reply,
-                  replyLength: chunk.immediate_display?.reply?.length || 0,
-                  messageId: chunk.system_state?.metadata?.message_id,
-                  streamType: chunk.system_state?.metadata?.stream_type
-                });
-              }
+              // 🔧 修复：增加调试日志，帮助排查问题
+              console.log('📦 [流式数据] 第', updateCount + 1, '次更新:', {
+                type: chunk.type || 'unknown',
+                hasReply: !!chunk.immediate_display?.reply,
+                replyLength: chunk.immediate_display?.reply?.length || 0,
+                replyPreview: chunk.immediate_display?.reply?.slice(0, 50) + '...',
+                messageId: chunk.system_state?.metadata?.message_id,
+                streamType: chunk.system_state?.metadata?.stream_type,
+                isFinal: chunk.system_state?.metadata?.is_final
+              });
               
+              // 🔧 修复：处理不同格式的流式数据
               // 检查是否是流式更新消息
               const isStreamUpdate = chunk.system_state?.metadata?.is_update;
               const messageId = chunk.system_state?.metadata?.message_id;
               const streamType = chunk.system_state?.metadata?.stream_type;
               const isFinal = chunk.system_state?.metadata?.is_final;
 
-              if (chunk.type === 'agent_response' && chunk.immediate_display?.reply) {
+              // 🔧 关键修复：处理StreamableAgentResponse格式
+              let replyContent = null;
+              let agentName = 'system';
+              let hasValidReply = false;
+
+              // 主要格式: StreamableAgentResponse (后端标准格式)
+              if (chunk.immediate_display?.reply) {
+                replyContent = chunk.immediate_display.reply;
+                agentName = chunk.immediate_display.agent_name || 'system';
+                hasValidReply = true;
+                console.log('🎯 [数据格式] StreamableAgentResponse格式，内容长度:', replyContent.length);
+              }
+              // 备用格式1: 标准的agent_response格式
+              else if (chunk.type === 'agent_response' && chunk.immediate_display?.reply) {
+                replyContent = chunk.immediate_display.reply;
+                agentName = chunk.immediate_display.agent_name || 'system';
+                hasValidReply = true;
+                console.log('🎯 [数据格式] agent_response格式');
+              }
+              // 备用格式2: 直接包含content的格式
+              else if (chunk.content) {
+                replyContent = chunk.content;
+                agentName = chunk.agent_name || chunk.agent || 'system';
+                hasValidReply = true;
+                console.log('🎯 [数据格式] 直接content格式');
+              }
+              // 备用格式3: 从data中提取
+              else if (chunk.data?.immediate_display?.reply) {
+                replyContent = chunk.data.immediate_display.reply;
+                agentName = chunk.data.immediate_display.agent_name || 'system';
+                hasValidReply = true;
+                console.log('🎯 [数据格式] data.immediate_display格式');
+              }
+              else {
+                console.log('⚠️ [数据格式] 未识别的数据格式:', Object.keys(chunk));
+              }
+
+              if (hasValidReply && replyContent) {
                 const now = Date.now();
                 
-                // 🔧 优化：限制更新频率，除非是最终消息
-                const shouldUpdate = isFinal || streamType === 'complete' || 
-                                   (now - lastUpdateTime) >= UPDATE_THROTTLE;
+                // 🔧 修复：移除限流逻辑，确保所有流式更新都能及时显示
+                // const shouldUpdate = isFinal || streamType === 'complete' || 
+                //                    (now - lastUpdateTime) >= UPDATE_THROTTLE;
                 
-                if (!shouldUpdate && !isFinal) {
-                  updateCount++;
-                  continue; // 跳过这次更新
-                }
+                // if (!shouldUpdate && !isFinal) {
+                //   updateCount++;
+                //   continue; // 跳过这次更新
+                // }
+                
+                // 确保所有更新都能被处理
+                const shouldUpdate = true;
                 
                 lastUpdateTime = now;
                 updateCount++;
                 
-                if (messageId && (isStreamUpdate || streamType)) {
-                  if (streamingMessageId === messageId && streamingMessageIndex >= 0) {
-                    // 🔄 更新现有流式消息
-                    if (updateCount % 5 === 0 || isFinal) {
-                      console.log(`🔄 [流式更新] 更新消息 ${messageId}, 第${updateCount}次, 类型: ${streamType}`);
-                    }
-                    
-                    const messageIndex = session.conversationHistory.findIndex(msg => 
-                      msg.metadata?.stream_message_id === messageId
-                    );
-                    
-                    if (messageIndex >= 0) {
-                      session.conversationHistory[messageIndex] = {
-                        ...session.conversationHistory[messageIndex],
-                        content: chunk.immediate_display.reply,
-                        timestamp: new Date(), 
-                        metadata: {
-                          ...session.conversationHistory[messageIndex].metadata,
-                          streaming: streamType !== 'complete' && !isFinal,
-                          stream_type: streamType,
-                          // 🔧 关键修复：更新时也要保存system_state中的metadata
-                          ...(chunk.system_state?.metadata || {})
-                        }
-                      };
-                      
-                      // 🔧 优化：批量更新状态，减少渲染次数
-                      setCurrentSession({ ...session });
-                      setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
-                    }
-                  } else {
-                    // 🆕 首次流式消息，创建新消息
-                    console.log(`🆕 [流式创建] 创建新的流式消息 ${messageId}, 类型: ${streamType}`);
-                    
-                    const isStreaming = streamType !== 'complete' && !isFinal;
-                    
-                    const agentMessage = {
-                      id: `msg-${Date.now()}-agent-${messageId}`,
+                // 🔧 修复：检查是否为流式消息更新
+                const isStreamingMode = !chunk.system_state?.done;
+                const currentMessageId: string = streamingMessageId || `stream-${Date.now()}`;
+
+                if (streamingMessageId && streamingMessageIndex >= 0) {
+                  // 🔄 更新现有流式消息
+                  console.log(`🔄 [流式更新] 更新消息 ${streamingMessageId}, 第${updateCount}次, 内容长度: ${replyContent.length}`);
+                  
+                  if (streamingMessageIndex < session.conversationHistory.length) {
+                    session.conversationHistory[streamingMessageIndex] = {
+                      ...session.conversationHistory[streamingMessageIndex],
+                      content: replyContent,
                       timestamp: new Date(),
-                      type: 'agent_response' as const,
-                      agent: chunk.immediate_display.agent_name || 'system',
-                      content: chunk.immediate_display.reply,
-                      metadata: { 
-                        streaming: isStreaming,
-                        stream_message_id: messageId,
-                        stream_type: streamType,
-                        // 🔧 关键修复：保存system_state中的所有metadata
+                      metadata: {
+                        ...session.conversationHistory[streamingMessageIndex].metadata,
+                        streaming: isStreamingMode,
+                        lastUpdate: new Date(),
+                        updateCount: updateCount,
+                        // 保存system_state中的metadata
                         ...(chunk.system_state?.metadata || {})
                       }
                     };
                     
-                    session.conversationHistory.push(agentMessage);
-                    streamingMessageIndex = session.conversationHistory.length - 1;
-                    streamingMessageId = messageId;
                     setCurrentSession({ ...session });
                     setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                   }
-                  
-                  // 🔧 关键修复：如果是完成状态，清理流式状态
-                  if (streamType === 'complete' || isFinal) {
-                    console.log(`✅ [流式完成] 消息 ${messageId} 流式处理完成，总计${updateCount}次更新`);
-                    streamingMessageId = null;
-                    streamingMessageIndex = -1;
-                  }
                 } else {
-                  // 🔧 修复：只有当不是流式消息时才创建普通消息
-                  console.log(`📝 [普通消息] 创建新消息（非流式）`);
+                  // 🆕 创建新的流式消息
+                  console.log(`🆕 [流式创建] 创建新的流式消息, 内容长度: ${replyContent.length}`);
+                  
                   const agentMessage = {
                     id: `msg-${Date.now()}-agent-${Math.random().toString(36).substr(2, 9)}`,
                     timestamp: new Date(),
                     type: 'agent_response' as const,
-                    agent: chunk.immediate_display.agent_name || 'system',
-                    content: chunk.immediate_display.reply,
+                    agent: agentName,
+                    content: replyContent,
                     metadata: { 
-                      interaction: chunk.interaction
+                      streaming: isStreamingMode,
+                      stream_message_id: currentMessageId,
+                      updateCount: 1,
+                      interaction: chunk.interaction,
+                      // 保存system_state中的所有metadata
+                      ...(chunk.system_state?.metadata || {})
                     }
                   };
                   
                   session.conversationHistory.push(agentMessage);
+                  streamingMessageIndex = session.conversationHistory.length - 1;
+                  streamingMessageId = currentMessageId;
                   setCurrentSession({ ...session });
                   setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
+                }
+                
+                // 🔧 关键修复：如果是完成状态，清理流式状态
+                if (chunk.system_state?.done) {
+                  console.log(`✅ [流式完成] 消息流式处理完成，总计${updateCount}次更新`);
+                  streamingMessageId = null;
+                  streamingMessageIndex = -1;
                 }
                 
                 messageReceived = true;

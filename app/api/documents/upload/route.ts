@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { supabaseDocumentService } from '@/lib/services/supabase-document-service';
+import { unifiedDocumentService } from '@/lib/services/unified-document-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,45 +15,56 @@ export async function POST(req: NextRequest) {
 
     // 2. 解析表单数据
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const files: File[] = [];
+    const isPrivacyMode = formData.get('isPrivacyMode') === 'true';
     const sessionId = formData.get('sessionId') as string;
-    const parseImmediately = formData.get('parseImmediately') === 'true';
-    const extractMode = (formData.get('extractMode') as string) || 'general';
+    const extractMode = (formData.get('extractMode') as string) || 'comprehensive';
 
-    if (!file) {
+    // 收集所有文件
+    formData.forEach((value, key) => {
+      if (key.startsWith('file') && value instanceof File) {
+        files.push(value);
+      }
+    });
+
+    if (files.length === 0) {
       return NextResponse.json(
         { error: '未提供文件' },
         { status: 400 }
       );
     }
 
-    console.log(`📤 [API] 用户 ${userId} 上传文件: ${file.name}`);
+    console.log(`📄 [API] 用户 ${userId} 上传 ${files.length} 个文件 (隐私模式: ${isPrivacyMode})`);
 
-    // 3. 上传文档
-    const uploadedDocument = await supabaseDocumentService.uploadDocument(
-      file,
-      userId,
-      {
-        sessionId: sessionId || undefined,
-        parseImmediately,
-        extractMode: extractMode as 'general' | 'resume' | 'comprehensive'
-      }
-    );
-
-    console.log(`✅ [API] 文档上传成功: ${uploadedDocument.id}`);
-
-    return NextResponse.json({
-      success: true,
-      document: uploadedDocument
+    // 3. 处理文档
+    const results = await unifiedDocumentService.processMultipleDocuments(files, {
+      isPrivacyMode,
+      sessionId,
+      extractMode: extractMode as 'general' | 'resume' | 'comprehensive',
+      userId: isPrivacyMode ? undefined : userId
     });
+
+    // 4. 返回结果
+    const response = {
+      success: true,
+      message: `成功处理 ${results.length} 个文档`,
+      documents: results,
+      privacyMode: isPrivacyMode,
+      ...(isPrivacyMode && {
+        notice: '隐私模式：文档仅在内存中处理，不会持久化存储'
+      })
+    };
+
+    console.log(`✅ [API] 文档处理完成: ${results.length} 个文档`);
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('❌ [API] 文档上传失败:', error);
     
     return NextResponse.json(
       { 
-        error: '文档上传失败', 
-        details: error instanceof Error ? error.message : String(error)
+        error: '文档处理失败',
+        details: error instanceof Error ? error.message : '未知错误'
       },
       { status: 500 }
     );
@@ -62,7 +73,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. 认证检查
+    // 获取用户文档列表
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json(
@@ -71,19 +82,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 2. 获取查询参数
-    const { searchParams } = new URL(req.url);
-    const sessionId = searchParams.get('sessionId');
+    const url = new URL(req.url);
+    const isPrivacyMode = url.searchParams.get('isPrivacyMode') === 'true';
 
-    // 3. 获取用户文档列表
-    const documents = await supabaseDocumentService.getUserDocuments(
-      userId,
-      sessionId || undefined
-    );
+    const documents = await unifiedDocumentService.getUserDocuments(userId, isPrivacyMode);
 
     return NextResponse.json({
       success: true,
-      documents
+      documents,
+      privacyMode: isPrivacyMode,
+      count: documents.length
     });
 
   } catch (error) {
@@ -91,8 +99,8 @@ export async function GET(req: NextRequest) {
     
     return NextResponse.json(
       { 
-        error: '获取文档列表失败', 
-        details: error instanceof Error ? error.message : String(error)
+        error: '获取文档列表失败',
+        details: error instanceof Error ? error.message : '未知错误'
       },
       { status: 500 }
     );

@@ -226,24 +226,34 @@ export function ChatInterface({ sessionId: initialSessionId, onSessionUpdate, cl
     setError(null);
 
     try {
-      // 启动流式响应
-      const eventSource = new EventSource('/api/chat/stream', {
-        // 注意：EventSource不支持POST，我们需要通过查询参数传递
-      });
+      // 🔧 修复：根据消息类型选择不同的API端点
+      let apiEndpoint = '/api/chat/stream';
+      let requestBody: any = {
+        message,
+        sessionId,
+        currentStage: sessionStatus?.currentStage
+      };
 
-      // 实际上我们需要使用fetch来发送POST请求
+      // 如果是交互类型的消息，使用interact端点
+      if (options && (options.type || options.interactionType)) {
+        apiEndpoint = '/api/chat/interact';
+        requestBody = {
+          sessionId,
+          interactionType: options.interactionType || 'interaction',
+          data: options
+        };
+      }
+
+      console.log('📡 [发送请求] 端点:', apiEndpoint, '数据:', requestBody);
+
       eventSourceRef.current?.close();
       
-      const response = await fetch('/api/chat/stream', {
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message,
-          sessionId,
-          currentStage: sessionStatus?.currentStage
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {

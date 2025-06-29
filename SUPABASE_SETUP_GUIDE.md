@@ -37,13 +37,14 @@
    - **Name**: `documents`
    - **Public**: `false` (私有bucket)
    - **File size limit**: `10MB`
-   - **Allowed MIME types**: 
+   - **Allowed MIME types** (支持通配符): 
      - `application/pdf`
      - `application/msword`
      - `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
-     - `text/plain`
-     - `text/markdown`
+     - `text/*` (支持所有文本类型)
      - `application/json`
+     - `image/*` (支持所有图片类型，用于OCR处理)
+     - 或留空允许任何MIME类型
 
 ### 设置Storage策略
 
@@ -87,9 +88,78 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Clerk (用于认证)
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_key
 CLERK_SECRET_KEY=your_clerk_secret
+
+# Supabase S3配置
+NEXT_PUBLIC_SUPABASE_REGION=us-east-1
+NEXT_PUBLIC_SUPABASE_PROJECT_REF=your_project_ref
+
+# 可选：S3 Access Keys（仅服务端使用）
+SUPABASE_S3_ACCESS_KEY_ID=your_access_key
+SUPABASE_S3_SECRET_ACCESS_KEY=your_secret_key
 ```
 
-## 📦 4. 依赖安装
+## 🎯 4. MIME类型配置
+
+### 支持的文件类型
+
+系统支持以下文件类型和MIME类型：
+
+#### 📄 文档类型
+- **PDF**: `application/pdf`
+- **Word**: `application/msword`, `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+- **RTF**: `application/rtf`
+- **OpenDocument**: `application/vnd.oasis.opendocument.text`
+
+#### 📝 文本类型 (通配符: `text/*`)
+- **纯文本**: `text/plain`
+- **Markdown**: `text/markdown`
+- **CSV**: `text/csv`
+- **HTML**: `text/html`
+- **XML**: `text/xml`
+
+#### 🖼️ 图片类型 (通配符: `image/*`, 用于OCR)
+- **JPEG**: `image/jpeg`
+- **PNG**: `image/png`
+- **GIF**: `image/gif`
+- **BMP**: `image/bmp`
+- **TIFF**: `image/tiff`
+- **WebP**: `image/webp`
+
+#### 📊 表格类型
+- **Excel**: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- **Excel Legacy**: `application/vnd.ms-excel`
+- **OpenDocument Spreadsheet**: `application/vnd.oasis.opendocument.spreadsheet`
+
+#### 🎨 演示文稿类型
+- **PowerPoint**: `application/vnd.openxmlformats-officedocument.presentationml.presentation`
+- **PowerPoint Legacy**: `application/vnd.ms-powerpoint`
+- **OpenDocument Presentation**: `application/vnd.oasis.opendocument.presentation`
+
+### 通配符支持
+
+系统支持MIME类型通配符：
+- `text/*` - 匹配所有文本类型
+- `image/*` - 匹配所有图片类型
+- `application/*` - 匹配所有应用程序类型
+- 留空 - 允许任何MIME类型
+
+### 自定义配置
+
+在 `lib/services/supabase-document-service.ts` 中修改 `validateFile` 方法的 `allowedTypes` 数组：
+
+```typescript
+const allowedTypes = [
+  'application/pdf',
+  'text/*',           // 支持所有文本类型
+  'image/*',          // 支持所有图片类型
+  // 添加更多类型...
+];
+
+// 或者留空数组允许所有类型
+const allowedTypes: string[] = [];
+```
+
+## 📦 5. 依赖安装
 
 确保已安装必要的依赖：
 
@@ -99,7 +169,7 @@ npm install pdf-parse mammoth xlsx  # 文档解析依赖
 npm install crypto  # 文件哈希生成
 ```
 
-## 🧪 5. 测试设置
+## 🧪 6. 测试设置
 
 ### 测试文档上传
 
@@ -117,7 +187,7 @@ npm run dev
 3. **文档解析**: 文档内容应该被正确解析
 4. **权限控制**: 用户只能访问自己的文档
 
-## 🔍 6. 监控和调试
+## 🔍 7. 监控和调试
 
 ### 查看日志
 
@@ -142,7 +212,7 @@ npm run dev
 - 检查RLS策略是否正确
 - 验证用户ID匹配
 
-## 🚀 7. 生产部署
+## 🚀 8. 生产部署
 
 ### 性能优化
 
@@ -162,7 +232,7 @@ npm run dev
 2. **解析性能**: 跟踪解析时间和成功率
 3. **错误率**: 监控上传和解析错误
 
-## 📊 8. 使用统计
+## 📊 9. 使用统计
 
 ### 查询示例
 

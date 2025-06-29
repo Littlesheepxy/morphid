@@ -293,21 +293,29 @@ export class SupabaseDocumentService {
   // ==================== 私有方法 ====================
 
   private validateFile(file: File): void {
+    // 支持的MIME类型（支持通配符）
     const allowedTypes = [
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'text/markdown',
-      'application/json'
+      'text/*',           // 支持所有文本类型
+      'application/json',
+      'image/*'           // 支持所有图片类型（用于OCR处理）
     ];
 
-    if (!allowedTypes.includes(file.type)) {
+    // 检查文件类型
+    if (allowedTypes.length > 0 && !this.isTypeAllowed(file.type, allowedTypes)) {
       throw new Error(`不支持的文件类型: ${file.type}`);
     }
 
+    // 检查文件大小
     if (file.size > this.MAX_FILE_SIZE) {
-      throw new Error(`文件大小超过限制: ${file.size} > ${this.MAX_FILE_SIZE}`);
+      throw new Error(`文件大小超过限制: ${(file.size / 1024 / 1024).toFixed(2)}MB > ${this.MAX_FILE_SIZE / 1024 / 1024}MB`);
+    }
+
+    // 检查文件名
+    if (!file.name || file.name.trim() === '') {
+      throw new Error('文件名不能为空');
     }
   }
 
@@ -318,12 +326,42 @@ export class SupabaseDocumentService {
   private getFileType(filename: string): string {
     const extension = this.getFileExtension(filename);
     const typeMap: Record<string, string> = {
+      // 文档类型
       'pdf': 'pdf',
       'doc': 'doc',
       'docx': 'docx',
+      'rtf': 'rtf',
+      'odt': 'odt',
+      
+      // 文本类型
       'txt': 'txt',
       'md': 'markdown',
-      'json': 'json'
+      'markdown': 'markdown',
+      'csv': 'csv',
+      'json': 'json',
+      'xml': 'xml',
+      'html': 'html',
+      'htm': 'html',
+      
+      // 表格类型
+      'xlsx': 'xlsx',
+      'xls': 'xls',
+      'ods': 'ods',
+      
+      // 图片类型（用于OCR）
+      'jpg': 'image',
+      'jpeg': 'image',
+      'png': 'image',
+      'gif': 'image',
+      'bmp': 'image',
+      'tiff': 'image',
+      'tif': 'image',
+      'webp': 'image',
+      
+      // 演示文稿类型
+      'ppt': 'ppt',
+      'pptx': 'pptx',
+      'odp': 'odp'
     };
     return typeMap[extension] || 'unknown';
   }
@@ -375,6 +413,32 @@ export class SupabaseDocumentService {
     } catch (error) {
       console.warn(`⚠️ [清理] 清理上传文件失败: ${error}`);
     }
+  }
+
+  /**
+   * 检查MIME类型是否被允许（支持通配符）
+   */
+  private isTypeAllowed(fileType: string, allowedTypes: string[]): boolean {
+    // 如果允许类型列表为空，则允许所有类型
+    if (allowedTypes.length === 0) {
+      return true;
+    }
+
+    return allowedTypes.some(allowedType => {
+      // 精确匹配
+      if (allowedType === fileType) {
+        return true;
+      }
+
+      // 通配符匹配
+      if (allowedType.includes('*')) {
+        const pattern = allowedType.replace('*', '.*');
+        const regex = new RegExp(`^${pattern}$`, 'i');
+        return regex.test(fileType);
+      }
+
+      return false;
+    });
   }
 
   private mapDatabaseRecordToDocument(record: any): UploadedDocument {

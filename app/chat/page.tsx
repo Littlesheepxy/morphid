@@ -40,6 +40,7 @@ export default function ChatPage() {
   const [generatedCode, setGeneratedCode] = useState<any[]>([])
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [chatMode, setChatMode] = useState<'normal' | 'professional'>('normal')
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // 监听当前会话变化，如果有会话且有消息，则显示对话模式
@@ -505,6 +506,8 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
           onModeChange={setChatMode}
           isCodeMode={isCodeMode}
           onBackToChat={handleBackToChat}
+          isPrivacyMode={isPrivacyMode}
+          onPrivacyModeChange={setIsPrivacyMode}
         />
 
         {/* 🎨 主内容区域 */}
@@ -549,6 +552,8 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
               chatMode={chatMode}
               onFileUpload={handleFileUpload}
               onSendWithFiles={handleSendWithFiles}
+              sessionId={currentSession?.id}
+              isPrivacyMode={isPrivacyMode}
             />
           )}
         </div>

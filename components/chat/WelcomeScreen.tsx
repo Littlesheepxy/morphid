@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FileDropzone } from '@/components/ui/file-dropzone';
 import { Sparkles, Send, Paperclip, Upload, X } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 
@@ -65,6 +64,7 @@ interface FileWithPreview {
   progress: number;
   error?: string;
   documentId?: string; // Supabase文档ID
+  tempId?: string; // 隐私模式下的临时ID
 }
 
 interface WelcomeScreenProps {
@@ -75,6 +75,8 @@ interface WelcomeScreenProps {
   chatMode?: 'normal' | 'professional';
   onFileUpload?: (file: File) => void;
   onSendWithFiles?: (message: string, files: FileWithPreview[]) => void;
+  sessionId?: string;
+  isPrivacyMode?: boolean;
 }
 
 // 打字机效果Hook
@@ -114,7 +116,7 @@ const useTypewriter = (phrases: string[], baseText: string = "") => {
   return { text: baseText + currentText, showCursor: true };
 };
 
-export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating, chatMode, onFileUpload, onSendWithFiles }: WelcomeScreenProps) {
+export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGenerating, chatMode, onFileUpload, onSendWithFiles, sessionId, isPrivacyMode = false }: WelcomeScreenProps) {
   const { theme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDropzone, setShowDropzone] = useState(false);
@@ -160,9 +162,9 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && onFileUpload) {
-      onFileUpload(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      handleFilesChange(files);
     }
     // 清空input值，以便重复选择同一文件
     if (e.target) {
@@ -183,13 +185,66 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
     
     setUploadedFiles(prev => [...prev, ...filesWithPreview]);
     
-    // 开始处理每个文件
-    filesWithPreview.forEach(fileWithPreview => {
-      processFile(fileWithPreview);
-    });
+    // 使用统一文档服务处理文件
+    processFilesWithUnifiedService(filesWithPreview);
   };
 
-  // 处理单个文件 - 使用Supabase上传和解析
+  // 使用统一文档服务处理文件
+  const processFilesWithUnifiedService = async (filesWithPreview: FileWithPreview[]) => {
+    try {
+      const formData = new FormData();
+      
+      // 添加文件
+      filesWithPreview.forEach((fileWithPreview, index) => {
+        formData.append(`file${index}`, fileWithPreview.file);
+      });
+
+      // 添加配置
+      formData.append('isPrivacyMode', isPrivacyMode.toString());
+      formData.append('sessionId', sessionId || '');
+      formData.append('extractMode', 'comprehensive');
+
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || '上传失败');
+      }
+
+      const result = await response.json();
+      
+      // 更新文件状态
+      setUploadedFiles(prev => prev.map(f => {
+        const matchedResult = result.documents?.find((doc: any) => doc.originalFilename === f.file.name);
+        if (matchedResult) {
+          return {
+            ...f,
+            isProcessing: false,
+            progress: 100,
+            parsedContent: matchedResult.extractedText,
+            documentId: matchedResult.isPrivacyMode ? undefined : matchedResult.id,
+            tempId: matchedResult.isPrivacyMode ? matchedResult.id : undefined
+          };
+        }
+        return f;
+      }));
+
+    } catch (error) {
+      console.error('文件处理失败:', error);
+      
+      // 更新错误状态
+      setUploadedFiles(prev => prev.map(f => ({
+        ...f,
+        isProcessing: false,
+        error: error instanceof Error ? error.message : '处理失败'
+      })));
+    }
+  };
+
+  // 处理单个文件 - 使用Supabase上传和解析（保留作为备用）
   const processFile = async (fileWithPreview: FileWithPreview) => {
     try {
       // 1. 更新上传进度
@@ -367,6 +422,22 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
     const textarea = e.target;
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+  };
+
+  // 处理增强文件上传组件的文件处理完成
+  const handleFilesProcessed = (processedFiles: any[]) => {
+    const filesWithPreview = processedFiles.map(file => ({
+      file: file.file,
+      id: file.id,
+      preview: file.preview,
+      isProcessing: false,
+      progress: 100,
+      parsedContent: file.result,
+      error: file.error,
+      tempId: file.tempId // 隐私模式下的临时ID
+    }));
+    
+    setUploadedFiles(prev => [...prev, ...filesWithPreview]);
   };
 
   return (
@@ -657,7 +728,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                       onClick={handleFileUploadClick}
                       onMouseEnter={() => setShowDropzone(true)}
                       onMouseLeave={() => setShowDropzone(false)}
-                      className={`h-9 w-9 p-0 rounded-full transition-all duration-300 flex-shrink-0 hover:scale-105 ${
+                      className={`h-10 w-10 p-0 rounded-full transition-all duration-300 flex-shrink-0 hover:scale-105 ${
                         theme === "light"
                           ? "text-gray-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200"
                           : "text-gray-400 hover:bg-emerald-950/30 hover:text-emerald-400 hover:border-emerald-800"
@@ -706,7 +777,7 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
                     onClick={handleSendMessage}
                     disabled={(!inputValue.trim() && uploadedFiles.length === 0) || isGenerating}
                     size="sm"
-                    className="h-9 w-9 p-0 rounded-full hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
+                    className="h-10 w-10 p-0 rounded-full hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105"
                     style={{
                       background: ((!inputValue.trim() && uploadedFiles.length === 0) || isGenerating)
                         ? '#9CA3AF' 
@@ -728,11 +799,26 @@ export function WelcomeScreen({ inputValue, setInputValue, onSendMessage, isGene
           </motion.div>
         </div>
 
+        {/* 隐私模式提示 */}
+        {isPrivacyMode && (
+          <div className="w-full max-w-2xl mx-auto mt-4">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
+              theme === "light" 
+                ? "bg-amber-50 border border-amber-200 text-amber-700"
+                : "bg-amber-950/30 border border-amber-800 text-amber-400"
+            }`}>
+              <div className="w-1 h-1 rounded-full bg-amber-500" />
+              <span>🔒 隐私模式已启用：文件将仅在内存中处理，不会保存到服务器。处理结果在会话结束后自动清理。</span>
+            </div>
+          </div>
+        )}
+
         {/* 隐藏的文件上传输入 */}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.doc,.docx,.txt,.md,.json"
+          accept=".pdf,.doc,.docx,.txt,.md,.json,.csv,.xls,.xlsx,.ppt,.pptx,.rtf"
+          multiple
           onChange={handleFileChange}
           className="hidden"
         />

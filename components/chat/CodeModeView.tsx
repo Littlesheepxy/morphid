@@ -10,6 +10,7 @@ import { useTheme } from '@/contexts/theme-context';
 import { MessageBubble } from './MessageBubble';
 import { CodePreviewToggle } from '@/components/editor/CodePreviewToggle';
 import { ShareDialog } from '@/components/dialogs/share-dialog';
+import { UnifiedInputBox } from '@/components/ui/unified-input-box';
 
 interface CodeModeViewProps {
   currentSession: any;
@@ -155,8 +156,40 @@ export function CodeModeView({
             </ScrollArea>
           </div>
 
-          {/* 底部对话输入框 */}
-          <div className="border-t border-gray-100 bg-white p-4 shrink-0">
+          {/* 底部对话输入框 - 优化布局 */}
+          <div className={`border-t p-4 shrink-0 transition-all duration-300 ${
+            theme === "light" 
+              ? "bg-white border-gray-100" 
+              : "bg-gray-900 border-gray-700"
+          }`}>
+            {/* 快捷操作建议 - 横向滚动一行显示 */}
+            <div className="mb-3 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-2 pb-1 min-w-max">
+                {[
+                  "修改配色方案",
+                  "调整布局结构", 
+                  "添加新功能",
+                  "优化移动端显示",
+                  "更新个人信息"
+                ].map((suggestion, index) => (
+                  <Button
+                    key={index}
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setInputValue(suggestion)}
+                    className={`text-xs rounded-full border transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
+                      theme === "light"
+                        ? "text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200"
+                        : "text-gray-400 hover:text-gray-200 hover:bg-gray-800 border-gray-600"
+                    }`}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* 输入框区域 */}
             <div className="flex items-end gap-3">
               <div className="flex-1 relative">
                 <div 
@@ -175,14 +208,14 @@ export function CodeModeView({
                     variant="ghost"
                     size="sm"
                     onClick={handleFileUploadClick}
-                    className={`ml-3 p-3 h-12 w-12 rounded-2xl transition-all duration-300 flex-shrink-0 ${
+                    className={`ml-3 p-2 h-10 w-10 rounded-full transition-all duration-300 flex-shrink-0 ${
                       theme === "light"
                         ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                         : "text-gray-400 hover:bg-gray-700 hover:text-gray-300"
                     }`}
                     title="上传文件"
                   >
-                    <Paperclip className="w-5 h-5" />
+                    <Paperclip className="w-4 h-4" />
                   </Button>
 
                   {/* 输入框 */}
@@ -193,8 +226,12 @@ export function CodeModeView({
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyPress={onKeyPress}
                       placeholder="输入修改需求..."
-                      className="px-4 py-4 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent pr-16"
-                      style={{ height: '72px' }}
+                      className={`px-4 py-3 w-full border-0 rounded-3xl text-base transition-all duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent pr-14 ${
+                        theme === "light"
+                          ? "text-gray-900 placeholder-gray-400"
+                          : "text-white placeholder-gray-500"
+                      }`}
+                      style={{ height: '56px' }}
                       disabled={isGenerating}
                     />
                     
@@ -203,39 +240,18 @@ export function CodeModeView({
                       onClick={onSendMessage}
                       disabled={!inputValue.trim() || isGenerating}
                       size="sm"
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 w-12 h-12 p-0 rounded-2xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 p-0 rounded-full hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 z-20"
                       style={{
                         background: !inputValue.trim() || isGenerating 
                           ? '#9CA3AF' 
                           : 'linear-gradient(135deg, #34D399 0%, #2DD4BF 50%, #22D3EE 100%)',
                       }}
                     >
-                      <Send className="w-5 h-5 text-white" />
+                      <Send className="w-4 h-4 text-white" />
                     </Button>
                   </div>
                 </div>
               </div>
-            </div>
-            
-            {/* 快捷操作建议 */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                "修改配色方案",
-                "调整布局结构", 
-                "添加新功能",
-                "优化移动端显示",
-                "更新个人信息"
-              ].map((suggestion, index) => (
-                <Button
-                  key={index}
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setInputValue(suggestion)}
-                  className="text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-full border border-gray-200"
-                >
-                  {suggestion}
-                </Button>
-              ))}
             </div>
           </div>
         </div>

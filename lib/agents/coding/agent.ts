@@ -726,12 +726,41 @@ ${userInput}
       console.error('🤖 [AI调用] 调用失败，错误详情:', {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
-        type: typeof error
+        type: typeof error,
+        name: error instanceof Error ? error.name : 'Unknown'
       });
+      
+      // 🔧 检查具体的错误类型
+      if (error instanceof Error) {
+        console.error('🤖 [错误分析] 错误名称:', error.name);
+        console.error('🤖 [错误分析] 错误消息:', error.message);
+        
+        // 检查是否是网络相关错误
+        if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('timeout')) {
+          console.error('🤖 [网络错误] 检测到网络相关错误');
+        }
+        
+        // 检查是否是 API 限制错误
+        if (error.message.includes('rate limit') || error.message.includes('quota') || error.message.includes('429')) {
+          console.error('🤖 [API限制] 检测到API限制错误');
+        }
+        
+        // 检查是否是认证错误
+        if (error.message.includes('401') || error.message.includes('unauthorized') || error.message.includes('api key')) {
+          console.error('🤖 [认证错误] 检测到API认证错误');
+        }
+        
+        // 检查是否是超时错误
+        if (error.message.includes('超时') || error.message.includes('timeout')) {
+          console.error('🤖 [超时错误] API调用超时，可能是因为请求太复杂');
+        }
+      }
       
       // 🔧 回退到基础文件生成
       console.log('🤖 [AI调用] 使用回退方案生成基础文件...');
-      return this.generateFallbackFiles(userInput);
+      const fallbackFiles = this.generateFallbackFiles(userInput);
+      console.log('🤖 [回退方案] 生成了', fallbackFiles.length, '个回退文件');
+      return fallbackFiles;
     }
   }
 

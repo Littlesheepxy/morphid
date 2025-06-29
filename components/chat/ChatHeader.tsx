@@ -6,19 +6,25 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Eye, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useTheme } from '@/contexts/theme-context';
 import { motion } from 'framer-motion';
+import { PrivacyToggle } from '@/components/ui/privacy-toggle';
+import { ThemeToggle } from '@/components/navigation/theme-toggle';
 
 interface ChatHeaderProps {
   chatMode?: 'normal' | 'professional';
   onModeChange?: (mode: 'normal' | 'professional') => void;
   isCodeMode?: boolean;
   onBackToChat?: () => void;
+  isPrivacyMode?: boolean;
+  onPrivacyModeChange?: (enabled: boolean) => void;
 }
 
 export function ChatHeader({ 
   chatMode = 'normal', 
   onModeChange,
   isCodeMode = false,
-  onBackToChat
+  onBackToChat,
+  isPrivacyMode = false,
+  onPrivacyModeChange
 }: ChatHeaderProps) {
   const { theme } = useTheme();
 
@@ -60,7 +66,7 @@ export function ChatHeader({
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <motion.button
-                          className={`flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded-md transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                          className={`flex items-center gap-1 text-sm font-medium px-2 py-1 rounded-md transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 ${
                             theme === "light" ? "text-gray-700" : "text-gray-300"
                           }`}
                           whileHover={{ scale: 1.02 }}
@@ -105,15 +111,28 @@ export function ChatHeader({
             )}
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* 隐私模式开关 */}
+            {onPrivacyModeChange && (
+              <PrivacyToggle
+                isPrivacyMode={isPrivacyMode}
+                onToggle={onPrivacyModeChange}
+                variant="compact"
+              />
+            )}
+            
+            {/* 主题切换 */}
+            <ThemeToggle size="sm" />
+            
+            {/* 工作台按钮 */}
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               asChild
-              className={`rounded-lg border transition-all duration-300 h-8 px-3 text-sm ${
+              className={`rounded-lg transition-all duration-300 h-8 px-2 text-sm ${
                 theme === "light"
-                  ? "border-emerald-200 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50"
-                  : "border-emerald-700 text-emerald-400 hover:border-emerald-600 hover:bg-emerald-900/20"
+                  ? "text-emerald-700 hover:bg-emerald-50"
+                  : "text-emerald-400 hover:bg-emerald-900/20"
               }`}
             >
               <a href="/dashboard" className="flex items-center gap-1">

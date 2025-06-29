@@ -43,12 +43,28 @@ export const MessageBubble = function MessageBubble({
 
   // 🔧 流式消息检测逻辑
   const isStreamingMessage = useMemo(() => {
-    return (
+    const result = (
       message.streaming === true ||
       message.metadata?.streaming === true ||
       (isLast && isGenerating && !actualIsUser) ||
       (isLast && isStreaming && !actualIsUser)
     );
+    
+    // 调试日志
+    if (result) {
+      console.log('🌊 [MessageBubble] 检测到流式消息:', {
+        messageId: message.id,
+        streaming: message.streaming,
+        metadataStreaming: message.metadata?.streaming,
+        isLast,
+        isGenerating,
+        isStreaming,
+        actualIsUser,
+        contentLength: message.content?.length || 0
+      });
+    }
+    
+    return result;
   }, [message.streaming, message.metadata?.streaming, isLast, isGenerating, actualIsUser, isStreaming]);
 
   // 🔧 修复：自动显示表单逻辑
