@@ -322,8 +322,12 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
       const hasLinks = this.detectLinksInInput(userInput);
       const linkInfo = hasLinks ? this.extractLinkInfo(userInput) : '无链接';
 
-      // 构建prompt
-      const prompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, {
+      // 🔧 构建系统prompt（不包含对话历史和用户输入）
+      const sessionHistory = this.conversationHistory.get(sessionData.id) || [];
+      const turnCount = Math.floor(sessionHistory.length / 2);
+
+      // 构建系统prompt
+      const systemPrompt = formatPrompt(OPTIMIZED_INFO_COLLECTION_PROMPT, {
         user_role: welcomeData.user_role || '未知身份',
         use_case: welcomeData.use_case || '个人展示',
         style: welcomeData.style || '简约现代',
@@ -344,7 +348,8 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
         current_collected_data: JSON.stringify(welcomeData.current_collected_data || {}),
         available_tools: JSON.stringify(welcomeData.available_tools || []),
         context_for_next_agent: welcomeData.context_for_next_agent || '继续信息收集',
-        user_input: userInput
+        // 轮次信息
+        turn_count: turnCount
       });
       
       // 使用流式内容处理器
@@ -356,56 +361,53 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
       
       console.log(`🌊 [流式处理] 开始接收Claude响应流`);
       
-      // 流式调用Claude
-      for await (const chunk of generateStreamWithModel(
-        'claude',
-        'claude-sonnet-4-20250514',
-        [{ role: 'user', content: prompt }],
-        { maxTokens: 2000 }
-      )) {
-        chunkCount++;
-        
-        // 处理每个chunk
-        const processResult = contentProcessor.processChunk(chunk);
-        
-        // 如果有新的可见内容，发送给前端
-        if (processResult.newVisibleContent) {
-          console.log(`📤 [流式可见内容] 第${chunkCount}个块，新增内容长度: ${processResult.newVisibleContent.length}`);
-          
-          yield this.createResponse({
-            immediate_display: {
-              reply: contentProcessor.getCurrentVisibleContent(),
-              agent_name: this.name,
-              timestamp: new Date().toISOString()
-            },
-            system_state: {
-              intent: 'collecting',
-              done: false,
-              progress: Math.min(90, 20 + Math.floor(contentProcessor.getCurrentVisibleContent().length / 50)),
-              current_stage: '正在分析对话...',
-              metadata: {
-                streaming: true,
-                message_id: messageId,
-                stream_type: isFirstChunk ? 'start' : 'delta',
-                is_update: !isFirstChunk
-              }
+      // 🔧 使用对话历史模式调用Claude
+      const response = await this.callLLM(userInput, {
+        system: systemPrompt,
+        maxTokens: 2000,
+        sessionId: sessionData.id,
+        useHistory: true
+      });
+
+      console.log(`🔍 [AI响应] 收到完整响应，长度: ${response.length}`);
+      
+      // 直接处理完整响应
+      const processResult = contentProcessor.processChunk(response);
+      
+      // 发送可见内容
+      if (processResult.newVisibleContent) {
+        yield this.createResponse({
+          immediate_display: {
+            reply: contentProcessor.getCurrentVisibleContent(),
+            agent_name: this.name,
+            timestamp: new Date().toISOString()
+          },
+          system_state: {
+            intent: 'collecting',
+            done: false,
+            progress: 80,
+            current_stage: '分析完成',
+            metadata: {
+              streaming: false,
+              message_id: messageId,
+              stream_type: 'complete'
             }
-          });
-          
-          isFirstChunk = false;
-        }
-        
-        // 如果检测到完整的隐藏控制信息，处理完成逻辑
-        if (processResult.isComplete && processResult.hiddenControl) {
-          console.log(`🎉 [隐藏控制信息] 检测到完整的控制信息`);
-          finalHiddenControl = processResult.hiddenControl;
-          break;
-        }
+          }
+        });
+      }
+      
+      // 检查隐藏控制信息
+      if (processResult.isComplete && processResult.hiddenControl) {
+        console.log(`🎉 [隐藏控制信息] 检测到完整的控制信息`);
+        finalHiddenControl = processResult.hiddenControl;
       }
       
       // 流式完成：根据隐藏控制信息决定下一步
       if (finalHiddenControl) {
         console.log(`🔍 [流式完成] 解析最终控制信息:`, finalHiddenControl.collection_status);
+        
+        // 🔧 更新对话历史
+        this.updateConversationHistory(sessionData, userInput, contentProcessor.getCurrentVisibleContent());
         
         // 更新会话数据
         this.updateSessionData(sessionData, finalHiddenControl);
@@ -421,6 +423,10 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
       } else {
         // 如果没有检测到完整的控制信息，默认继续收集
         console.log(`⚠️ [未检测到控制信息] 默认继续收集模式`);
+        
+        // 🔧 即使没有控制信息也要更新对话历史
+        this.updateConversationHistory(sessionData, userInput, contentProcessor.getCurrentVisibleContent());
+        
         yield this.createDefaultContinueResponse(messageId);
       }
       
@@ -777,5 +783,25 @@ export class OptimizedInfoCollectionAgent extends BaseAgent {
     return links.map((link, index) => 
       `链接${index + 1}: ${link}`
     ).join('\n');
+  }
+
+  /**
+   * 更新对话历史 - 与Welcome Agent保持一致的格式
+   */
+  private updateConversationHistory(sessionData: SessionData, userInput: string, agentResponse: string): void {
+    const metadata = sessionData.metadata as any;
+    
+    // 初始化info collection对话历史（如果不存在）
+    if (!metadata.infoCollectionHistory) {
+      metadata.infoCollectionHistory = [];
+    }
+    
+    // 添加用户消息和助手回复（与Welcome Agent相同的格式）
+    metadata.infoCollectionHistory.push(
+      { role: 'user', content: userInput },
+      { role: 'assistant', content: agentResponse }
+    );
+
+    console.log(`💬 [对话历史更新] Info Collection历史长度: ${metadata.infoCollectionHistory.length}`);
   }
 } 

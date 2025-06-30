@@ -298,7 +298,10 @@ export function useChatSystemV2() {
             body: JSON.stringify({
               sessionId: targetSession.id,
               interactionType: 'interaction',
-              data: option
+              data: {
+                ...option,
+                message: content // 🔧 修复：确保用户的实际消息被传递
+              }
             })
           });
 

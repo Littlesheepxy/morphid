@@ -941,14 +941,14 @@ interface EncryptionService {
 ### ✅ 已完成功能 (2025-01-27)
 
 #### Phase 1: 基础页面结构 ✅
-- **数字身份广场页面** (`/dashboard/people`)
+- **数字身份广场页面** (`/people`)
   - 完整的响应式布局设计
   - 搜索和筛选功能界面
   - 用户卡片组件设计
   - 加载状态和骨架屏
   - 模拟数据展示
 
-- **灵感模板库页面** (`/dashboard/templates`)
+- **灵感模板库页面** (`/templates`)
   - 模板卡片展示界面
   - 分类和排序功能
   - 创建者信息展示
@@ -1000,7 +1000,7 @@ interface EncryptionService {
     - 认证申请提交
     - 重复申请检查
     - 认证状态查询
-  - 模板页面认证入口 (`app/(dashboard)/templates/page.tsx`)
+  - 模板页面认证入口 (`app/templates/page.tsx`)
     - 创作者认证横幅
     - 认证申请按钮集成
 

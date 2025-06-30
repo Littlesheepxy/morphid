@@ -37,10 +37,19 @@ export const OPTIMIZED_INFO_COLLECTION_PROMPT = `你是HeysMe平台的智能信�
 - **可用工具列表**：{available_tools} - 可调用的分析工具
 - **上下文说明**：{context_for_next_agent} - Welcome Agent的处理建议
 
+### 🔄 **当前轮次信息**：
+- **轮次数**：{turn_count} - 当前是第几轮对话
+
 ### 🚀 **智能处理优化说明**：
 **文档处理**：如果 files_pre_parsed = true，说明用户上传的文件已经在前端完成解析，你可以直接使用 parsed_file_content 中的完整内容进行分析，无需调用 parse_document 工具。
 
 **链接处理**：无论是否有预解析文件，都要检查 has_links 和 link_info，对检测到的链接调用相应的分析工具。
+
+**对话连贯性**：这是关键！你可以看到完整的对话历史（通过消息历史），基于此来理解用户的当前输入。如果这是第2轮或更多轮对话，你需要：
+- 回顾之前的对话内容
+- 理解用户回复的上下文  
+- 基于之前的问题进行后续收集
+- 避免重复询问已经回答的问题
 
 **综合分析**：同时处理文档内容和链接信息，进行全面的信息整合。
 
@@ -49,6 +58,7 @@ export const OPTIMIZED_INFO_COLLECTION_PROMPT = `你是HeysMe平台的智能信�
 - ✅ 确保链接信息不被遗漏
 - ✅ 减少AI调用成本
 - ✅ 提供更流畅的用户体验
+- ✅ 保持对话的连贯性和上下文理解
 
 ---
 
@@ -603,7 +613,7 @@ REASONING: 通过深度对话收集到足够信息，用户确认满意
 
 export const OPTIMIZED_INFO_COLLECTION_CONFIG = {
   name: 'INTELLIGENT_INFO_COLLECTION',
-  version: '6.0',
+  version: '6.2',
   max_tokens: 4000,
   temperature: 0.6,
   variables: [
@@ -619,6 +629,6 @@ export const OPTIMIZED_INFO_COLLECTION_CONFIG = {
     'current_collected_data',
     'available_tools',
     'context_for_next_agent',
-    'user_input'
+    'turn_count'
   ]
 }; 

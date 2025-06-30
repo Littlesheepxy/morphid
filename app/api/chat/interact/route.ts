@@ -7,6 +7,12 @@ import { agentOrchestrator } from '@/lib/utils/agent-orchestrator';
 function formatInteractionAsUserMessage(data: any, result: any): string {
   const parts = [];
   
+  // 🔧 修复：优先使用用户的实际输入消息
+  if (data.message && typeof data.message === 'string' && data.message.trim()) {
+    console.log(`📝 [用户实际输入] 使用用户消息: "${data.message}"`);
+    return data.message.trim();
+  }
+  
   // 添加用户的选择信息
   if (data.user_role) {
     parts.push(`我的身份是：${data.user_role}`);
@@ -21,12 +27,15 @@ function formatInteractionAsUserMessage(data: any, result: any): string {
     parts.push(`关注重点：${data.highlight_focus.join('、')}`);
   }
   
-  // 如果没有具体信息，使用summary
-  if (parts.length === 0 && result?.summary) {
-    return result.summary;
+  // 如果有具体选择信息，返回
+  if (parts.length > 0) {
+    return parts.join('，');
   }
   
-  return parts.length > 0 ? parts.join('，') : '我已经做出了选择';
+  // 🔧 修复：如果没有具体信息且没有用户消息，不使用summary
+  // summary通常是系统生成的，不应该替代用户的实际输入
+  console.log(`⚠️ [格式化警告] 没有找到用户的实际输入内容，使用默认消息`);
+  return '我想继续了解更多信息';
 }
 
 export async function POST(req: NextRequest) {

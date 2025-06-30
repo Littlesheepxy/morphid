@@ -20,6 +20,7 @@ const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
   "/people(.*)",
   "/templates(.*)",
+  "/chat(.*)",
   "/settings(.*)",
   "/api/pages(.*)",
   "/api/generate-page(.*)",
