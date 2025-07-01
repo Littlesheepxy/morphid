@@ -686,18 +686,16 @@ ${userInput}
       console.log('🤖 [AI调用] 步骤4: 提示词构建完成，长度:', fullPrompt.length);
       console.log('🤖 [AI调用] 步骤5: 开始调用大模型API...');
       
-      // 🔧 调用大模型API
-      const result = await generateWithModel(
-        'claude',
-        'claude-sonnet-4-20250514',
-        [{ role: 'user', content: fullPrompt }],
-        { maxTokens: 8000 }
-      );
+      // 🔧 使用统一的callLLM接口
+      const result = await this.callLLM(fullPrompt, {
+        maxTokens: 64000,
+        system: "你是HeysMe平台的V0风格代码生成专家，专门生成高质量的React + TypeScript项目。"
+      });
       
       console.log('🤖 [AI调用] 步骤6: 大模型API调用成功');
       
       // 提取响应文本
-      const responseText = 'text' in result ? result.text : JSON.stringify(result);
+      const responseText = typeof result === 'string' ? result : JSON.stringify(result);
       
       console.log('🤖 [AI调用] 步骤7: 响应文本提取完成，长度:', responseText.length);
       console.log('🤖 [AI调用] 步骤8: 响应预览:', responseText.substring(0, 500) + '...');
@@ -769,10 +767,22 @@ ${userInput}
    */
   private parseAICodeResponse(response: string): CodeFile[] {
     try {
+      // 🔧 首先尝试提取JSON代码块（处理```json格式）
+      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/i);
+      let jsonText = response;
+      
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim();
+        console.log('🤖 [JSON提取] 从markdown代码块中提取JSON，长度:', jsonText.length);
+      } else {
+        console.log('🤖 [JSON提取] 未找到markdown代码块，直接解析响应');
+      }
+      
       // 尝试解析JSON响应
-      const parsed = JSON.parse(response);
+      const parsed = JSON.parse(jsonText);
       
       if (parsed.files && Array.isArray(parsed.files)) {
+        console.log('🤖 [JSON解析] 成功解析JSON格式，包含', parsed.files.length, '个文件');
         return parsed.files.map((file: any) => ({
           filename: file.filename || 'unknown.txt',
           content: file.content || '',
@@ -786,6 +796,7 @@ ${userInput}
       
     } catch (error) {
       console.error('🤖 [解析错误] JSON解析失败:', error);
+      console.log('🤖 [解析错误] 尝试的JSON文本预览:', response.substring(0, 300));
       
       // 尝试从文本中提取代码块
       return this.extractCodeBlocksFromText(response);
@@ -807,20 +818,54 @@ ${userInput}
   private extractCodeBlocksFromText(text: string): CodeFile[] {
     const files: CodeFile[] = [];
     
-    // 匹配代码块模式：```filename\ncontent\n```
-    const codeBlockRegex = /```(\w+)?\s*(?:filename:?\s*([^\n]+))?\n([\s\S]*?)```/gi;
-    let match;
+    // 🔧 改进的代码块匹配模式
+    const patterns = [
+      // 模式1: ```typescript filename="app/page.tsx"
+      /```(\w+)\s+filename="([^"]+)"\s*\n([\s\S]*?)```/gi,
+      // 模式2: ```typescript:app/page.tsx
+      /```(\w+):([^\n]+)\s*\n([\s\S]*?)```/gi,
+      // 模式3: ```app/page.tsx
+      /```([^\s\n]+\.[^\s\n]+)\s*\n([\s\S]*?)```/gi,
+      // 模式4: 标准代码块（尝试从上下文推断文件名）
+      /```(\w+)?\s*\n([\s\S]*?)```/gi
+    ];
     
-    while ((match = codeBlockRegex.exec(text)) !== null) {
-      const [, language, filename, content] = match;
+    for (const regex of patterns) {
+      let match;
+      regex.lastIndex = 0; // 重置正则表达式索引
       
-      if (filename && content) {
-        files.push({
-          filename: filename.trim(),
-          content: content.trim(),
-          description: `从AI响应中提取的${language || ''}文件`,
-          language: language || 'text'
-        });
+      while ((match = regex.exec(text)) !== null) {
+        let filename, content, language;
+        
+        if (match.length === 4) {
+          // 模式1和2: 有明确的语言、文件名和内容
+          [, language, filename, content] = match;
+        } else if (match.length === 3) {
+          // 模式3: 文件名作为语言标识
+          [, filename, content] = match;
+          language = this.getLanguageFromExtension(filename);
+        } else {
+          // 模式4: 标准代码块，需要推断文件名
+          [, language, content] = match;
+          filename = this.inferFilenameFromContent(content, language || 'text');
+        }
+        
+        if (filename && content && content.trim().length > 0) {
+          // 避免重复添加相同的文件
+          if (!files.some(f => f.filename === filename.trim())) {
+            files.push({
+              filename: filename.trim(),
+              content: content.trim(),
+              description: `从AI响应中提取的${language || ''}文件`,
+              language: language || this.getLanguageFromExtension(filename)
+            });
+          }
+        }
+      }
+      
+      // 如果已经找到文件，跳出循环
+      if (files.length > 0) {
+        break;
       }
     }
     
@@ -828,10 +873,59 @@ ${userInput}
     
     // 如果没有提取到文件，返回回退文件
     if (files.length === 0) {
+      console.log('🤖 [文本提取] 未找到代码块，使用回退方案');
       return this.generateFallbackFiles(text.substring(0, 100));
     }
     
     return files;
+  }
+
+  /**
+   * 从文件扩展名推断语言
+   */
+  private getLanguageFromExtension(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    const langMap: Record<string, string> = {
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'js': 'javascript',
+      'jsx': 'javascript',
+      'json': 'json',
+      'css': 'css',
+      'html': 'html',
+      'md': 'markdown',
+      'yml': 'yaml',
+      'yaml': 'yaml'
+    };
+    return langMap[ext || ''] || 'text';
+  }
+
+  /**
+   * 从内容推断文件名
+   */
+  private inferFilenameFromContent(content: string, language: string): string {
+    // 尝试从内容中推断文件名
+    if (content.includes('export default function') && content.includes('HomePage')) {
+      return 'app/page.tsx';
+    }
+    if (content.includes('RootLayout')) {
+      return 'app/layout.tsx';
+    }
+    if (content.includes('"name":') && content.includes('"version":')) {
+      return 'package.json';
+    }
+    if (content.includes('tailwind') && content.includes('config')) {
+      return 'tailwind.config.js';
+    }
+    if (content.includes('@tailwind')) {
+      return 'app/globals.css';
+    }
+    
+    // 默认文件名
+    const ext = language === 'typescript' ? 'tsx' : 
+                language === 'javascript' ? 'jsx' : 
+                language === 'json' ? 'json' : 'txt';
+    return `generated-file.${ext}`;
   }
 
   /**

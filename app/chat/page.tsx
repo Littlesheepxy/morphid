@@ -55,52 +55,72 @@ export default function ChatPage() {
     if (currentSession && currentSession.conversationHistory && currentSession.conversationHistory.length > 0) {
       setHasStartedChat(true)
       
-          // 检查是否有代码生成相关的消息
-    const hasCodeGeneration = currentSession.conversationHistory.some(message => 
-      message.metadata?.systemState?.current_stage === '代码生成中' ||
-      message.metadata?.codeBlocks ||
-      // 🔧 检查直接代码生成模式
-      message.metadata?.directCodeGeneration ||
-      message.metadata?.projectGenerated ||
-      message.metadata?.projectFiles ||
-      // 🔧 检查不同的intent状态
-      message.metadata?.intent === 'project_complete'
-    )
+      // 检查是否有代码生成相关的消息
+      const hasCodeGeneration = currentSession.conversationHistory.some(message => 
+        message.metadata?.systemState?.current_stage === '代码生成中' ||
+        message.metadata?.codeBlocks ||
+        // 🔧 检查直接代码生成模式
+        message.metadata?.directCodeGeneration ||
+        message.metadata?.projectGenerated ||
+        message.metadata?.projectFiles ||
+        // 🔧 检查不同的intent状态
+        message.metadata?.intent === 'project_complete' ||
+        message.metadata?.intent === 'test_project_complete' ||
+        // 🔧 添加更多检查条件
+        message.metadata?.hasCodeFiles ||
+        message.metadata?.codeFilesReady ||
+        message.metadata?.expertMode
+      )
+      
+      console.log('🔍 [代码检测] hasCodeGeneration:', hasCodeGeneration, 'isCodeMode:', isCodeMode);
       
       if (hasCodeGeneration) {
         // 🔧 修复：无论是否已在代码模式，都要检查和更新代码
         if (!isCodeMode) {
-          setIsCodeMode(true)
+          console.log('🔄 [模式切换] 自动切换到代码模式');
+          setIsCodeMode(true);
         }
         
         // 提取生成的代码 - 支持多种数据源
         let extractedCode: any[] = []
         
-        // 1. 优先检查最新的项目文件（测试模式）
+        // 1. 优先检查最新的项目文件（专业模式）
         const projectMessages = currentSession.conversationHistory.filter(msg => 
           msg.metadata?.projectFiles && Array.isArray(msg.metadata.projectFiles)
         )
         
-                 if (projectMessages.length > 0) {
-           const latestProjectMessage = projectMessages[projectMessages.length - 1]
-           extractedCode = latestProjectMessage.metadata?.projectFiles || []
-           console.log('🎯 [代码提取] 从projectFiles提取到', extractedCode.length, '个文件')
-         } else {
-           // 2. 回退到传统的codeBlocks
-           const codeMessages = currentSession.conversationHistory.filter(msg => msg.metadata?.codeBlocks)
-           if (codeMessages.length > 0) {
-             const latestCodeMessage = codeMessages[codeMessages.length - 1]
-             extractedCode = latestCodeMessage.metadata?.codeBlocks || []
-             console.log('🎯 [代码提取] 从codeBlocks提取到', extractedCode.length, '个文件')
-           }
-         }
+        if (projectMessages.length > 0) {
+          const latestProjectMessage = projectMessages[projectMessages.length - 1]
+          extractedCode = latestProjectMessage.metadata?.projectFiles || []
+          console.log('🎯 [代码提取] 从projectFiles提取到', extractedCode.length, '个文件')
+        } else {
+          // 2. 回退到传统的codeBlocks
+          const codeMessages = currentSession.conversationHistory.filter(msg => msg.metadata?.codeBlocks)
+          if (codeMessages.length > 0) {
+            const latestCodeMessage = codeMessages[codeMessages.length - 1]
+            extractedCode = latestCodeMessage.metadata?.codeBlocks || []
+            console.log('🎯 [代码提取] 从codeBlocks提取到', extractedCode.length, '个文件')
+          }
+        }
         
         // 🔧 修复：只有当提取到的代码与当前代码不同时才更新
-        if (extractedCode.length > 0 && extractedCode.length !== generatedCode.length) {
-          setGeneratedCode(extractedCode)
-          console.log('✅ [代码设置] 成功设置生成的代码，共', extractedCode.length, '个文件')
-        } else if (extractedCode.length === 0) {
-          console.log('⚠️ [代码提取] 未找到任何代码文件')
+        if (extractedCode.length > 0) {
+          // 检查文件内容是否真的不同，而不只是数量
+          const isDifferent = extractedCode.length !== generatedCode.length || 
+                             extractedCode.some((file, index) => 
+                               !generatedCode[index] || 
+                               file.filename !== generatedCode[index].filename ||
+                               file.content !== generatedCode[index].content
+                             );
+          
+          if (isDifferent) {
+            setGeneratedCode(extractedCode);
+            console.log('✅ [代码设置] 成功设置生成的代码，共', extractedCode.length, '个文件');
+          } else {
+            console.log('ℹ️ [代码设置] 代码内容未变化，跳过更新');
+          }
+        } else {
+          console.log('⚠️ [代码提取] 未找到任何代码文件');
         }
       }
     }
