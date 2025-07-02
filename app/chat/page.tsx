@@ -69,7 +69,8 @@ export default function ChatPage() {
         // 🔧 添加更多检查条件
         message.metadata?.hasCodeFiles ||
         message.metadata?.codeFilesReady ||
-        message.metadata?.expertMode
+        // 🔧 修复：只有当expertMode有实际代码文件时才切换，等待用户输入时不切换
+        (message.metadata?.expertMode && !message.metadata?.awaitingUserInput)
       )
       
       console.log('🔍 [代码检测] hasCodeGeneration:', hasCodeGeneration, 'isCodeMode:', isCodeMode);
@@ -188,30 +189,36 @@ export default function ChatPage() {
     let sendOptions: any = {}
 
     if (isInExpertMode) {
-      // 🎯 专业模式测试：添加专业模式标识和强制使用coding agent
-      messageToSend = `[FORCE_AGENT:coding][TEST_MODE]${inputValue}`
+      // 🎯 专业模式测试：通过context参数传递模式信息
+      messageToSend = inputValue
       sendOptions = {
         forceAgent: 'coding',
-        expertMode: true
+        context: {
+          expertMode: true,
+          testMode: true,
+          forceExpertMode: true
+        }
       }
-      console.log('🎯 [专业模式测试发送] 消息:', messageToSend)
+      console.log('🎯 [专业模式测试发送] 消息:', messageToSend, '选项:', sendOptions)
     } else if (chatMode === 'professional') {
-      // 专业模式：自动进入代码模式，使用专业模式 prompt
-      messageToSend = `[FORCE_AGENT:coding][TEST_MODE]${inputValue}`
+      // 专业模式：通过context参数传递模式信息
+      messageToSend = inputValue
       sendOptions = {
         forceAgent: 'coding',
-        expertMode: true
+        context: {
+          expertMode: true,
+          forceExpertMode: true
+        }
       }
       // 自动切换到代码模式
       if (!isCodeMode) {
         setIsCodeMode(true)
         setGeneratedCode([])
       }
-      console.log('🎯 [专业模式发送] 消息:', messageToSend)
+      console.log('🎯 [专业模式发送] 消息:', messageToSend, '选项:', sendOptions)
     } else {
-      // 普通模式：直接使用用户输入，添加模式标识
-      messageToSend = `[普通模式] ${inputValue}`
-      // 🔧 修复：普通模式不需要特殊选项，确保使用正常的消息流
+      // 普通模式：直接使用用户输入
+      messageToSend = inputValue
       sendOptions = undefined
     }
 
@@ -437,33 +444,7 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
       console.log('🎯 [专业模式测试] 会话ID:', session?.id);
 
       // 显示专业模式提示
-      const expertModePrompt = `🎯 **专业模式已启动！**
-
-专业模式使用最先进的代码生成能力，为你创建V0级别的高质量Web项目。
-
-### 💡 支持的项目类型：
-- 个人简历/作品集网站
-- 商业展示页面  
-- 博客网站
-- 产品介绍页
-- 公司官网
-- 登陆页面
-- 仪表板界面
-- 其他任何Web应用
-
-### 🔧 专业特性：
-- V0 级别的代码质量
-- Next.js 15 + TypeScript
-- Tailwind CSS + shadcn/ui
-- 响应式设计和无障碍支持
-- 现代化动画效果
-
-请告诉我你想要创建什么类型的项目！
-
-**示例输入：**
-- "创建一个个人简历网站"
-- "生成一个产品展示页面" 
-- "制作一个公司介绍网站"`
+      const expertModePrompt = `🎯 **专业模式已启动！** 请告诉我你想创建什么类型的Web项目？`
 
       // 手动添加一个系统提示消息到会话历史
       if (session) {
@@ -493,6 +474,14 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
   const handleBackToChat = () => {
     setIsCodeMode(false)
     setGeneratedCode([])
+    
+    // 🔧 清理专家模式状态：移除等待用户输入的专家模式消息
+    if (currentSession) {
+      const filteredHistory = currentSession.conversationHistory.filter(msg => 
+        !(msg.metadata?.expertMode && msg.metadata?.awaitingUserInput)
+      )
+      currentSession.conversationHistory = filteredHistory
+    }
   }
 
   // 处理侧边栏折叠切换

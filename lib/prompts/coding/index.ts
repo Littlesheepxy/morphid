@@ -756,4 +756,11 @@ export const CODING_TEST_MODE_CONFIG = {
   max_tokens: 8000,
   temperature: 0.1,
   variables: []
-}; 
+};
+
+/**
+ * 获取编码提示词
+ */
+export function getCodingPrompt(userInput: string): string {
+  return CODING_AGENT_PROMPT + `\n\n用户需求：${userInput}`;
+} 

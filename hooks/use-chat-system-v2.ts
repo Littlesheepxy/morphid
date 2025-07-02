@@ -332,12 +332,15 @@ export function useChatSystemV2() {
             message: content
           };
 
-          // 如果option中包含forceAgent或testMode，添加到请求中
+          // 🔧 修复：支持context参数传递
           if (option?.forceAgent) {
             requestBody.forceAgent = option.forceAgent;
           }
           if (option?.testMode) {
             requestBody.testMode = option.testMode;
+          }
+          if (option?.context) {
+            requestBody.context = option.context;
           }
 
           const response = await fetch('/api/chat/stream', {

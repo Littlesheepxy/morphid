@@ -4,11 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { User, Sparkles } from 'lucide-react';
+import { User, Sparkles, FileCode, FolderOpen } from 'lucide-react';
 import { LoadingText, StreamingText, LoadingDots } from '@/components/ui/loading-text';
 import { UnifiedLoading, ThinkingLoader, GeneratingLoader, SimpleTextLoader } from '@/components/ui/unified-loading';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { StreamingMarkdown } from '@/components/ui/streaming-markdown';
+import { FileCreationItem } from '@/components/editor/FileCreationItem';
 import { cleanTextContent } from '@/lib/utils';
 
 interface MessageBubbleProps {
@@ -34,12 +35,23 @@ export const MessageBubble = function MessageBubble({
   const [showInteraction, setShowInteraction] = useState(false);
   const [contentComplete, setContentComplete] = useState(!message.metadata?.streaming);
   
+  // 🆕 文件创建状态管理
+  const [fileCreationStatus, setFileCreationStatus] = useState<Record<string, {
+    status: 'pending' | 'creating' | 'created' | 'error';
+    progress: number;
+  }>>({});
+  
   // 🔧 修复：更精确的用户消息判断
   const isUser = message.sender === 'user' || message.agent === 'user';
   const isSystemMessage = message.agent === 'system' || message.sender === 'assistant' || message.sender === 'system';
   
   // 🔧 确保系统消息显示在左侧
   const actualIsUser = isUser && !isSystemMessage;
+
+  // 🆕 检测是否包含代码文件
+  const hasCodeFiles = message.metadata?.hasCodeFiles || false;
+  const codeFiles = message.metadata?.projectFiles || [];
+  const fileCreationProgress = message.metadata?.fileCreationProgress || [];
 
   // 🔧 流式消息检测逻辑
   const isStreamingMessage = useMemo(() => {
@@ -60,12 +72,50 @@ export const MessageBubble = function MessageBubble({
         isGenerating,
         isStreaming,
         actualIsUser,
-        contentLength: message.content?.length || 0
+        contentLength: message.content?.length || 0,
+        hasCodeFiles,
+        codeFilesCount: codeFiles.length
       });
     }
     
     return result;
-  }, [message.streaming, message.metadata?.streaming, isLast, isGenerating, actualIsUser, isStreaming]);
+  }, [message.streaming, message.metadata?.streaming, isLast, isGenerating, actualIsUser, isStreaming, hasCodeFiles, codeFiles.length]);
+
+  // 🆕 处理文件创建状态更新
+  useEffect(() => {
+    if (hasCodeFiles && fileCreationProgress.length > 0) {
+      const newStatus: Record<string, { status: any; progress: number }> = {};
+      
+      fileCreationProgress.forEach((fileProgress: any) => {
+        newStatus[fileProgress.filename] = {
+          status: fileProgress.status || 'creating',
+          progress: fileProgress.progress || 0
+        };
+      });
+      
+      setFileCreationStatus(newStatus);
+    }
+  }, [hasCodeFiles, fileCreationProgress]);
+
+  // 🆕 文件创建完成回调
+  const handleFileCreated = (filename: string) => {
+    setFileCreationStatus(prev => ({
+      ...prev,
+      [filename]: {
+        ...prev[filename],
+        status: 'created',
+        progress: 100
+      }
+    }));
+    
+    // 触发全局文件创建事件
+    window.dispatchEvent(new CustomEvent('fileCreated', { 
+      detail: { 
+        filename, 
+        content: codeFiles.find((f: any) => f.filename === filename)?.content || ''
+      } 
+    }));
+  };
 
   // 🔧 修复：自动显示表单逻辑
   useEffect(() => {
@@ -367,6 +417,66 @@ export const MessageBubble = function MessageBubble({
               ))}
             </div>
           )} */}
+
+          {/* 🆕 文件创建状态面板 */}
+          {!actualIsUser && hasCodeFiles && codeFiles.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <FolderOpen className="w-4 h-4 text-blue-600" />
+                <h4 className="font-semibold text-gray-900">
+                  正在创建项目文件
+                </h4>
+                <span className="text-sm text-gray-500">
+                  ({Object.values(fileCreationStatus).filter(s => s.status === 'created').length}/{codeFiles.length})
+                </span>
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {codeFiles.map((file: any, index: number) => {
+                  const status = fileCreationStatus[file.filename];
+                  return (
+                    <FileCreationItem
+                      key={file.filename}
+                      filename={file.filename}
+                      status={status?.status || 'pending'}
+                      content={file.content}
+                      progress={status?.progress || 0}
+                      size={file.content?.length || 0}
+                      onFileCreated={() => handleFileCreated(file.filename)}
+                    />
+                  );
+                })}
+              </div>
+              
+              {/* 总体进度 */}
+              {Object.keys(fileCreationStatus).length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+                    <span>总体进度</span>
+                    <span>
+                      {Math.round(
+                        (Object.values(fileCreationStatus).filter(s => s.status === 'created').length / codeFiles.length) * 100
+                      )}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-200 rounded-full">
+                    <motion.div
+                      className="h-full bg-green-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ 
+                        width: `${(Object.values(fileCreationStatus).filter(s => s.status === 'created').length / codeFiles.length) * 100}%` 
+                      }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* 🔧 修复：智能确认表单 - 简约设计 */}
           {!actualIsUser && 

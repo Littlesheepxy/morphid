@@ -46,11 +46,13 @@ export class AgentOrchestrator {
    * @param sessionId 会话ID
    * @param userInput 用户输入
    * @param sessionData 可选的会话数据
+   * @param context 可选的上下文参数
    */
   async* processUserInputStreaming(
     sessionId: string,
     userInput: string,
-    sessionData?: SessionData
+    sessionData?: SessionData,
+    context?: Record<string, any>
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     console.log(`\n🚀 [编排器] 开始处理用户输入`);
     console.log(`📝 [用户输入] ${userInput}`);
@@ -63,7 +65,7 @@ export class AgentOrchestrator {
       console.log(`📊 [会话状态] 当前阶段: ${session.metadata.progress.currentStage}, 进度: ${session.metadata.progress.percentage}%`);
       
       // 确定当前Agent
-      const agentName = this.determineCurrentAgent(session, userInput);
+      const agentName = this.determineCurrentAgent(session, userInput, context);
       const agent = this.agents.get(agentName);
       
       if (!agent) {
@@ -71,10 +73,10 @@ export class AgentOrchestrator {
       }
 
       this.currentAgent = agentName;
-      console.log(`🎯 [编排器] 使用 ${agentName} 处理请求`);
+      console.log(`🎯 [编排器] 使用 ${agentName} 处理请求，context:`, context);
 
       // 流式执行Agent处理
-      yield* this.executeAgentStreaming(agent, agentName, userInput, session);
+      yield* this.executeAgentStreaming(agent, agentName, userInput, session, context);
 
     } catch (error) {
       console.error(`❌ [编排器] 流程错误:`, error);
@@ -335,12 +337,18 @@ export class AgentOrchestrator {
   /**
    * 确定当前应该使用的Agent
    */
-  private determineCurrentAgent(session: SessionData, userInput: string): string {
-    // 检查是否有强制指定的Agent
+  private determineCurrentAgent(session: SessionData, userInput: string, context?: Record<string, any>): string {
+    // 🔧 优先检查context中的强制Agent指定
+    if (context?.forceAgent) {
+      console.log(`🎯 [编排器] Context中强制使用Agent: ${context.forceAgent}`);
+      return context.forceAgent;
+    }
+    
+    // 检查是否有强制指定的Agent（保留兼容性）
     const forceAgentMatch = userInput.match(/\[FORCE_AGENT:(\w+)\]/);
     if (forceAgentMatch) {
       const forceAgent = forceAgentMatch[1];
-      console.log(`🎯 [编排器] 强制使用Agent: ${forceAgent}`);
+      console.log(`🎯 [编排器] 用户输入中强制使用Agent: ${forceAgent}`);
       return forceAgent;
     }
     
@@ -358,13 +366,14 @@ export class AgentOrchestrator {
     agent: BaseAgent,
     agentName: string,
     userInput: string,
-    session: SessionData
+    session: SessionData,
+    context?: Record<string, any>
   ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
     const agentStartTime = new Date();
     console.log(`⏰ [编排器] ${agentName} 开始处理 (${agentStartTime.toISOString()})`);
     
     let responseCount = 0;
-    for await (const response of agent.process({ user_input: userInput }, session)) {
+    for await (const response of agent.process({ user_input: userInput }, session, context)) {
       responseCount++;
       console.log(`📤 [编排器] ${agentName} 第${responseCount}个响应:`, {
         hasReply: !!response.immediate_display?.reply,
@@ -512,7 +521,7 @@ export class AgentOrchestrator {
     }
 
     // 对于其他agent，直接启动（传递空字符串作为初始输入）
-    yield* this.executeAgentStreaming(nextAgent, nextAgentName, userInput || '', session);
+    yield* this.executeAgentStreaming(nextAgent, nextAgentName, userInput || '', session, undefined);
   }
 
   /**

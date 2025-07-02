@@ -4,27 +4,19 @@ import {
   AgentCapabilities
 } from '@/lib/types/streaming';
 import { SessionData } from '@/lib/types/session';
-import { z } from 'zod';
-import {
-  CodeFile,
-  extractUserGoal,
-  extractUserType,
-  extractDesignData,
-  generatePackageJson,
-  generateTailwindConfig,
-  generateTsConfig,
-  generateNextConfig,
-  generatePostCssConfig,
-  generateUtils,
-  generateGlobalStyles,
-  generateDataConfig,
-  generateDeploymentGuide,
-  generateReadme,
-  getSectionComponentName
-} from './utils';
 
 /**
- * Coding Agent - 代码生成和项目构建
+ * 代码文件接口
+ */
+export interface CodeFile {
+  filename: string;
+  content: string;
+  description: string;
+  language: string;
+}
+
+/**
+ * Coding Agent - AI驱动的代码生成
  */
 export class CodingAgent extends BaseAgent {
   constructor() {
@@ -40,7 +32,7 @@ export class CodingAgent extends BaseAgent {
   }
 
   /**
-   * 主处理流程 - 生成完整的代码项目
+   * 主处理流程 - AI驱动的代码生成
    */
   async* process(
     input: any,
@@ -50,64 +42,178 @@ export class CodingAgent extends BaseAgent {
     try {
       const userInput = input.user_input || '';
       
-      // 检查是否为专业模式测试 - 直接进行代码生成，跳过设计阶段
-      const isExpertMode = userInput.includes('[TEST_MODE]') || context?.expertMode === true;
-      const cleanInput = userInput
-        .replace(/\[FORCE_AGENT:\w+\]/g, '')  // 使用全局标志 g
-        .replace(/\[TEST_MODE\]/g, '')        // 使用全局标志 g
-        .trim();
-      
       console.log('🔧 [CodingAgent] 输入分析:', {
-        原始输入: userInput,
-        是否专业模式: isExpertMode,
-        清理后输入: cleanInput
+        用户输入: userInput,
+        上下文: context
       });
       
-      if (isExpertMode) {
-        // 🔧 专业模式：使用专业模式 prompt 直接根据用户需求生成代码
-        yield* this.handleExpertModeGeneration(cleanInput, sessionData);
-        return;
-      }
+      // 🚀 统一使用AI生成模式
+      yield* this.handleAIGeneration(userInput, sessionData, context);
 
-      // 原有的正常模式逻辑 - 需要设计数据
-      // 步骤1: 提取设计数据
-      yield this.createThinkingResponse('正在解析页面设计方案...', 80);
-      await this.delay(1000);
+    } catch (error) {
+      yield await this.handleError(error as Error, sessionData, context);
+    }
+  }
 
-      const designData = extractDesignData(sessionData);
-      if (!designData) {
-        throw new Error('缺少设计数据，请先完成页面设计阶段');
-      }
+  /**
+   * AI生成模式处理
+   */
+  private async* handleAIGeneration(
+    userInput: string, 
+    sessionData: SessionData,
+    context?: Record<string, any>
+  ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
+    try {
+      // 步骤1: 思考阶段
+      yield this.createThinkingResponse('🤔 正在分析您的需求...', 10);
+      await this.delay(500);
 
-      const userType = extractUserType(sessionData);
-      const userGoal = extractUserGoal(sessionData);
-      const collectedData = sessionData.collectedData;
+      yield this.createThinkingResponse('🎯 准备调用AI生成代码...', 20);
+      await this.delay(500);
 
-      // 步骤2: 生成项目配置文件
-      yield this.createThinkingResponse('正在生成项目配置文件...', 85);
-      await this.delay(1200);
+      // 🆕 统一使用流式输出，不再区分测试模式和常规模式
+      console.log('🌊 [流式模式] 使用流式AI代码生成');
+      yield* this.handleStreamingAIGeneration(userInput, sessionData, context);
 
-      const configFiles = this.generateConfigFiles(designData.designStrategy, userType);
-
-      // 步骤3: 生成核心代码文件
-      yield this.createThinkingResponse('正在生成React组件和页面代码...', 90);
-      await this.delay(1500);
-
-      const codeFiles = await this.generateCodeFiles(designData.designStrategy, collectedData, userType);
-
-      // 步骤4: 生成部署文档
-      yield this.createThinkingResponse('正在生成部署文档和说明...', 95);
-      await this.delay(800);
-
-      const documentationFiles = this.generateDocumentationFiles(designData.designStrategy, userGoal, userType);
-
-      // 整合所有文件
-      const allFiles = [...configFiles, ...codeFiles, ...documentationFiles];
-
-      // 步骤5: 输出完整项目
+    } catch (error) {
+      console.error('❌ [AI生成错误]:', error);
       yield this.createResponse({
         immediate_display: {
-          reply: `🎉 代码生成完成！已为您创建了一个完整的${userType}个人网站项目，包含${allFiles.length}个文件。`,
+          reply: '抱歉，AI代码生成过程中遇到了问题。请重试或调整您的需求。',
+          agent_name: this.name,
+          timestamp: new Date().toISOString()
+        },
+        system_state: {
+          intent: 'error',
+          done: true
+        }
+      });
+    }
+  }
+
+  /**
+   * 🆕 流式AI代码生成处理
+   */
+  private async* handleStreamingAIGeneration(
+    userInput: string, 
+    sessionData: SessionData,
+    context?: Record<string, any>
+  ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
+    try {
+      console.log('🤖 [流式AI调用] 步骤1: 开始导入模块...');
+      
+      // 动态导入提示词
+      const { getCodingPrompt, CODING_EXPERT_MODE_PROMPT } = await import('@/lib/prompts/coding');
+      
+      console.log('🤖 [流式AI调用] 步骤2: 提示词导入成功');
+      
+      // 🔧 判断使用哪种模式的prompt
+      let prompt: string;
+      const isExpertMode = this.isExpertMode(sessionData, context);
+      
+      if (isExpertMode) {
+        // 专业模式：用户直接对话
+        prompt = CODING_EXPERT_MODE_PROMPT + `\n\n用户需求：${userInput}`;
+        console.log('🎯 [模式选择] 使用专业模式 CODING_EXPERT_MODE_PROMPT');
+      } else {
+        // 正常模式：来自prompt-output agent
+        prompt = getCodingPrompt(userInput);
+        console.log('🎯 [模式选择] 使用正常模式 CODING_AGENT_PROMPT');
+      }
+      
+      console.log('🤖 [流式AI调用] 步骤3: 提示词构建完成，长度:', prompt.length);
+      
+      // 🆕 使用流式AI模型生成
+      const { generateStreamWithModel } = await import('@/lib/ai-models');
+      
+      console.log('🌊 [流式生成] 开始流式调用大模型API...');
+      
+      let accumulatedResponse = '';
+      let chunkCount = 0;
+      let messageId = `coding-stream-${Date.now()}`;
+      
+      // 🆕 分离内容的变量
+      let extractedText = '';
+      let extractedCodeFiles: CodeFile[] = [];
+      let lastTextLength = 0;
+      
+      // 流式调用AI模型
+      for await (const chunk of generateStreamWithModel(
+        'claude',
+        'claude-sonnet-4-20250514',
+        [
+          { role: 'system', content: '你是一个专业的全栈开发工程师，专门生成高质量的代码项目。' },
+          { role: 'user', content: prompt }
+        ],
+        { maxTokens: 64000 }
+      )) {
+        chunkCount++;
+        accumulatedResponse += chunk;
+        
+        console.log(`📤 [流式输出] 第${chunkCount}个块，新增内容长度: ${chunk.length}, 累积长度: ${accumulatedResponse.length}`);
+        
+        // 🆕 实时分离文本和代码
+        const separated = this.separateTextAndCode(accumulatedResponse);
+        extractedText = separated.text;
+        extractedCodeFiles = separated.codeFiles;
+        
+        // 🆕 计算新增的文本内容
+        const newTextContent = extractedText.slice(lastTextLength);
+        lastTextLength = extractedText.length;
+        
+        const progress = Math.min(90, 30 + Math.floor(accumulatedResponse.length / 200));
+        
+        // 🆕 发送分离后的内容
+        yield this.createResponse({
+          immediate_display: {
+            reply: extractedText, // 🆕 只发送纯文本内容到对话框
+            agent_name: this.name,
+            timestamp: new Date().toISOString()
+          },
+          system_state: {
+            intent: 'generating',
+            done: false,
+            progress: progress,
+            current_stage: `流式生成中... (${chunkCount} 块)`,
+            metadata: {
+              streaming: true,
+              message_id: messageId,
+              chunk_count: chunkCount,
+              accumulated_length: accumulatedResponse.length,
+              estimated_lines: Math.floor(accumulatedResponse.length / 50),
+              is_update: chunkCount > 1,
+              latest_chunk: chunk,
+              // 🆕 代码文件相关信息
+              hasCodeFiles: extractedCodeFiles.length > 0,
+              codeFilesReady: extractedCodeFiles.length > 0,
+              projectFiles: extractedCodeFiles,
+              totalFiles: extractedCodeFiles.length,
+              newTextContent: newTextContent, // 🆕 新增的文本内容
+              // 🆕 文件创建状态
+              fileCreationProgress: extractedCodeFiles.map((file, index) => ({
+                filename: file.filename,
+                status: 'creating',
+                progress: Math.min(100, (chunkCount / 10) * 100), // 模拟进度
+                size: file.content.length
+              }))
+            }
+          }
+        });
+      }
+      
+      console.log('🤖 [流式AI调用] 步骤4: 流式生成完成，总长度:', accumulatedResponse.length);
+      
+      // 解析AI响应（使用现有的解析逻辑作为备选）
+      const finalFiles = extractedCodeFiles.length > 0 ? extractedCodeFiles : this.parseAICodeResponse(accumulatedResponse);
+      console.log('🤖 [流式AI调用] 步骤5: 解析完成，得到', finalFiles.length, '个文件');
+      
+      // 步骤3: 完成响应
+      yield this.createThinkingResponse('✨ 代码生成完成！', 100);
+
+      yield this.createResponse({
+        immediate_display: {
+          reply: `🎉 AI代码生成完成！已为您创建了一个完整的项目，包含 ${finalFiles.length} 个文件。\n\n` +
+                 `📁 生成的文件：\n${finalFiles.map(f => `• ${f.filename} - ${f.description}`).join('\n')}`,
           agent_name: this.name,
           timestamp: new Date().toISOString()
         },
@@ -117,649 +223,77 @@ export class CodingAgent extends BaseAgent {
           progress: 100,
           current_stage: '项目生成完成',
           metadata: {
-            projectGenerated: true,
-            totalFiles: allFiles.length,
-            generatedAt: new Date().toISOString(),
-            projectFiles: allFiles
-          }
-        }
-      });
-
-      // 更新会话数据
-      this.updateSessionWithProject(sessionData, allFiles);
-
-    } catch (error) {
-      yield await this.handleError(error as Error, sessionData, context);
-    }
-  }
-
-  /**
-   * 生成项目配置文件
-   */
-  private generateConfigFiles(strategy: any, userType: string): CodeFile[] {
-    return [
-      {
-        filename: 'package.json',
-        content: generatePackageJson(strategy, userType),
-        description: 'Node.js项目配置文件，包含依赖和脚本',
-        language: 'json'
-      },
-      {
-        filename: 'tailwind.config.js',
-        content: generateTailwindConfig(strategy, userType),
-        description: 'Tailwind CSS配置文件',
-        language: 'javascript'
-      },
-      {
-        filename: 'tsconfig.json',
-        content: generateTsConfig(),
-        description: 'TypeScript编译配置',
-        language: 'json'
-      },
-      {
-        filename: 'next.config.js',
-        content: generateNextConfig(),
-        description: 'Next.js框架配置',
-        language: 'javascript'
-      },
-      {
-        filename: 'postcss.config.js',
-        content: generatePostCssConfig(),
-        description: 'PostCSS处理器配置',
-        language: 'javascript'
-      }
-    ];
-  }
-
-  /**
-   * 生成代码文件
-   */
-  private async generateCodeFiles(strategy: any, collectedData: any, userType: string): Promise<CodeFile[]> {
-    const codeFiles: CodeFile[] = [];
-
-    // 工具函数
-    codeFiles.push({
-      filename: 'lib/utils.ts',
-      content: generateUtils(),
-      description: '通用工具函数',
-      language: 'typescript'
-    });
-
-    // 全局样式
-    codeFiles.push({
-      filename: 'app/globals.css',
-      content: generateGlobalStyles(),
-      description: '全局CSS样式文件',
-      language: 'css'
-    });
-
-    // 数据配置
-    codeFiles.push({
-      filename: 'lib/config.ts',
-      content: generateDataConfig(collectedData, userType),
-      description: '网站数据配置文件',
-      language: 'typescript'
-    });
-
-    // 主页面
-    codeFiles.push({
-      filename: 'app/page.tsx',
-      content: this.generateMainPage(strategy),
-      description: 'React主页面组件',
-      language: 'typescript'
-    });
-
-    // 布局文件
-    codeFiles.push({
-      filename: 'app/layout.tsx',
-      content: this.generateLayout(strategy),
-      description: 'Next.js应用布局',
-      language: 'typescript'
-    });
-
-    // 组件文件
-    const componentFiles = await this.generateComponents(strategy, userType);
-    codeFiles.push(...componentFiles);
-
-    return codeFiles;
-  }
-
-  /**
-   * 生成文档文件
-   */
-  private generateDocumentationFiles(strategy: any, userGoal: string, userType: string): CodeFile[] {
-    return [
-      {
-        filename: 'README.md',
-        content: generateReadme(strategy, userGoal, userType),
-        description: '项目说明文档',
-        language: 'markdown'
-      },
-      {
-        filename: 'DEPLOYMENT.md',
-        content: generateDeploymentGuide(),
-        description: '部署指导文档',
-        language: 'markdown'
-      }
-    ];
-  }
-
-  /**
-   * 生成主页面代码
-   */
-  private generateMainPage(strategy: any): string {
-    const sections = strategy.sections || [];
-    const sectionImports = sections
-      .map((section: any) => getSectionComponentName(section.type))
-      .filter((name: string, index: number, arr: string[]) => arr.indexOf(name) === index);
-
-    return `import { siteConfig } from '@/lib/config'
-${sectionImports.map((name: string) => `import { ${name} } from '@/components/sections/${name}'`).join('\n')}
-
-export default function Home() {
-  return (
-    <main className="min-h-screen bg-background">
-      ${sections.map((section: any) => {
-        const componentName = getSectionComponentName(section.type);
-        return `<${componentName} data={siteConfig} />`;
-      }).join('\n      ')}
-    </main>
-  )
-}`;
-  }
-
-  /**
-   * 生成布局文件
-   */
-  private generateLayout(strategy: any): string {
-    return `import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: '个人作品集网站',
-  description: '基于Next.js构建的现代化个人作品集网站',
-}
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="zh-CN">
-      <body className={inter.className}>{children}</body>
-    </html>
-  )
-}`;
-  }
-
-  /**
-   * 生成组件文件
-   */
-  private async generateComponents(strategy: any, userType: string): Promise<CodeFile[]> {
-    const components: CodeFile[] = [];
-    const sections = strategy.sections || [];
-
-    // 为每个unique组件类型生成文件
-    const componentSet = new Set(sections.map((section: any) => getSectionComponentName(section.type)));
-    const uniqueComponents = Array.from(componentSet) as string[];
-
-    for (const componentName of uniqueComponents) {
-      components.push({
-        filename: `components/sections/${componentName}.tsx`,
-        content: this.generateComponentCode(componentName, strategy, userType),
-        description: `${componentName}页面区块组件`,
-        language: 'typescript'
-      });
-    }
-
-    return components;
-  }
-
-  /**
-   * 生成组件代码
-   */
-  private generateComponentCode(componentName: string, strategy: any, userType: string): string {
-    // 这里简化实现，实际可以根据不同组件类型生成更详细的代码
-    return `import { siteConfig } from '@/lib/config'
-
-interface ${componentName}Props {
-  data: typeof siteConfig
-}
-
-export function ${componentName}({ data }: ${componentName}Props) {
-  return (
-    <section className="py-16 px-4">
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-3xl font-bold mb-8">${componentName.replace('Section', '')}</h2>
-        {/* 组件内容将在这里实现 */}
-        <div className="text-muted-foreground">
-          ${componentName} 组件内容
-        </div>
-      </div>
-    </section>
-  )
-}`;
-  }
-
-  /**
-   * 创建思考响应
-   */
-  protected createThinkingResponse(message: string, progress: number): StreamableAgentResponse {
-    return this.createResponse({
-      immediate_display: {
-        reply: message,
-        agent_name: this.name,
-        timestamp: new Date().toISOString()
-      },
-      system_state: {
-        intent: 'thinking',
-        done: false,
-        progress,
-        current_stage: '代码生成中...'
-      }
-    });
-  }
-
-  /**
-   * 更新会话数据
-   */
-  private updateSessionWithProject(sessionData: SessionData, files: CodeFile[]): void {
-    const metadata = sessionData.metadata as any;
-    metadata.projectGenerated = true;
-    metadata.generatedFiles = files;
-    metadata.codingPhaseCompleted = true;
-    metadata.lastUpdated = new Date().toISOString();
-
-    console.log("✅ 会话数据已更新，项目文件已保存");
-  }
-
-  /**
-   * 延迟函数
-   */
-  protected delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * 处理测试模式
-   */
-  private async* handleExpertModeGeneration(
-    userInput: string, 
-    sessionData: SessionData
-  ): AsyncGenerator<StreamableAgentResponse, void, unknown> {
-    try {
-      // 如果是初始启动（空输入或启动消息）
-      if (!userInput || userInput === '启动测试代码生成模式') {
-        yield this.createResponse({
-          immediate_display: {
-            reply: `🎯 **专业模式已启动！**
-
-专业模式将使用最先进的代码生成能力，为你创建高质量的Web项目。
-
-### 💡 支持的项目类型：
-- 个人简历/作品集网站
-- 商业展示页面  
-- 博客网站
-- 产品介绍页
-- 公司官网
-- 登陆页面
-- 仪表板界面
-- 其他任何Web应用
-
-### 🔧 专业特性：
-- V0 级别的代码质量
-- Next.js 15 + TypeScript
-- Tailwind CSS + shadcn/ui
-- 响应式设计和无障碍支持
-- 现代化动画效果
-
-请告诉我你想要创建什么类型的项目！
-
-**示例：**
-- "创建一个个人简历网站"
-- "生成一个产品展示页面" 
-- "制作一个公司介绍网站"`,
-            agent_name: this.name,
-            timestamp: new Date().toISOString()
-          },
-          system_state: {
-            intent: 'awaiting_requirements',
-            done: false,
-            progress: 10,
-            current_stage: '等待用户需求',
-            metadata: {
-              expertMode: true,
-              awaitingUserInput: true
-            }
-          }
-        });
-        return;
-      }
-
-      // 专业模式：使用专业模式 prompt 直接生成代码
-      yield this.createThinkingResponse('🎯 正在使用专业模式分析需求...', 20);
-      await this.delay(500);
-
-      yield this.createThinkingResponse('🤖 正在调用V0级别的代码生成引擎...', 40);
-      await this.delay(800);
-
-      console.log('🎯 [专业模式] 开始调用专业模式代码生成，用户输入:', userInput);
-      
-      // 调用专业模式代码生成
-      const expertGeneratedCode = await this.callExpertModeGeneration(userInput);
-      
-      console.log('🎯 [专业模式] 代码生成完成，文件数量:', expertGeneratedCode.length);
-      
-      yield this.createThinkingResponse('⚡ 正在优化代码结构和样式...', 80);
-      await this.delay(600);
-
-      // 发送完成响应
-      yield this.createResponse({
-        immediate_display: {
-          reply: `✅ **专业模式代码生成完成！**
-
-已使用专业级 prompt 为你生成了高质量的项目代码，包含 ${expertGeneratedCode.length} 个文件。
-
-**专业特性：**
-- 🎨 V0 级别的代码质量
-- 📱 完全响应式设计
-- ⚡ 优化的性能
-- 🚀 现代化架构
-
-右侧预览区域将显示完整的项目代码和实时预览。如需修改，请直接告诉我！`,
-          agent_name: this.name,
-          timestamp: new Date().toISOString()
-        },
-        system_state: {
-          intent: 'project_complete',
-          done: true,
-          progress: 100,
-          current_stage: '专业模式生成完成',
-          metadata: {
+            streaming: false,
+            message_id: messageId,
+            stream_type: 'complete',
+            is_final: true,
             expertMode: true,
             projectGenerated: true,
-            totalFiles: expertGeneratedCode.length,
+            totalFiles: finalFiles.length,
             generatedAt: new Date().toISOString(),
-            projectFiles: expertGeneratedCode,
+            projectFiles: finalFiles,
             userRequest: userInput,
             hasCodeFiles: true,
-            codeFilesReady: true
+            codeFilesReady: true,
+            // 🆕 所有文件创建完成
+            fileCreationProgress: finalFiles.map(file => ({
+              filename: file.filename,
+              status: 'created',
+              progress: 100,
+              size: file.content.length
+            }))
           }
         }
       });
 
       // 更新会话数据
-      this.updateSessionWithProject(sessionData, expertGeneratedCode);
-
+      this.updateSessionWithProject(sessionData, finalFiles);
+      
     } catch (error) {
-      console.error('🔧 [专业模式] 发生错误:', error);
-      yield await this.handleError(error as Error, sessionData);
+      console.error('❌ [流式AI生成错误]:', error);
+      throw error;
     }
   }
 
-
-
   /**
-   * 确定项目类型
+   * 🆕 分离文本和代码的核心方法
    */
-  private determineProjectType(userInput: string): string {
-    const input = userInput.toLowerCase();
-    if (input.includes('简历') || input.includes('resume') || input.includes('cv')) {
-      return 'resume';
-    } else if (input.includes('作品集') || input.includes('portfolio')) {
-      return 'portfolio';
-    } else if (input.includes('博客') || input.includes('blog')) {
-      return 'blog';
-    } else if (input.includes('公司') || input.includes('企业') || input.includes('business')) {
-      return 'business';
-    } else if (input.includes('产品') || input.includes('product')) {
-      return 'product';
-    } else {
-      return 'general';
-    }
-  }
-
-
-
-
-
-  /**
-   * 获取项目标题
-   */
-  private getProjectTitle(projectType: string, userInput: string): string {
-    if (userInput) {
-      return userInput;
+  private separateTextAndCode(content: string): {
+    text: string;
+    codeFiles: CodeFile[];
+  } {
+    // 首先尝试提取代码块
+    const codeFiles = this.extractCodeBlocksFromText(content);
+    
+    // 移除所有代码块，保留纯文本
+    let textOnly = content;
+    
+    // 匹配各种代码块格式并移除
+    const codeBlockPatterns = [
+      /```[\s\S]*?```/g,  // 标准代码块
+      /`[^`\n]*`/g,       // 行内代码
+    ];
+    
+    codeBlockPatterns.forEach(pattern => {
+      textOnly = textOnly.replace(pattern, '');
+    });
+    
+    // 清理文本格式
+    textOnly = textOnly
+      .replace(/\n{3,}/g, '\n\n')      // 合并多余换行
+      .replace(/^\s+|\s+$/g, '')       // 移除首尾空白
+      .replace(/\s*\n\s*/g, '\n')      // 规范化换行
+      .trim();
+    
+    // 如果文本为空，生成默认说明
+    if (!textOnly && codeFiles.length > 0) {
+      textOnly = `我正在为您生成一个完整的项目，包含 ${codeFiles.length} 个文件。\n\n项目结构：\n${codeFiles.map(f => `• ${f.filename}`).join('\n')}`;
     }
     
-    const titles = {
-      resume: '个人简历',
-      portfolio: '作品集',
-      blog: '个人博客',
-      business: '企业官网',
-      product: '产品展示',
-      general: '网站项目'
+    return {
+      text: textOnly,
+      codeFiles: codeFiles
     };
-    return titles[projectType as keyof typeof titles] || '网站项目';
-  }
-
-  /**
-   * 获取项目描述
-   */
-  private getProjectDescription(projectType: string): string {
-    const descriptions = {
-      resume: '展示专业技能和工作经历的个人简历网站',
-      portfolio: '精美的作品集展示平台',
-      blog: '分享想法和知识的个人博客',
-      business: '专业的企业形象展示网站',
-      product: '突出产品特色的展示页面',
-      general: '现代化的网站项目'
-    };
-    return descriptions[projectType as keyof typeof descriptions] || '现代化的网站项目';
-  }
-
-  /**
-   * 获取项目区块内容
-   */
-  private getProjectSections(projectType: string): string {
-    const sections = {
-      resume: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">专业技能</h3>
-            <p className="text-gray-600">展示你的核心技能和专业能力</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">工作经历</h3>
-            <p className="text-gray-600">详细的职业发展历程</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">项目作品</h3>
-            <p className="text-gray-600">精选的项目案例展示</p>
-          </div>`,
-      portfolio: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">设计作品</h3>
-            <p className="text-gray-600">创意设计和视觉作品</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">开发项目</h3>
-            <p className="text-gray-600">技术实现和代码作品</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">获奖经历</h3>
-            <p className="text-gray-600">荣誉和成就展示</p>
-          </div>`,
-      blog: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">最新文章</h3>
-            <p className="text-gray-600">最近发布的博客内容</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">分类标签</h3>
-            <p className="text-gray-600">按主题浏览文章</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">关于我</h3>
-            <p className="text-gray-600">个人介绍和联系方式</p>
-          </div>`,
-      business: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">公司简介</h3>
-            <p className="text-gray-600">企业历史和发展理念</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">产品服务</h3>
-            <p className="text-gray-600">核心业务和服务内容</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibent mb-4">联系我们</h3>
-            <p className="text-gray-600">联系方式和地址信息</p>
-          </div>`,
-      product: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">产品特色</h3>
-            <p className="text-gray-600">核心功能和优势介绍</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">使用案例</h3>
-            <p className="text-gray-600">实际应用场景展示</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">立即体验</h3>
-            <p className="text-gray-600">试用和购买渠道</p>
-          </div>`,
-      general: `
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">功能特色</h3>
-            <p className="text-gray-600">主要功能和特点介绍</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">使用指南</h3>
-            <p className="text-gray-600">操作说明和帮助文档</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold mb-4">联系支持</h3>
-            <p className="text-gray-600">技术支持和客服信息</p>
-          </div>`
-    };
-    return sections[projectType as keyof typeof sections] || sections.general;
-  }
-
-
-
-  /**
-   * 调用专业模式API生成代码
-   */
-  private async callExpertModeGeneration(userInput: string): Promise<CodeFile[]> {
-    try {
-      console.log('🤖 [AI调用] 步骤1: 开始导入模块...');
-      
-      // 🔧 导入专家模式提示词和AI模型函数
-      const { CODING_EXPERT_MODE_PROMPT } = await import('@/lib/prompts/coding');
-      console.log('🤖 [AI调用] 步骤2: 提示词导入成功');
-      
-      const { generateWithModel } = await import('@/lib/ai-models');
-      console.log('🤖 [AI调用] 步骤3: AI模型函数导入成功');
-      
-      // 🔧 构建完整的提示词
-      const fullPrompt = `${CODING_EXPERT_MODE_PROMPT}
-
-## 🎯 用户需求：
-${userInput}
-
-## 📋 输出要求：
-请生成一个完整的Next.js项目，包含以下文件：
-1. package.json - 项目配置
-2. tailwind.config.js - Tailwind配置  
-3. tsconfig.json - TypeScript配置
-4. app/layout.tsx - 应用布局
-5. app/page.tsx - 主页面
-6. app/globals.css - 全局样式
-7. components/ui/button.tsx - Button组件
-8. lib/utils.ts - 工具函数
-
-请以JSON格式返回，每个文件包含filename、content、description、language字段。`;
-
-      console.log('🤖 [AI调用] 步骤4: 提示词构建完成，长度:', fullPrompt.length);
-      console.log('🤖 [AI调用] 步骤5: 开始调用大模型API...');
-      
-      // 🔧 使用统一的callLLM接口
-      const result = await this.callLLM(fullPrompt, {
-        maxTokens: 64000,
-        system: "你是HeysMe平台的V0风格代码生成专家，专门生成高质量的React + TypeScript项目。"
-      });
-      
-      console.log('🤖 [AI调用] 步骤6: 大模型API调用成功');
-      
-      // 提取响应文本
-      const responseText = typeof result === 'string' ? result : JSON.stringify(result);
-      
-      console.log('🤖 [AI调用] 步骤7: 响应文本提取完成，长度:', responseText.length);
-      console.log('🤖 [AI调用] 步骤8: 响应预览:', responseText.substring(0, 500) + '...');
-      
-      // 检查响应长度，如果太短可能有问题
-      if (responseText.length < 100) {
-        console.warn('🤖 [AI调用] 警告: 响应内容过短，可能生成失败');
-        console.log('🤖 [AI调用] 完整响应内容:', responseText);
-        throw new Error(`AI响应内容过短(${responseText.length}字符)，可能生成失败`);
-      }
-      
-      // 🔧 解析AI响应
-      const parsedResponse = this.parseAICodeResponse(responseText);
-      
-      console.log('🤖 [AI调用] 步骤9: 解析完成，得到', parsedResponse.length, '个文件');
-      
-      // 检查解析结果
-      if (parsedResponse.length === 0) {
-        console.warn('🤖 [AI调用] 警告: 解析结果为空，使用回退方案');
-        return this.generateFallbackFiles(userInput);
-      }
-      
-      return parsedResponse;
-      
-    } catch (error) {
-      console.error('🤖 [AI调用] 调用失败，错误详情:', {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        type: typeof error,
-        name: error instanceof Error ? error.name : 'Unknown'
-      });
-      
-      // 🔧 检查具体的错误类型
-      if (error instanceof Error) {
-        console.error('🤖 [错误分析] 错误名称:', error.name);
-        console.error('🤖 [错误分析] 错误消息:', error.message);
-        
-        // 检查是否是网络相关错误
-        if (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('timeout')) {
-          console.error('🤖 [网络错误] 检测到网络相关错误');
-        }
-        
-        // 检查是否是 API 限制错误
-        if (error.message.includes('rate limit') || error.message.includes('quota') || error.message.includes('429')) {
-          console.error('🤖 [API限制] 检测到API限制错误');
-        }
-        
-        // 检查是否是认证错误
-        if (error.message.includes('401') || error.message.includes('unauthorized') || error.message.includes('api key')) {
-          console.error('🤖 [认证错误] 检测到API认证错误');
-        }
-        
-        // 检查是否是超时错误
-        if (error.message.includes('超时') || error.message.includes('timeout')) {
-          console.error('🤖 [超时错误] API调用超时，可能是因为请求太复杂');
-        }
-      }
-      
-      // 🔧 回退到基础文件生成
-      console.log('🤖 [AI调用] 使用回退方案生成基础文件...');
-      const fallbackFiles = this.generateFallbackFiles(userInput);
-      console.log('🤖 [回退方案] 生成了', fallbackFiles.length, '个回退文件');
-      return fallbackFiles;
-    }
   }
 
   /**
@@ -767,9 +301,24 @@ ${userInput}
    */
   private parseAICodeResponse(response: string): CodeFile[] {
     try {
-      // 🔧 首先尝试提取JSON代码块（处理```json格式）
-      const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/i);
-      let jsonText = response;
+      let responseText = response;
+      
+      // 🔧 如果响应是包含text字段的对象，先提取text内容
+      if (typeof response === 'string' && response.startsWith('{"text":')) {
+        try {
+          const responseObj = JSON.parse(response);
+          if (responseObj.text) {
+            responseText = responseObj.text;
+            console.log('🤖 [响应解析] 从响应对象中提取text字段，长度:', responseText.length);
+          }
+        } catch (e) {
+          console.log('🤖 [响应解析] 响应对象解析失败，使用原始响应');
+        }
+      }
+      
+      // 🔧 然后尝试提取JSON代码块（处理```json格式）
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/i);
+      let jsonText = responseText;
       
       if (jsonMatch) {
         jsonText = jsonMatch[1].trim();
@@ -777,6 +326,9 @@ ${userInput}
       } else {
         console.log('🤖 [JSON提取] 未找到markdown代码块，直接解析响应');
       }
+      
+      // 🔧 清理可能的转义字符问题
+      jsonText = jsonText.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
       
       // 尝试解析JSON响应
       const parsed = JSON.parse(jsonText);
@@ -807,7 +359,6 @@ ${userInput}
    * 解析备用格式
    */
   private parseAlternativeFormat(response: string): CodeFile[] {
-    // 这里可以添加其他格式的解析逻辑
     console.log('🤖 [备用解析] 尝试备用格式解析...');
     return this.extractCodeBlocksFromText(response);
   }
@@ -955,22 +506,66 @@ ${userInput}
             'react': '^18.2.0',
             'react-dom': '^18.2.0',
             'typescript': '^5.0.0',
-            'tailwindcss': '^3.3.0',
-            'autoprefixer': '^10.4.14',
-            'postcss': '^8.4.24',
-            'lucide-react': '^0.263.1',
-            'framer-motion': '^10.16.4'
-          },
-          devDependencies: {
-            '@types/node': '^20.5.2',
-            '@types/react': '^18.2.21',
-            '@types/react-dom': '^18.2.7',
-            'eslint': '^8.48.0',
-            'eslint-config-next': '^13.4.19'
+            'tailwindcss': '^3.3.0'
           }
         }, null, 2),
         description: '项目配置文件',
         language: 'json'
+      },
+      {
+        filename: 'app/page.tsx',
+        content: `export default function HomePage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold text-gray-900 mb-6">
+          ${projectTitle}
+        </h1>
+        <p className="text-lg text-gray-600">
+          这是基于您的需求"${userInput}"生成的项目。
+        </p>
+      </div>
+    </div>
+  );
+}`,
+        description: '主页面组件',
+        language: 'typescript'
+      },
+      {
+        filename: 'app/layout.tsx',
+        content: `import type { Metadata } from 'next'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: '${projectTitle}',
+  description: '基于AI生成的现代化网站',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="zh-CN">
+      <body>{children}</body>
+    </html>
+  )
+}`,
+        description: '应用布局文件',
+        language: 'typescript'
+      },
+      {
+        filename: 'app/globals.css',
+        content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}`,
+        description: '全局样式文件',
+        language: 'css'
       },
       {
         filename: 'tailwind.config.js',
@@ -982,162 +577,113 @@ module.exports = {
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#f0f9ff',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-        }
-      }
-    },
+    extend: {},
   },
   plugins: [],
 }`,
-        description: 'Tailwind CSS配置文件',
+        description: 'Tailwind CSS配置',
         language: 'javascript'
-      },
-      {
-        filename: 'app/layout.tsx',
-        content: `import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
-
-export const metadata: Metadata = {
-  title: '${projectTitle}',
-  description: '${this.getProjectDescription(projectType)}',
-}
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="zh-CN">
-      <body className={inter.className}>{children}</body>
-    </html>
-  )
-}`,
-        description: 'Next.js应用布局',
-        language: 'typescript'
-      },
-      {
-        filename: 'app/page.tsx',
-        content: `'use client'
-
-import { motion } from 'framer-motion'
-import { ArrowRight, Mail, Github, Linkedin } from 'lucide-react'
-
-export default function HomePage() {
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6">
-              ${projectTitle}
-            </h1>
-            <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
-              ${this.getProjectDescription(projectType)}
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="inline-flex items-center px-8 py-4 bg-blue-600 text-white rounded-full font-semibold text-lg hover:bg-blue-700 transition-colors"
-            >
-              了解更多
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </motion.button>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Content Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            ${this.getProjectSections(projectType)}
-          </div>
-        </div>
-      </section>
-
-      {/* Contact Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8">联系方式</h2>
-          <div className="flex justify-center space-x-6">
-            <a href="mailto:hello@example.com" className="flex items-center text-gray-600 hover:text-blue-600">
-              <Mail className="w-5 h-5 mr-2" />
-              邮箱
-            </a>
-            <a href="https://github.com" className="flex items-center text-gray-600 hover:text-blue-600">
-              <Github className="w-5 h-5 mr-2" />
-              GitHub
-            </a>
-            <a href="https://linkedin.com" className="flex items-center text-gray-600 hover:text-blue-600">
-              <Linkedin className="w-5 h-5 mr-2" />
-              LinkedIn
-            </a>
-          </div>
-        </div>
-      </section>
-    </main>
-  )
-}`,
-        description: 'React主页面组件',
-        language: 'typescript'
-      },
-      {
-        filename: 'app/globals.css',
-        content: `@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}`,
-        description: '全局CSS样式',
-        language: 'css'
       }
     ];
+  }
+
+  /**
+   * 判断是否为专业模式
+   */
+  private isExpertMode(sessionData?: SessionData, context?: Record<string, any>): boolean {
+    // 1. 优先检查context中的强制模式标记
+    if (context?.forceExpertMode || context?.expertMode || context?.testMode) {
+      console.log('🎯 [模式判断] Context中指定为专业模式:', context);
+      return true;
+    }
+    
+    // 2. 检查会话状态 - 如果当前阶段不是 code_generation，说明是直接调用
+    if (sessionData?.metadata?.progress?.currentStage !== 'code_generation') {
+      console.log('🎯 [模式判断] 非code_generation阶段，使用专业模式');
+      return true;
+    }
+    
+    // 3. 检查是否来自prompt-output阶段（正常流程）
+    const hasDesignData = sessionData?.collectedData && 
+                         Object.keys(sessionData.collectedData).some(key => {
+                           const data = (sessionData.collectedData as any)[key];
+                           return data && typeof data === 'object' && Object.keys(data).length > 0;
+                         });
+    
+    if (hasDesignData) {
+      console.log('🎯 [模式判断] 有设计数据，使用正常流程模式');
+      return false; // 有设计数据，说明是正常流程
+    }
+    
+    // 默认为专业模式
+    console.log('🎯 [模式判断] 默认使用专业模式');
+    return true;
+  }
+
+  /**
+   * 项目类型判断
+   */
+  private determineProjectType(userInput: string): string {
+    if (userInput.includes('简历') || userInput.includes('resume')) return 'resume';
+    if (userInput.includes('作品集') || userInput.includes('portfolio')) return 'portfolio';
+    if (userInput.includes('博客') || userInput.includes('blog')) return 'blog';
+    if (userInput.includes('商城') || userInput.includes('shop')) return 'ecommerce';
+    if (userInput.includes('登录') || userInput.includes('注册')) return 'auth';
+    return 'website';
+  }
+
+  /**
+   * 获取项目标题
+   */
+  private getProjectTitle(projectType: string, userInput: string): string {
+    const titles: Record<string, string> = {
+      resume: '个人简历网站',
+      portfolio: '个人作品集',
+      blog: '个人博客',
+      ecommerce: '电商网站',
+      auth: '用户认证系统',
+      website: '网站项目'
+    };
+    
+    return titles[projectType] || '网站项目';
+  }
+
+  /**
+   * 创建思考响应
+   */
+  protected createThinkingResponse(message: string, progress: number): StreamableAgentResponse {
+    return {
+      immediate_display: {
+        reply: message,
+        agent_name: this.name,
+        timestamp: new Date().toISOString()
+      },
+      system_state: {
+        intent: 'thinking',
+        done: false,
+        progress,
+        current_stage: message
+      }
+    };
+  }
+
+  /**
+   * 更新会话数据
+   */
+  private updateSessionWithProject(sessionData: SessionData, files: CodeFile[]): void {
+    if (sessionData.metadata) {
+      (sessionData.metadata as any).generatedProject = {
+        files,
+        generatedAt: new Date().toISOString(),
+        totalFiles: files.length
+      };
+    }
+  }
+
+  /**
+   * 延迟函数
+   */
+  protected delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 } 

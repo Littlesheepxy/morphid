@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, sessionId, currentStage, forceAgent, testMode } = await req.json();
+    const { message, sessionId, currentStage, forceAgent, testMode, context } = await req.json();
 
     if (!message || !sessionId) {
       return NextResponse.json(
@@ -98,7 +98,8 @@ export async function POST(req: NextRequest) {
       messageLength: message.length,
       currentStage,
       forceAgent,
-      testMode
+      testMode,
+      context
     });
 
     // 创建流式响应
@@ -107,12 +108,13 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // 构建传递给编排器的会话数据
+          // 构建传递给编排器的会话数据和上下文
           let sessionData = undefined;
           let finalMessage = message;
+          let finalContext = context;
           
-          // 如果有forceAgent参数，修改消息和会话数据
-          if (forceAgent) {
+          // 🔧 修复：优先使用context参数，而不是在消息中添加标记
+          if (forceAgent || testMode) {
             // 获取现有会话数据
             const existingSession = await agentOrchestrator.getSessionData(sessionId);
             
@@ -130,15 +132,24 @@ export async function POST(req: NextRequest) {
               };
             }
             
-            // 在消息中添加特殊标记，让编排器知道这是强制指定的agent
-            finalMessage = `[FORCE_AGENT:${forceAgent}]${testMode ? '[TEST_MODE]' : ''}${message}`;
+            // 🔧 修复：通过context传递模式信息，而不是修改消息
+            finalContext = {
+              ...context,
+              forceAgent,
+              testMode,
+              expertMode: testMode || context?.expertMode,
+              forceExpertMode: testMode || context?.forceExpertMode
+            };
+            
+            console.log('🎯 [API] 使用context传递模式信息:', finalContext);
           }
 
           // 使用Agent编排器处理流式输入
           const responseGenerator = agentOrchestrator.processUserInputStreaming(
             sessionId,
             finalMessage,
-            sessionData
+            sessionData,
+            finalContext
           );
 
           let responseCount = 0;
@@ -161,7 +172,14 @@ export async function POST(req: NextRequest) {
 
             // 转换为SSE格式
             const sseData = `data: ${JSON.stringify(formattedChunk)}\n\n`;
-            controller.enqueue(encoder.encode(sseData));
+            
+            // 🔧 添加控制器状态检查
+            try {
+              controller.enqueue(encoder.encode(sseData));
+            } catch (streamError) {
+              console.error('❌ [流式发送错误]:', streamError);
+              break; // 退出循环，避免继续发送
+            }
           }
 
           console.log(`✅ [流式完成] 总共发送了 ${responseCount} 个响应`);
