@@ -6,6 +6,12 @@ export interface SessionData {
   userId?: string;
   status: 'active' | 'paused' | 'completed' | 'abandoned';
   
+  // 🆕 会话标题相关
+  title?: string;
+  titleGeneratedAt?: string;
+  titleModel?: string;
+  lastTitleMessageCount?: number;
+  
   // 核心数据
   userIntent: UserIntent;
   personalization: PersonalizationProfile;

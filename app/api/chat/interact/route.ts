@@ -38,6 +38,39 @@ function formatInteractionAsUserMessage(data: any, result: any): string {
   return '我想继续了解更多信息';
 }
 
+/**
+ * 尝试恢复或重新创建会话
+ */
+async function recoverOrCreateSession(sessionId: string, data: any) {
+  console.log(`🔄 [会话恢复] 尝试恢复会话: ${sessionId}`);
+  
+  try {
+    // 尝试重新创建会话
+    const newSessionId = await agentOrchestrator.createSession();
+    console.log(`✅ [会话恢复] 创建新会话: ${newSessionId}`);
+    
+    // 如果是重新生成请求，返回特殊标识
+    if (data.type === 'regenerate') {
+      return {
+        action: 'session_recovered',
+        newSessionId,
+        originalSessionId: sessionId,
+        needsRegenerate: true,
+        messageId: data.messageId
+      };
+    }
+    
+    return {
+      action: 'session_recovered',
+      newSessionId,
+      originalSessionId: sessionId
+    };
+  } catch (error) {
+    console.error('❌ [会话恢复] 恢复失败:', error);
+    throw error;
+  }
+}
+
 export async function POST(req: NextRequest) {
   console.log(`\n🎯 [交互API] 收到POST请求 - ${new Date().toISOString()}`);
   
@@ -71,7 +104,8 @@ export async function POST(req: NextRequest) {
 
     // 获取会话数据
     console.log(`🔍 [会话查找] 查找会话 ${sessionId}`);
-    const sessionData = agentOrchestrator.getSessionDataSync(sessionId);
+    let sessionData = agentOrchestrator.getSessionDataSync(sessionId);
+    
     if (!sessionData) {
       console.error(`❌ [会话错误] 会话 ${sessionId} 未找到`);
       
@@ -84,10 +118,26 @@ export async function POST(req: NextRequest) {
         console.error(`⚠️ [调试] 获取活跃会话失败:`, debugError);
       }
       
-      return NextResponse.json(
-        { error: 'Session not found' },
-        { status: 404 }
-      );
+      // 🆕 尝试恢复会话
+      try {
+        const recoveryResult = await recoverOrCreateSession(sessionId, data);
+        
+        return NextResponse.json({
+          success: true,
+          action: 'session_recovery_needed',
+          recovery: recoveryResult,
+          timestamp: new Date().toISOString()
+        });
+      } catch (recoveryError) {
+        console.error(`❌ [会话恢复] 恢复失败:`, recoveryError);
+        return NextResponse.json(
+          { 
+            error: 'Session not found and recovery failed',
+            details: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+          },
+          { status: 404 }
+        );
+      }
     }
 
     console.log(`✅ [会话找到] 当前阶段: ${sessionData.metadata.progress.currentStage}, 进度: ${sessionData.metadata.progress.percentage}%`);
@@ -208,163 +258,84 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      return new NextResponse(stream, {
+      return new Response(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
       });
     }
 
-        // 🔧 修复：continue动作触发流式响应，让AI重新生成推荐
-    if (result?.action === 'continue') {
-      console.log(`🔄 [交互API] continue动作，触发流式AI推荐`);
-      console.log(`📊 [Agent结果] ${JSON.stringify(result)}`);
-      
-      // 构造用户输入消息
-      const userMessage = formatInteractionAsUserMessage(data, result);
-      console.log(`📝 [用户消息] ${userMessage}`);
-      
-      // 调用AgentOrchestrator重新处理，让AI生成流式推荐
-      console.log(`🤖 [AI调用] 让AI基于当前信息生成流式推荐选项`);
-      const aiRecommendationGenerator = agentOrchestrator.processUserInputStreaming(
-        sessionId,
-        userMessage,
-        sessionData
-      );
-      
-      // 创建流式响应
+    // 🆕 处理流式响应
+    if (result?.action === 'stream_response') {
       const encoder = new TextEncoder();
+      
       const stream = new ReadableStream({
         async start(controller) {
           try {
-            console.log(`🌊 [流式开始] AI推荐生成流开始`);
+            const userMessage = formatInteractionAsUserMessage(data, result);
+            console.log(`📝 [流式消息] 用户消息: "${userMessage}"`);
             
-            for await (const chunk of aiRecommendationGenerator) {
-              const sseData = `data: ${JSON.stringify(chunk)}\n\n`;
-              controller.enqueue(encoder.encode(sseData));
+            // 使用AgentOrchestrator的流式处理
+            const streamGenerator = agentOrchestrator.processUserInputStreaming(
+              sessionId,
+              userMessage,
+              sessionData,
+              {
+                interactionType,
+                originalData: data,
+                result
+              }
+            );
+            
+            for await (const chunk of streamGenerator) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
             }
             
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
-            console.log(`✅ [流式完成] AI推荐生成流完成`);
             
           } catch (error) {
-            console.error('❌ [AI推荐错误]:', error);
+            console.error('❌ [流式错误] 处理失败:', error);
             
-            const errorResponse = {
+            const errorChunk = {
               type: 'agent_response',
               immediate_display: {
-                reply: '抱歉，生成推荐时出现问题，请刷新页面重试。',
+                reply: '抱歉，处理您的请求时出现问题，请重试。',
                 agent_name: 'System',
                 timestamp: new Date().toISOString()
               },
               system_state: {
                 intent: 'error',
-                done: true,
+                done: false,
                 metadata: { error: error instanceof Error ? error.message : String(error) }
               }
             };
             
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorResponse)}\n\n`));
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          }
-        }
-      });
-      
-      return new NextResponse(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
-      });
-    }
-
-    // 如果需要推进到下一阶段
-    if (result?.action === 'advance' && result?.nextAgent) {
-      // 创建流式响应以启动下一个Agent
-      const encoder = new TextEncoder();
-      
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            // 发送确认消息
-            const confirmResponse = {
-              immediate_display: {
-                reply: `✅ ${result.summary || '信息已确认'}，正在推进到下一阶段...`,
-                agent_name: 'System',
-                timestamp: new Date().toISOString()
-              },
-              system_state: {
-                intent: 'advancing',
-                done: false,
-                progress: sessionData.metadata.progress.percentage,
-                current_stage: '推进中'
-              }
-            };
-            
-            const confirmData = `data: ${JSON.stringify(confirmResponse)}\n\n`;
-            controller.enqueue(encoder.encode(confirmData));
-            
-            // 启动下一个Agent
-            const nextAgentGenerator = agentOrchestrator.processUserInputStreaming(
-              sessionId,
-              '', // 空消息，让下一个Agent自动启动
-              sessionData // 传入会话数据而不是nextAgent字符串
-            );
-
-            for await (const chunk of nextAgentGenerator) {
-              const sseData = `data: ${JSON.stringify(chunk)}\n\n`;
-              controller.enqueue(encoder.encode(sseData));
-            }
-
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-
-          } catch (error) {
-            console.error('Next agent startup error:', error);
-            const errorResponse = {
-              immediate_display: {
-                reply: '推进到下一阶段时遇到了问题，请刷新页面重试。',
-                agent_name: 'System',
-                timestamp: new Date().toISOString()
-              },
-              system_state: {
-                intent: 'error',
-                done: true
-              }
-            };
-
-            const errorData = `data: ${JSON.stringify(errorResponse)}\n\n`;
-            controller.enqueue(encoder.encode(errorData));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`));
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
           }
         }
       });
 
-      return new NextResponse(stream, {
+      return new Response(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
       });
     }
 
-    // 其他情况的普通响应
+    // 默认返回结果
     return NextResponse.json({
       success: true,
       result,
@@ -372,11 +343,12 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Interaction handling error:', error);
+    console.error('❌ [交互API] 处理失败:', error);
+    
     return NextResponse.json(
       { 
-        error: 'Failed to handle user interaction',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
@@ -388,8 +360,8 @@ export async function OPTIONS() {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
 } 

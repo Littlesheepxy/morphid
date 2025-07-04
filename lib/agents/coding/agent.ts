@@ -102,8 +102,9 @@ export class CodingAgent extends BaseAgent {
     try {
       console.log('🤖 [流式AI调用] 步骤1: 开始导入模块...');
       
-      // 动态导入提示词
+      // 动态导入提示词和JSON流式解析器
       const { getCodingPrompt, CODING_EXPERT_MODE_PROMPT } = await import('@/lib/prompts/coding');
+      const { JSONStreamParser } = await import('@/lib/streaming/json-streamer');
       
       console.log('🤖 [流式AI调用] 步骤2: 提示词导入成功');
       
@@ -128,14 +129,11 @@ export class CodingAgent extends BaseAgent {
       
       console.log('🌊 [流式生成] 开始流式调用大模型API...');
       
-      let accumulatedResponse = '';
       let chunkCount = 0;
       let messageId = `coding-stream-${Date.now()}`;
       
-      // 🆕 分离内容的变量
-      let extractedText = '';
-      let extractedCodeFiles: CodeFile[] = [];
-      let lastTextLength = 0;
+      // 🆕 创建JSON流式解析器
+      const jsonParser = new JSONStreamParser();
       
       // 流式调用AI模型
       for await (const chunk of generateStreamWithModel(
@@ -148,72 +146,91 @@ export class CodingAgent extends BaseAgent {
         { maxTokens: 64000 }
       )) {
         chunkCount++;
-        accumulatedResponse += chunk;
         
-        console.log(`📤 [流式输出] 第${chunkCount}个块，新增内容长度: ${chunk.length}, 累积长度: ${accumulatedResponse.length}`);
+        console.log(`📤 [流式输出] 第${chunkCount}个块，新增内容长度: ${chunk.length}`);
         
-        // 🆕 实时分离文本和代码
-        const separated = this.separateTextAndCode(accumulatedResponse);
-        extractedText = separated.text;
-        extractedCodeFiles = separated.codeFiles;
+        // 🆕 使用JSON流式解析器处理chunk
+        const parseResult = jsonParser.processChunk(chunk);
         
-        // 🆕 计算新增的文本内容
-        const newTextContent = extractedText.slice(lastTextLength);
-        lastTextLength = extractedText.length;
-        
-        const progress = Math.min(90, 30 + Math.floor(accumulatedResponse.length / 200));
-        
-        // 🆕 发送分离后的内容
+        // 🆕 发送分离后的内容 - 只发送纯文本到对话框
         yield this.createResponse({
           immediate_display: {
-            reply: extractedText, // 🆕 只发送纯文本内容到对话框
+            reply: parseResult.rawText, // 🆕 只发送纯文本内容到对话框
             agent_name: this.name,
             timestamp: new Date().toISOString()
           },
           system_state: {
             intent: 'generating',
             done: false,
-            progress: progress,
-            current_stage: `流式生成中... (${chunkCount} 块)`,
+            progress: Math.min(90, 30 + Math.floor(chunkCount / 10) * 10),
+            current_stage: `正在生成代码... (${chunkCount} 块)`,
             metadata: {
               streaming: true,
               message_id: messageId,
               chunk_count: chunkCount,
-              accumulated_length: accumulatedResponse.length,
-              estimated_lines: Math.floor(accumulatedResponse.length / 50),
               is_update: chunkCount > 1,
               latest_chunk: chunk,
-              // 🆕 代码文件相关信息
-              hasCodeFiles: extractedCodeFiles.length > 0,
-              codeFilesReady: extractedCodeFiles.length > 0,
-              projectFiles: extractedCodeFiles,
-              totalFiles: extractedCodeFiles.length,
-              newTextContent: newTextContent, // 🆕 新增的文本内容
-              // 🆕 文件创建状态
-              fileCreationProgress: extractedCodeFiles.map((file, index) => ({
+              // 🆕 文件相关信息
+              hasCodeFiles: parseResult.files.length > 0,
+              codeFilesReady: parseResult.files.length > 0,
+              projectFiles: parseResult.files.map(f => ({
+                filename: f.filename,
+                content: f.content,
+                description: f.description,
+                language: f.language,
+                type: f.type
+              })),
+              totalFiles: parseResult.files.length,
+              // 🆕 流式文件创建状态
+              fileCreationProgress: parseResult.files.map(file => ({
                 filename: file.filename,
-                status: 'creating',
-                progress: Math.min(100, (chunkCount / 10) * 100), // 模拟进度
+                status: file.status,
+                progress: file.progress,
                 size: file.content.length
-              }))
+              })),
+              // 🆕 实时更新标记
+              hasNewFile: parseResult.hasNewFile,
+              hasContentUpdate: parseResult.hasContentUpdate,
+              newFileIndex: parseResult.newFileIndex,
+              updatedFileIndex: parseResult.updatedFileIndex
             }
           }
         });
+        
+        // 如果JSON解析完成，退出循环
+        if (parseResult.isComplete) {
+          console.log('🎉 [JSON解析] JSON解析完成，文件数量:', parseResult.files.length);
+          break;
+        }
       }
       
-      console.log('🤖 [流式AI调用] 步骤4: 流式生成完成，总长度:', accumulatedResponse.length);
+      console.log('🤖 [流式AI调用] 步骤4: 流式生成完成');
       
-      // 解析AI响应（使用现有的解析逻辑作为备选）
-      const finalFiles = extractedCodeFiles.length > 0 ? extractedCodeFiles : this.parseAICodeResponse(accumulatedResponse);
+      // 🆕 获取最终文件列表
+      const finalFiles = jsonParser.getAllFiles();
+      
+      // 🆕 标记所有文件为完成状态
+      finalFiles.forEach(file => {
+        jsonParser.markFileComplete(file.filename);
+      });
+      
       console.log('🤖 [流式AI调用] 步骤5: 解析完成，得到', finalFiles.length, '个文件');
       
       // 步骤3: 完成响应
       yield this.createThinkingResponse('✨ 代码生成完成！', 100);
 
+      // 🆕 转换为CodeFile格式
+      const codeFiles: CodeFile[] = finalFiles.map(file => ({
+        filename: file.filename,
+        content: file.content,
+        description: file.description || `生成的${file.language}文件`,
+        language: file.language || 'text'
+      }));
+
       yield this.createResponse({
         immediate_display: {
           reply: `🎉 AI代码生成完成！已为您创建了一个完整的项目，包含 ${finalFiles.length} 个文件。\n\n` +
-                 `📁 生成的文件：\n${finalFiles.map(f => `• ${f.filename} - ${f.description}`).join('\n')}`,
+                 `📁 生成的文件：\n${finalFiles.map((f: any) => `• ${f.filename} - ${f.description}`).join('\n')}`,
           agent_name: this.name,
           timestamp: new Date().toISOString()
         },
@@ -231,14 +248,14 @@ export class CodingAgent extends BaseAgent {
             projectGenerated: true,
             totalFiles: finalFiles.length,
             generatedAt: new Date().toISOString(),
-            projectFiles: finalFiles,
+            projectFiles: codeFiles,
             userRequest: userInput,
             hasCodeFiles: true,
             codeFilesReady: true,
             // 🆕 所有文件创建完成
-            fileCreationProgress: finalFiles.map(file => ({
+            fileCreationProgress: finalFiles.map((file: any) => ({
               filename: file.filename,
-              status: 'created',
+              status: 'completed',
               progress: 100,
               size: file.content.length
             }))
@@ -247,7 +264,7 @@ export class CodingAgent extends BaseAgent {
       });
 
       // 更新会话数据
-      this.updateSessionWithProject(sessionData, finalFiles);
+      this.updateSessionWithProject(sessionData, codeFiles);
       
     } catch (error) {
       console.error('❌ [流式AI生成错误]:', error);

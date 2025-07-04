@@ -94,7 +94,7 @@ export interface SessionStats {
  */
 export interface UserInteractionResult {
   /** 处理动作 */
-  action: 'continue' | 'advance' | 'retry' | 'error' | 'request_custom_description';
+  action: 'continue' | 'advance' | 'retry' | 'error' | 'request_custom_description' | 'stream_response';
   /** 确认的信息 */
   confirmed_info?: any;
   /** 更新的信息 */

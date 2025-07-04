@@ -6,6 +6,7 @@ import { useState, useCallback } from "react"
 import { SessionData } from "@/lib/types/session"
 import { StreamableAgentResponse } from "@/lib/types/streaming"
 import { DEFAULT_MODEL } from "@/types/models"
+import { useTitleGeneration } from "./use-title-generation"
 
 export function useChatSystemV2() {
   const [sessions, setSessions] = useState<SessionData[]>([])
@@ -16,6 +17,30 @@ export function useChatSystemV2() {
   const [streamingResponses, setStreamingResponses] = useState<StreamableAgentResponse[]>([])
   const [currentError, setCurrentError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+
+  // 🆕 集成标题生成功能
+  const titleGeneration = useTitleGeneration({
+    onTitleGenerated: (conversationId, title) => {
+      console.log(`📝 [标题生成] 会话 ${conversationId} 标题已生成: "${title}"`);
+      // 更新会话标题
+      setSessions(prev => 
+        prev.map(session => 
+          session.id === conversationId 
+            ? { ...session, title, titleGeneratedAt: new Date().toISOString() }
+            : session
+        )
+      );
+      // 如果是当前会话，也更新当前会话
+      setCurrentSession(prev => 
+        prev?.id === conversationId 
+          ? { ...prev, title, titleGeneratedAt: new Date().toISOString() }
+          : prev
+      );
+    },
+    onError: (error) => {
+      console.error('❌ [标题生成] 失败:', error);
+    }
+  })
 
   const createNewSession = useCallback(async () => {
     try {
@@ -255,6 +280,35 @@ export function useChatSystemV2() {
           console.log('✅ [发送消息] 使用现有会话:', targetSession.id);
         }
 
+        // 🔧 处理会话恢复
+        if (option?.type === 'session_recovered') {
+          console.log('🔄 [会话恢复] 检测到会话恢复请求:', option);
+          
+          // 更新会话ID
+          if (option.newSessionId && targetSession) {
+            const newSession = {
+              ...targetSession,
+              id: option.newSessionId
+            };
+            
+            setCurrentSession(newSession);
+            setSessions((prev) => prev.map((s) => (s.id === targetSession!.id ? newSession : s)));
+            
+            // 如果需要重新生成，发送重新生成请求
+            if (option.needsRegenerate) {
+              console.log('🔄 [会话恢复] 需要重新生成消息:', option.messageId);
+              setTimeout(() => {
+                sendMessage('', {
+                  type: 'regenerate',
+                  messageId: option.messageId
+                });
+              }, 100);
+            }
+          }
+          
+          return;
+        }
+
         // 添加用户消息到会话历史
         const userMessage = {
           id: `msg-${Date.now()}-user`,
@@ -453,6 +507,9 @@ export function useChatSystemV2() {
                 isFinal: chunk.system_state?.metadata?.is_final
               });
               
+              // 🆕 添加完整的chunk数据结构调试
+              console.log('🔍 [完整数据结构]', JSON.stringify(chunk, null, 2));
+              
               // 🔧 修复：处理不同格式的流式数据
               // 检查是否是流式更新消息
               const isStreamUpdate = chunk.system_state?.metadata?.is_update;
@@ -495,6 +552,7 @@ export function useChatSystemV2() {
               }
               else {
                 console.log('⚠️ [数据格式] 未识别的数据格式:', Object.keys(chunk));
+                console.log('⚠️ [数据内容] 完整chunk:', chunk);
               }
 
               if (hasValidReply && replyContent) {
@@ -538,6 +596,18 @@ export function useChatSystemV2() {
                       }
                     };
                     
+                    // 🆕 专门处理projectFiles数据
+                    if (chunk.system_state?.metadata?.projectFiles && session.conversationHistory[streamingMessageIndex]?.metadata) {
+                      console.log('🎯 [文件数据] 更新projectFiles:', chunk.system_state.metadata.projectFiles.length, '个文件');
+                      session.conversationHistory[streamingMessageIndex].metadata!.projectFiles = chunk.system_state.metadata.projectFiles;
+                    }
+                    
+                    // 🆕 专门处理fileCreationProgress数据
+                    if (chunk.system_state?.metadata?.fileCreationProgress && session.conversationHistory[streamingMessageIndex]?.metadata) {
+                      console.log('🎯 [文件状态] 更新fileCreationProgress:', chunk.system_state.metadata.fileCreationProgress);
+                      session.conversationHistory[streamingMessageIndex].metadata!.fileCreationProgress = chunk.system_state.metadata.fileCreationProgress;
+                    }
+                    
                     setCurrentSession({ ...session });
                     setSessions((prev) => prev.map((s) => (s.id === session.id ? session : s)));
                   }
@@ -561,6 +631,18 @@ export function useChatSystemV2() {
                     }
                   };
                   
+                  // 🆕 专门处理projectFiles数据
+                  if (chunk.system_state?.metadata?.projectFiles) {
+                    console.log('🎯 [文件数据] 新消息包含projectFiles:', chunk.system_state.metadata.projectFiles.length, '个文件');
+                    (agentMessage.metadata as any).projectFiles = chunk.system_state.metadata.projectFiles;
+                  }
+                  
+                  // 🆕 专门处理fileCreationProgress数据
+                  if (chunk.system_state?.metadata?.fileCreationProgress) {
+                    console.log('🎯 [文件状态] 新消息包含fileCreationProgress:', chunk.system_state.metadata.fileCreationProgress);
+                    (agentMessage.metadata as any).fileCreationProgress = chunk.system_state.metadata.fileCreationProgress;
+                  }
+                  
                   session.conversationHistory.push(agentMessage);
                   streamingMessageIndex = session.conversationHistory.length - 1;
                   streamingMessageId = currentMessageId;
@@ -576,6 +658,16 @@ export function useChatSystemV2() {
                 }
                 
                 messageReceived = true;
+              }
+              
+              // 🆕 检查是否需要生成标题
+              if (messageReceived && session.conversationHistory.length >= 3 && !session.title) {
+                console.log('🎯 [标题生成] 触发自动标题生成...');
+                titleGeneration.maybeGenerateTitle(
+                  session.id, 
+                  session.conversationHistory.length, 
+                  Boolean(session.title)
+                );
               }
               
               // 检查是否需要生成页面
@@ -775,6 +867,82 @@ export function useChatSystemV2() {
     [currentSession],
   )
 
+  // 🆕 更新会话标题
+  const updateSessionTitle = useCallback(
+    (sessionId: string, title: string) => {
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId
+            ? { ...session, title, titleGeneratedAt: new Date().toISOString() }
+            : session
+        )
+      );
+      
+      if (currentSession?.id === sessionId) {
+        setCurrentSession((prev) => 
+          prev ? { ...prev, title, titleGeneratedAt: new Date().toISOString() } : prev
+        );
+      }
+    },
+    [currentSession]
+  );
+
+  // 🆕 分享会话
+  const shareSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const session = sessions.find(s => s.id === sessionId);
+        if (!session) {
+          throw new Error('会话不存在');
+        }
+
+        // 这里可以实现分享逻辑，比如生成分享链接
+        const shareData = {
+          pageId: sessionId,
+          pageTitle: session.title || `会话 ${sessionId.slice(-6)}`,
+          pageContent: session.conversationHistory,
+          conversationHistory: session.conversationHistory
+        };
+
+        const response = await fetch('/api/share', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'link',
+            config: {
+              title: shareData.pageTitle,
+              description: '来自HeysMe的AI会话',
+              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7天后过期
+              allowedViewers: [],
+              analytics: true
+            },
+            ...shareData
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('分享失败');
+        }
+
+        const result = await response.json();
+        
+        // 复制分享链接到剪贴板
+        if (result.data?.shareUrl) {
+          await navigator.clipboard.writeText(result.data.shareUrl);
+          console.log('✅ [分享] 分享链接已复制到剪贴板');
+        }
+
+        return result.data;
+      } catch (error) {
+        console.error('❌ [分享] 分享失败:', error);
+        throw error;
+      }
+    },
+    [sessions]
+  );
+
   return {
     sessions,
     currentSession,
@@ -793,5 +961,18 @@ export function useChatSystemV2() {
     resetToStage,
     clearChat,
     deleteSession,
+    
+    // 🆕 新增的标题和分享功能
+    updateSessionTitle,
+    shareSession,
+    
+    // 🆕 标题生成相关
+    titleGeneration: {
+      isGenerating: titleGeneration.isGenerating,
+      error: titleGeneration.error,
+      generateTitle: titleGeneration.generateTitle,
+      regenerateTitle: titleGeneration.regenerateTitle,
+      clearError: titleGeneration.clearError,
+    },
   }
 } 

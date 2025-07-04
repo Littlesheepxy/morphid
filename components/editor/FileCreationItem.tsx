@@ -8,9 +8,8 @@ import { Button } from '@/components/ui/button';
 
 interface FileCreationItemProps {
   filename: string;
-  status: 'pending' | 'creating' | 'created' | 'error';
+  status: 'pending' | 'streaming' | 'completed' | 'error';
   content: string;
-  progress?: number;
   size?: number;
   onFileCreated?: () => void;
 }
@@ -19,55 +18,36 @@ export function FileCreationItem({
   filename, 
   status, 
   content, 
-  progress = 0,
   size = 0,
   onFileCreated 
 }: FileCreationItemProps) {
   const [streamedContent, setStreamedContent] = useState('');
   const [showPreview, setShowPreview] = useState(false);
-  const [currentProgress, setCurrentProgress] = useState(progress);
+  const [isAnimating, setIsAnimating] = useState(false);
   
-  // 🔧 模拟流式文件创建
+  // 🔧 处理流式文件内容更新
   useEffect(() => {
-    if (status === 'creating' && content) {
-      let currentIndex = 0;
-      const interval = setInterval(() => {
-        if (currentIndex < content.length) {
-          const chunkSize = Math.random() * 30 + 5; // 随机块大小 5-35
-          const chunk = content.slice(currentIndex, currentIndex + chunkSize);
-          setStreamedContent(prev => prev + chunk);
-          
-          const newProgress = Math.min(100, (currentIndex / content.length) * 100);
-          setCurrentProgress(newProgress);
-          currentIndex += chunkSize;
-        } else {
-          clearInterval(interval);
-          setCurrentProgress(100);
-          if (onFileCreated) {
-            setTimeout(onFileCreated, 300); // 延迟一点显示完成状态
-          }
-        }
-      }, 80); // 80ms 间隔，更平滑的流式效果
-      
-      return () => clearInterval(interval);
-    } else if (status === 'created') {
+    if (status === 'streaming' && content) {
+      setIsAnimating(true);
+      // 直接使用传入的content，因为它已经是流式更新的
       setStreamedContent(content);
-      setCurrentProgress(100);
+    } else if (status === 'completed') {
+      setStreamedContent(content);
+      setIsAnimating(false);
+      if (onFileCreated) {
+        setTimeout(onFileCreated, 300); // 延迟一点显示完成状态
+      }
+    } else if (status === 'pending') {
+      setStreamedContent('');
+      setIsAnimating(false);
     }
   }, [status, content, onFileCreated]);
-  
-  // 同步外部传入的progress
-  useEffect(() => {
-    if (status === 'creating') {
-      setCurrentProgress(progress);
-    }
-  }, [progress, status]);
   
   const getStatusIcon = () => {
     switch (status) {
       case 'pending': 
         return <Clock className="w-4 h-4 text-gray-400" />;
-      case 'creating': 
+      case 'streaming': 
         return (
           <motion.div 
             animate={{ rotate: 360 }} 
@@ -76,7 +56,7 @@ export function FileCreationItem({
             <FileCode className="w-4 h-4 text-blue-500" />
           </motion.div>
         );
-      case 'created': 
+      case 'completed': 
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'error': 
         return <AlertCircle className="w-4 h-4 text-red-500" />;
@@ -86,8 +66,8 @@ export function FileCreationItem({
   const getStatusColor = () => {
     switch (status) {
       case 'pending': return 'bg-gray-50 border-gray-200';
-      case 'creating': return 'bg-blue-50 border-blue-200';
-      case 'created': return 'bg-green-50 border-green-200';
+      case 'streaming': return 'bg-blue-50 border-blue-200';
+      case 'completed': return 'bg-green-50 border-green-200';
       case 'error': return 'bg-red-50 border-red-200';
     }
   };
@@ -149,34 +129,28 @@ export function FileCreationItem({
         </div>
       </div>
       
-      {/* 进度条 */}
-      {status === 'creating' && (
-        <div className="mb-2">
-          <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-            <span>{status === 'creating' ? '创建中...' : '准备中...'}</span>
-            <span>{Math.round(currentProgress)}%</span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-blue-500 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${currentProgress}%` }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            />
-          </div>
+      {/* 状态消息 */}
+      {status === 'streaming' && (
+        <div className="text-xs text-blue-600 mb-1 flex items-center gap-1">
+          <motion.div
+            animate={{ opacity: [1, 0.5, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            📝
+          </motion.div>
+          正在生成内容...
         </div>
       )}
       
-      {/* 状态消息 */}
-      {status === 'created' && (
+      {status === 'completed' && (
         <div className="text-xs text-green-600 mb-1">
-          ✓ 文件创建完成
+          ✓ 文件生成完成
         </div>
       )}
       
       {status === 'error' && (
         <div className="text-xs text-red-600 mb-1">
-          ✗ 创建失败
+          ✗ 生成失败
         </div>
       )}
       
@@ -190,7 +164,7 @@ export function FileCreationItem({
             className="mt-2 p-2 bg-gray-900 rounded text-xs font-mono text-green-400 max-h-32 overflow-auto"
           >
             <div className="whitespace-pre-wrap">
-              {status === 'creating' ? (
+              {status === 'streaming' ? (
                 <>
                   {streamedContent}
                   <motion.span

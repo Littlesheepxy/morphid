@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, MessageSquare, MoreHorizontal, Code, Sparkles, ChevronLeft, ChevronRight, User, Users, BookTemplate } from 'lucide-react';
+import { ConversationItem } from './ConversationItem';
 import { useTheme } from '@/contexts/theme-context';
 import { useEffect, useState } from 'react';
 import { UserButton, SignedIn, SignedOut, SignInButton, useAuth } from '@clerk/nextjs';
@@ -17,6 +18,9 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   onSelectSession: (sessionId: string) => void;
   onGenerateExpertMode: () => void;
+  onDeleteSession?: (sessionId: string) => void;
+  onShareSession?: (sessionId: string) => void;
+  onUpdateSessionTitle?: (sessionId: string, title: string) => void;
 }
 
 export function ChatSidebar({ 
@@ -27,7 +31,10 @@ export function ChatSidebar({
   onToggleCollapse,
   onNewChat, 
   onSelectSession, 
-  onGenerateExpertMode 
+  onGenerateExpertMode,
+  onDeleteSession,
+  onShareSession,
+  onUpdateSessionTitle
 }: ChatSidebarProps) {
   const { theme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
@@ -336,40 +343,22 @@ export function ChatSidebar({
             <div className="px-4 pb-4 space-y-1">
               {sessions.length > 0 ? (
                 sessions.map((session, index) => (
-                  <motion.button
+                  <motion.div
                     key={session.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className={`group w-full flex items-center justify-start gap-3 h-9 px-3 rounded-[10px] font-medium transition-all duration-200 ${
-                      currentSession?.id === session.id
-                        ? theme === "light"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-emerald-900/25 text-emerald-300"
-                        : theme === "light"
-                          ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
-                          : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
-                    }`}
-                    onClick={() => onSelectSession(session.id)}
                   >
-                    <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="text-sm truncate">
-                      {session.id.length > 15 ? `${session.id.substring(0, 15)}...` : session.id}
-                    </span>
-                    <div
-                      className={`opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full transition-all duration-200 flex items-center justify-center ml-auto cursor-pointer ${
-                        theme === "light"
-                          ? "hover:bg-emerald-100 text-emerald-500 hover:text-emerald-700"
-                          : "hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // 这里可以添加更多操作的逻辑
-                      }}
-                    >
-                      <MoreHorizontal className="w-3 h-3" />
-                    </div>
-                  </motion.button>
+                    <ConversationItem
+                      session={session}
+                      isActive={currentSession?.id === session.id}
+                      isCollapsed={false}
+                      onSelect={onSelectSession}
+                      onDelete={onDeleteSession}
+                      onShare={onShareSession}
+                      onTitleUpdate={onUpdateSessionTitle}
+                    />
+                  </motion.div>
                 ))
               ) : (
                 <div className={`text-center p-8 ${theme === "light" ? "text-gray-400" : "text-gray-500"}`}>
@@ -392,23 +381,16 @@ export function ChatSidebar({
           className="flex flex-col px-4 py-4 space-y-2 relative z-10"
         >
           {sessions.slice(0, 3).map((session, index) => (
-            <motion.div
+            <ConversationItem
               key={session.id}
-              whileHover={{ scale: 1.05 }}
-              className={`w-10 h-10 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center ${
-                currentSession?.id === session.id
-                  ? theme === "light"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-emerald-900/30 text-emerald-300"
-                  : theme === "light"
-                    ? "text-gray-600 bg-transparent hover:bg-emerald-50 hover:text-emerald-700"
-                    : "text-gray-400 bg-transparent hover:bg-emerald-900/20 hover:text-emerald-300"
-              }`}
-              onClick={() => onSelectSession(session.id)}
-              title={session.id}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-            </motion.div>
+              session={session}
+              isActive={currentSession?.id === session.id}
+              isCollapsed={true}
+              onSelect={onSelectSession}
+              onDelete={onDeleteSession}
+              onShare={onShareSession}
+              onTitleUpdate={onUpdateSessionTitle}
+            />
           ))}
           
           {sessions.length > 3 && (

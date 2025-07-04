@@ -37,8 +37,7 @@ export const MessageBubble = function MessageBubble({
   
   // 🆕 文件创建状态管理
   const [fileCreationStatus, setFileCreationStatus] = useState<Record<string, {
-    status: 'pending' | 'creating' | 'created' | 'error';
-    progress: number;
+    status: 'pending' | 'streaming' | 'completed' | 'error';
   }>>({});
   
   // 🔧 修复：更精确的用户消息判断
@@ -84,12 +83,11 @@ export const MessageBubble = function MessageBubble({
   // 🆕 处理文件创建状态更新
   useEffect(() => {
     if (hasCodeFiles && fileCreationProgress.length > 0) {
-      const newStatus: Record<string, { status: any; progress: number }> = {};
+      const newStatus: Record<string, { status: any }> = {};
       
       fileCreationProgress.forEach((fileProgress: any) => {
         newStatus[fileProgress.filename] = {
-          status: fileProgress.status || 'creating',
-          progress: fileProgress.progress || 0
+          status: fileProgress.status || 'streaming'
         };
       });
       
@@ -103,8 +101,7 @@ export const MessageBubble = function MessageBubble({
       ...prev,
       [filename]: {
         ...prev[filename],
-        status: 'created',
-        progress: 100
+        status: 'completed'
       }
     }));
     
@@ -431,7 +428,7 @@ export const MessageBubble = function MessageBubble({
                   正在创建项目文件
                 </h4>
                 <span className="text-sm text-gray-500">
-                  ({Object.values(fileCreationStatus).filter(s => s.status === 'created').length}/{codeFiles.length})
+                  ({Object.values(fileCreationStatus).filter(s => s.status === 'completed').length}/{codeFiles.length})
                 </span>
               </div>
               
@@ -444,7 +441,6 @@ export const MessageBubble = function MessageBubble({
                       filename={file.filename}
                       status={status?.status || 'pending'}
                       content={file.content}
-                      progress={status?.progress || 0}
                       size={file.content?.length || 0}
                       onFileCreated={() => handleFileCreated(file.filename)}
                     />
@@ -459,7 +455,7 @@ export const MessageBubble = function MessageBubble({
                     <span>总体进度</span>
                     <span>
                       {Math.round(
-                        (Object.values(fileCreationStatus).filter(s => s.status === 'created').length / codeFiles.length) * 100
+                        (Object.values(fileCreationStatus).filter(s => s.status === 'completed').length / codeFiles.length) * 100
                       )}%
                     </span>
                   </div>
@@ -468,7 +464,7 @@ export const MessageBubble = function MessageBubble({
                       className="h-full bg-green-500 rounded-full"
                       initial={{ width: 0 }}
                       animate={{ 
-                        width: `${(Object.values(fileCreationStatus).filter(s => s.status === 'created').length / codeFiles.length) * 100}%` 
+                        width: `${(Object.values(fileCreationStatus).filter(s => s.status === 'completed').length / codeFiles.length) * 100}%` 
                       }}
                       transition={{ duration: 0.5 }}
                     />

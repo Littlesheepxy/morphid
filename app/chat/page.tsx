@@ -32,6 +32,10 @@ export default function ChatPage() {
     createNewSession,
     selectSession,
     sendMessage,
+    updateSessionTitle,
+    shareSession,
+    deleteSession,
+    titleGeneration,
   } = useChatSystemV2()
   
   const [inputValue, setInputValue] = useState("")
@@ -489,6 +493,58 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
     setIsSidebarCollapsed(!isSidebarCollapsed)
   }
 
+  // 🆕 处理会话删除
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await deleteSession(sessionId);
+      toast({
+        title: "会话已删除",
+        description: "会话已成功删除",
+      });
+      
+      // 如果删除的是当前会话，重置状态
+      if (currentSession?.id === sessionId) {
+        setHasStartedChat(false);
+        setIsCodeMode(false);
+        setGeneratedCode([]);
+      }
+    } catch (error) {
+      console.error('删除会话失败:', error);
+      toast({
+        title: "删除失败",
+        description: "请重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 🆕 处理会话分享
+  const handleShareSession = async (sessionId: string) => {
+    try {
+      const result = await shareSession(sessionId);
+      toast({
+        title: "分享成功",
+        description: "分享链接已复制到剪贴板",
+      });
+    } catch (error) {
+      console.error('分享会话失败:', error);
+      toast({
+        title: "分享失败",
+        description: "请重试",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 🆕 处理标题更新
+  const handleUpdateSessionTitle = (sessionId: string, title: string) => {
+    updateSessionTitle(sessionId, title);
+    toast({
+      title: "标题已更新",
+      description: `会话标题已更新为: ${title}`,
+    });
+  };
+
   return (
     <div
       className={`h-screen flex transition-all duration-300 ${
@@ -507,6 +563,9 @@ ${fileWithPreview.parsedContent ? `内容: ${fileWithPreview.parsedContent}` : '
         onGenerateExpertMode={generateTestCode}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
+        onDeleteSession={handleDeleteSession}
+        onShareSession={handleShareSession}
+        onUpdateSessionTitle={handleUpdateSessionTitle}
       />
 
       {/* 🎨 主内容区域 - 包含header和内容 */}
